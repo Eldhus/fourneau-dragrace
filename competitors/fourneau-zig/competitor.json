@@ -7,5 +7,5 @@
     { "cwd": "competitors/fourneau-zig", "argv": ["{zig}", "build", "-Doptimize=safe", "-Dcpu=baseline", "-p", "{out}/fourneau-zig-prefix"] },
     { "cwd": ".", "argv": ["cp", "{out}/fourneau-zig-prefix/bin/fourneau-zig", "{out}/fourneau-zig"] }
   ],
-  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}"] }
+  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}", "--database", "{db}"] }
 }
