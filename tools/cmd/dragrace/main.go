@@ -16,7 +16,12 @@
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site provision|install-server|deploy   the 24/7 site droplet
 //
-// Every command runs from anywhere inside the repository.
+// The services of self-hosting (docs/self-hosting.md), which run outside
+// a checkout:
+//
+//	dragrace guard [-config F]      the racer's DigitalOcean token and budget
+//
+// Every other command runs from anywhere inside the repository.
 package main
 
 import (
@@ -39,19 +44,34 @@ func main() {
 	if len(os.Args) < 2 {
 		usage()
 	}
-	root, err := repositoryRoot()
-	if err != nil {
-		log.Fatal(err)
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := dispatch(ctx, root, os.Args[1], os.Args[2:]); err != nil {
+	err := dispatchService(ctx, os.Args[1], os.Args[2:])
+	if errors.Is(err, errNotService) {
+		root, rootErr := repositoryRoot()
+		if rootErr != nil {
+			log.Fatal(rootErr)
+		}
+		err = dispatch(ctx, root, os.Args[1], os.Args[2:])
+	}
+	if err != nil {
 		var exit exitCode
 		if errors.As(err, &exit) {
 			os.Exit(int(exit))
 		}
 		log.Fatal(err)
 	}
+}
+
+var errNotService = errors.New("not a service")
+
+// dispatchService runs the commands that need no checkout.
+func dispatchService(ctx context.Context, command string, args []string) error {
+	switch command {
+	case "guard":
+		return commandGuard(ctx, args)
+	}
+	return errNotService
 }
 
 // exitCode ends the program with a code and no message (dragrace changed).
@@ -97,8 +117,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | race cloud | sizes | reap | fingerprint |
   changed DIR | publish RUN.json... | site build | site provision |
-  site install-server | site deploy
-See README.md and RACING.md.`)
+  site install-server | site deploy | guard
+See README.md, RACING.md and docs/self-hosting.md.`)
 	os.Exit(2)
 }
 

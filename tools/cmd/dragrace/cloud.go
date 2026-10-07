@@ -125,7 +125,7 @@ type dropletLife struct {
 // releaseClass deletes one class's pair as soon as its racing is over:
 // classes finish at different times, and a droplet waiting for the
 // slowest class is paid for doing nothing.
-func (fleet *Fleet) releaseClass(do *DigitalOcean, class string) {
+func (fleet *Fleet) releaseClass(do Provider, class string) {
 	for _, droplet := range []Droplet{fleet.loaders[class], fleet.servers[class]} {
 		if droplet.ID != 0 {
 			fleet.delete(do, droplet.ID)
@@ -135,7 +135,7 @@ func (fleet *Fleet) releaseClass(do *DigitalOcean, class string) {
 
 // delete deletes one droplet, retrying, unless it is deleted already, and
 // records when.
-func (fleet *Fleet) delete(do *DigitalOcean, id int) {
+func (fleet *Fleet) delete(do Provider, id int) {
 	fleet.mutex.Lock()
 	life := fleet.lives[id]
 	done := life != nil && !life.deleted.IsZero()
@@ -184,7 +184,7 @@ func (fleet *Fleet) costs(prices map[string]float64) []DropletCost {
 	return costs
 }
 
-func launchFleet(ctx context.Context, do *DigitalOcean, race Race, id string) (*Fleet, error) {
+func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet, error) {
 	fleet := &Fleet{loaders: map[string]Droplet{}, servers: map[string]Droplet{},
 		machines: map[int]SSHMachine{}, lives: map[int]*dropletLife{},
 		serverAttempts: map[string]int{}}
@@ -231,7 +231,7 @@ func launchFleet(ctx context.Context, do *DigitalOcean, race Race, id string) (*
 	}
 	// Active, answering SSH, and in the fleet's maps with its addresses.
 	ready := func(id int) error {
-		droplet, err := do.waitActive(ctx, id)
+		droplet, err := waitActive(ctx, do, id)
 		if err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ const serverCPUAttemptsMax = 6
 
 // pinServerCPU replaces a class's server until it has the CPU the class
 // asks for (ServerCPU), at most serverCPUAttemptsMax droplets in all.
-func pinServerCPU(ctx context.Context, do *DigitalOcean, fleet *Fleet, class ServerClass,
+func pinServerCPU(ctx context.Context, do Provider, fleet *Fleet, class ServerClass,
 	create func(role, class, size string) (Droplet, error), ready func(id int) error) error {
 	fleet.serverAttempts[class.Name] = 1
 	if class.ServerCPU == "" {
@@ -315,7 +315,7 @@ func pinServerCPU(ctx context.Context, do *DigitalOcean, fleet *Fleet, class Ser
 // Called once a race is over, so its results hold every droplet's life,
 // and again by a defer, for a race that ended early: the second does
 // nothing.
-func (fleet *Fleet) destroy(do *DigitalOcean) {
+func (fleet *Fleet) destroy(do Provider) {
 	if fleet.destroyed {
 		return
 	}
@@ -339,7 +339,7 @@ func (fleet *Fleet) destroy(do *DigitalOcean) {
 // into its own Run (same seed), merged afterwards in race.json's order, so
 // the results do not depend on which class finished first.
 func raceFleet(ctx context.Context, root string, tools Toolchain, race Race,
-	competitors []Competitor, fleet *Fleet, do *DigitalOcean, run *Run) error {
+	competitors []Competitor, fleet *Fleet, do Provider, run *Run) error {
 	classes := race.Cloud.Servers
 	parts := make([]Run, len(classes))
 	errs := make([]error, len(classes))

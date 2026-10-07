@@ -576,3 +576,22 @@ for, whether tonight's 03:00 check will race (the heads the racer last
 saw against the last finished run's commits: "New commits, roux
 def1234: they race tonight") or skip, and the last run that did not
 finish, with why. Seen live on the local site.
+
+## 2026-10-06: the guard: the DigitalOcean token and the budget
+
+`dragrace guard` holds the token on the racer and serves a Unix socket
+with the few things a race needs (docs/self-hosting.md). It refuses a
+size not in the owner's config, a price above the config's for it, any
+other region, image, tag or name, more droplets alive than allowed, and
+a droplet whose three hours could take the month past the cap (the spend
+so far, every alive droplet's remaining hours, the new one's). Its
+ledger is each droplet's life by its own clock at the price it allowed,
+billed per second with a minute's minimum, written atomically. Every
+minute it deletes its droplets past their age and marks the ones
+DigitalOcean no longer has. It reads and deletes only its own droplets
+(or ones tagged as races), and makes and deletes only race keys. The
+fleet now speaks to a `Provider`: DigitalOcean directly (the owner's
+`race cloud`) or the guard's client.
+
+Checked: six tests on a fake DigitalOcean, one over a real socket. A
+mutation (the budget check off) fails the budget test.
