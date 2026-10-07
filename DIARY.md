@@ -885,3 +885,13 @@ of a taller one). On a phone a page's title sat 64 px under the bar
 
 Built and served on localhost: the front page has the fire, History none,
 neither a body class. Not looked at in a browser: the owner checks it.
+
+To look at it with real data, the live database was copied down. `sqlite3
+.backup` on the host fails ("database is locked": roux holds SQLite's
+exclusive lock), so the copy is `site.db` and `site.db-wal` copied
+together while the site was idle (`sudo cp` both, then tar over SSH, the
+host key from `out/secrets/site-known-hosts`). The copy is fine: integrity ok, 1 run, 60
+results. Then `docs/migrations/2026-10-07-machine-memory.sql` ran on it as
+its header says: integrity and foreign keys ok, counts the same, and the
+new build serves `/`, `/history` and `/competitors` from it. That is the
+migration tested on the live data before it runs on the host.
