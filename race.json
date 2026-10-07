@@ -58,6 +58,59 @@
       "path": "/plaintext",
       "connections": 64,
       "keepalive": false
+    },
+    {
+      "name": "conduit",
+      "title": "RealWorld (Conduit)",
+      "summary": "A slice of RealWorld's Conduit API on SQLite (WAL, synchronous=NORMAL): the article list (tags, favorites, authors), an article, a comment and a favorite, all at once, open loop at rates the same for every server; the mean over every request at each rate.",
+      "method": "MIXED",
+      "path": "/api/articles",
+      "connections": 256,
+      "keepalive": true,
+      "mixed": {
+        "rates": [
+          250,
+          500,
+          1000,
+          2000,
+          4000,
+          8000,
+          16000,
+          32000
+        ],
+        "warmup_seconds": 3,
+        "measure_seconds": 10,
+        "saturated": 0.9,
+        "parts": [
+          {
+            "name": "list",
+            "method": "GET",
+            "path": "/api/articles\\?limit=20&offset=[0-9]{2}0",
+            "share": 0.5
+          },
+          {
+            "name": "article",
+            "method": "GET",
+            "path": "/api/articles/article-0[0-9]{3}",
+            "share": 0.3
+          },
+          {
+            "name": "comment",
+            "method": "POST",
+            "path": "/api/articles/article-0[0-9]{3}/comments",
+            "share": 0.15,
+            "auth": true,
+            "body": "{\"comment\":{\"body\":\"Lovely roux.\"}}"
+          },
+          {
+            "name": "favorite",
+            "method": "POST",
+            "path": "/api/articles/article-0[0-9]{3}/favorite",
+            "share": 0.05,
+            "auth": true
+          }
+        ]
+      }
     }
   ],
   "cloud": {

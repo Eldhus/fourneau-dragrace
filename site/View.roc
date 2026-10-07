@@ -36,7 +36,8 @@ View :: [].{
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
 	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_y : F64 }
-	OpenChart : { title : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	## `measure`: what the y axis is; `caption`, how the ladder was climbed.
+	OpenChart : { title : Str, measure : Str, caption : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -483,7 +484,7 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else if workload.kind == "mixed" {
-			Ok(open_chart("${workload.title}: mean latency", results, Mean))
+			Ok(open_chart(workload.title, results, Mean))
 		} else {
 			Ok(open_chart(workload.title, results, P99))
 		}
@@ -517,7 +518,12 @@ open_chart = |title, results, metric| {
 	lines = spread_open(results.map(|r| open_line(r, x, y, metric)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
 	ticks_x = [0.0, 0.25, 0.5, 0.75, 1.0].map(|t| { x: Format.one_decimal(x(t * x_ceiling)), label: Format.compact(t * x_ceiling) })
-	{ title, lines, ticks_x, ticks_y }
+	{ measure, caption } =
+		match metric {
+			P99 => { measure: "p99 latency", caption: "p99 latency against the offered rate (open loop: requests arrive at a fixed rate whatever the server does). Each server is offered 50% to 120% of its own maximum above." }
+			Mean => { measure: "mean latency", caption: "The mean latency of every request against the offered rate: the article list (50%), an article (30%), a comment (15%) and a favorite (5%) at once, open loop, at the same rates for every server, each climbing until it falls behind." }
+		}
+	{ title, measure, caption, lines, ticks_x, ticks_y }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Metric -> View.OpenLine
