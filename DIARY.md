@@ -525,3 +525,15 @@ saturated" (the owner: a line of its own per class, and "set it", read
 oddly). The outline now means exactly that, the server's CPU under 90%:
 a server at its limit that also met the network (dedicated-2's echo) is
 a filled bar, as the label says.
+
+## 2026-10-06: sticky size tabs that keep your place
+
+The owner wanted to flip between sizes without scrolling back up. The
+tabs are a sticky band at the top (the page's colour, blurred behind),
+and demo.js keeps the workload in view across a switch: on Datastar's
+`datastar-fetch` "started" it notes the first chart below the band and
+its offset, on "finished" it scrolls that chart back to the same offset.
+Tested by driving headless Brave over the DevTools protocol (scratch
+script, not committed): scrolled to Templates on small at 390 px, clicked
+medium: Templates stayed at 120 px, the address `?class=dedicated-2`;
+the same on History, and at 1280 px.

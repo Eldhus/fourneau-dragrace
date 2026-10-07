@@ -44,3 +44,32 @@
     draw();
   }
 })();
+
+// Switching sizes keeps your place. The tabs stay at the top of the screen
+// while the results scroll under them (style.css); a click swaps the
+// results in place (Datastar), and the workload you were looking at is put
+// back where it was, so flipping between sizes compares one chart, not two
+// scroll positions. Both sizes list the same workloads in the same order,
+// so the nth chart before is the nth after.
+(() => {
+  let kept = null;
+  document.addEventListener("datastar-fetch", (event) => {
+    const { type, el } = event.detail;
+    if (type === "started") {
+      const region = el && el.closest && el.closest("#race-classes, #history-classes");
+      if (!region) return;
+      const below = region.querySelector("nav.tabs").getBoundingClientRect().bottom;
+      const strips = [...region.querySelectorAll(".strip")];
+      const index = strips.findIndex((strip) => strip.getBoundingClientRect().bottom > below);
+      kept = index < 0 ? null
+        : { region: region.id, index, top: strips[index].getBoundingClientRect().top };
+    } else if (type === "finished" && kept) {
+      const { region, index, top } = kept;
+      kept = null;
+      requestAnimationFrame(() => {
+        const strip = document.querySelectorAll(`#${region} .strip`)[index];
+        if (strip) window.scrollBy(0, strip.getBoundingClientRect().top - top);
+      });
+    }
+  });
+})();
