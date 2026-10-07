@@ -834,3 +834,10 @@ redirect went to the name at once, but the certificate stayed the
 address's, since fourneau's ACME reused any fresh certificate from the
 same CA. Fixed in fourneau (ebdffc5): the state keeps what a
 certificate is for. This push builds the site with it.
+
+The build with fourneau ebdffc5 deployed at 17:27:59, ordered a
+certificate for the name (four seconds) and passed the host agent's
+health check by name. Every page answers at https://fourneau.y2kbugger.com/;
+port 80 redirects there; the address alone no longer verifies (the
+certificate names only the name). `racer install -site` the name: the
+racer posts its heads there.
