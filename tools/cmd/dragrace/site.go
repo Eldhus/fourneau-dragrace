@@ -297,7 +297,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"/etc/dragrace-host/config.json": string(config)}, 0o644); err != nil {
 		return err
 	}
-	if err := putFiles(ctx, machine, hostFiles("05:30"), 0o644); err != nil {
+	if err := putFiles(ctx, machine, hostFiles(""), 0o644); err != nil {
 		return err
 	}
 	setup := strings.Join(append(hostSetup(),
@@ -346,24 +346,57 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 // hostFiles are what every host of the owner's (the site host, the racer)
 // is set up with, found missing on the first live audit (2026-10-07):
 // root's login refused outright (cloud-init's disable_root only gave root
-// a key that prints "login as ..."), and unattended-upgrades rebooting
-// when an update needs it, at `rebootUTC`: away from the 03:00 New York
-// race (07:00 UTC), as each host's own time is UTC.
-func hostFiles(rebootUTC string) map[string]string {
+// a key that prints "login as ..."), and a reboot when an update needs one.
+//
+// The reboot is at 02:30 New York time, before the 03:00 race, by a timer
+// of New York's clock (unattended-upgrades' own Automatic-Reboot-Time is
+// the host's clock, UTC, which moves an hour against the race at each
+// daylight saving change). The updates themselves are moved to 01:30 New
+// York, without a random delay, so that a night's updates are installed
+// by the time it looks. No update needing one, no reboot. `busy`, when
+// set, is a file whose presence puts the reboot off to the next night:
+// the racer's mark of a run racing (a racer restarted ends its run).
+func hostFiles(busy string) map[string]string {
+	check := "test -e /run/reboot-required || exit 0; "
+	if busy != "" {
+		check += "test -e " + busy + " && { echo racing: next night; exit 0; }; "
+	}
 	return map[string]string{
 		"/etc/ssh/sshd_config.d/10-dragrace.conf": "PermitRootLogin no\nPasswordAuthentication no\n",
-		"/etc/apt/apt.conf.d/52dragrace-reboot": "Unattended-Upgrade::Automatic-Reboot \"true\";\n" +
-			"Unattended-Upgrade::Automatic-Reboot-Time \"" + rebootUTC + "\";\n",
+		"/etc/apt/apt.conf.d/52dragrace-reboot": "// dragrace-reboot.timer reboots, at 02:30 New York time.\n" +
+			"Unattended-Upgrade::Automatic-Reboot \"false\";\n",
+		"/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf": `[Timer]
+OnCalendar=
+OnCalendar=*-*-* 01:30:00 America/New_York
+RandomizedDelaySec=0
+`,
+		"/etc/systemd/system/dragrace-reboot.service": `[Unit]
+Description=Reboot if an update needs it (docs/self-hosting.md)
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '` + check + `systemctl reboot'
+`,
+		"/etc/systemd/system/dragrace-reboot.timer": `[Unit]
+Description=02:30 New York time, before the 03:00 race: a reboot if an update needs it
+[Timer]
+OnCalendar=*-*-* 02:30:00 America/New_York
+[Install]
+WantedBy=timers.target
+`,
 	}
 }
 
-// hostSetup is the script that goes with hostFiles: sshd reloaded, a 512
-// MiB swap file (a 512 MB droplet thrashed in its first boot's package
-// checks), and Ubuntu's update-notifier and motd timers off (nobody logs
-// in to read them; on the racer they took a CPU for minutes).
+// hostSetup is the script that goes with hostFiles: sshd reloaded, the
+// reboot timer on, a 512 MiB swap file (a 512 MB droplet thrashed in its
+// first boot's package checks), and Ubuntu's update-notifier and motd
+// timers off (nobody logs in to read them; on the racer they took a CPU
+// for minutes).
 func hostSetup() []string {
 	return []string{
 		"sudo sshd -t && sudo systemctl reload ssh",
+		"sudo systemctl daemon-reload",
+		"sudo systemctl enable --now dragrace-reboot.timer",
+		"sudo systemctl restart apt-daily-upgrade.timer",
 		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +
 			"sudo mkswap -q /swapfile))",
 		"(swapon --show=NAME --noheadings | grep -q /swapfile || sudo swapon /swapfile)",

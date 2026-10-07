@@ -750,3 +750,15 @@ id: that boot's journal is in the old id's directory (a one-off). The
 builds cache their dependencies now (7.5 of 8 minutes were compiling).
 Open, in TODO: the site host on 24.04, the site's unreproducible build,
 conduit's history and axis, the CPU pin, docs-only commits racing.
+
+## 2026-10-07: reboots on New York's clock
+
+The owner wants the hosts' reboots before the race, at 02:30, kept there
+through daylight saving. unattended-upgrades' Automatic-Reboot-Time is
+the host's clock (UTC), so 05:30 UTC was 01:30 New York in winter and
+the reboot's hour moved against the race twice a year. Now a timer
+(`dragrace-reboot.timer`, `OnCalendar=*-*-* 02:30:00 America/New_York`)
+reboots only when `/run/reboot-required` exists, and on the racer only
+when no run is racing (its `racing` mark; a restart ends a run). The
+updates move to 01:30 New York with no random delay (Ubuntu's default,
+06:00 UTC plus up to an hour, could install after the reboot's look).

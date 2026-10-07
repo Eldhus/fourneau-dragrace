@@ -16,6 +16,14 @@ built). Everything here is planned until TODO says otherwise.
 
 No GitHub runner is held for a race, and GitHub holds no secret.
 
+Both hosts install Ubuntu's security updates themselves (unattended-upgrades,
+moved to 01:30 New York time) and reboot when one needs it at 02:30 New
+York time, half an hour before the nightly check, by a timer of New
+York's clock so that daylight saving moves nothing (`hostFiles`; owner,
+2026-10-07). The racer puts its reboot off to the next night while a run
+races (a restarted racer ends its run); the site's is a half minute's
+outage, which posts retry through.
+
 ## Builds and deploys
 
 - `build.yml` runs on a push to main and when the racer dispatches it. It

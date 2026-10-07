@@ -213,8 +213,8 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		"/etc/dragrace-racer/config.json": string(racerJSON)}, 0o644); err != nil {
 		return err
 	}
-	// Its reboots far from the race (07:00 UTC) and from the site's.
-	if err := putFiles(ctx, machine, hostFiles("15:30"), 0o644); err != nil {
+	// Its reboot put off while a run races (racer.remember).
+	if err := putFiles(ctx, machine, hostFiles("/var/lib/dragrace-racer/racing"), 0o644); err != nil {
 		return err
 	}
 	setup := strings.Join(append(hostSetup(),
