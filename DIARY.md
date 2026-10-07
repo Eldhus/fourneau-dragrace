@@ -982,3 +982,21 @@ p90 read from the database); every open-loop chart is p99, Conduit's too
 stay one short line with a link to Workloads, whose Conduit line now says
 p99. Against before the switch: the Metric type gone, one open_chart.
 112 expects; two charts on the page, no radios.
+
+## 2026-10-07: `site dev` stuck on "connection refused"
+
+The owner: the page sometimes ends on the proxy's "dial tcp
+127.0.0.1:8091: connection refused" and stays. Reproduced with a loop of
+requests across restarts: 2 of 401 refused, and both *after* the app was
+"up". roux listens once per shard (8) on one port with SO_REUSEPORT; the
+readiness check took one accepted connection as ready, and the kernel can
+hand the next to a shard not yet listening, which refuses it. A reload in
+that gap got the error page, which subscribes for events after the reload
+event has gone, so nothing moved it on.
+
+Now: ready is 32 connections accepted in a row; a refused request waits
+for the gate and is sent again, up to 8 times at 25 ms more each (a body
+only if it can be replayed); an app that dies on its own shows its output
+over the page. Measured the same way: 779 of 779 answered 200 across four
+restarts. Go tests: a refusal retried, a dead app given up on, an
+unreplayable body not resent.

@@ -2,8 +2,11 @@ package main
 
 import (
 	"io"
+	"net"
 	"net/http"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -42,6 +45,36 @@ func TestDevInput(t *testing.T) {
 	}
 	if !devInput(true, "style.css") || devInput(true, ".hidden") {
 		t.Error("static: every file but a hidden one")
+	}
+}
+
+type refusing struct{ refusals, calls int }
+
+func (r *refusing) RoundTrip(*http.Request) (*http.Response, error) {
+	r.calls++
+	if r.calls <= r.refusals {
+		return nil, &net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
+	}
+	return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+}
+
+func TestDevTransportRetriesARestart(t *testing.T) {
+	gate := newDevGate()
+	gate.open()
+	request, _ := http.NewRequest("GET", "http://127.0.0.1:1/", nil)
+	restarting := &refusing{refusals: 1}
+	response, err := (&devTransport{base: restarting, gate: gate}).RoundTrip(request)
+	if err != nil || response.StatusCode != 200 || restarting.calls != 2 {
+		t.Fatalf("a refused request, the app back: %v %v after %d", response, err, restarting.calls)
+	}
+	dead := &refusing{refusals: 100}
+	if _, err := (&devTransport{base: dead, gate: gate}).RoundTrip(request); err == nil || dead.calls != devRetries+1 {
+		t.Fatalf("a dead app: %v after %d calls", err, dead.calls)
+	}
+	posted, _ := http.NewRequest("POST", "http://127.0.0.1:1/", io.NopCloser(strings.NewReader("x")))
+	once := &refusing{refusals: 1}
+	if _, err := (&devTransport{base: once, gate: gate}).RoundTrip(posted); err == nil || once.calls != 1 {
+		t.Fatalf("a body it cannot replay was sent again: %d calls", once.calls)
 	}
 }
 

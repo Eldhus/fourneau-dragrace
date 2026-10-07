@@ -118,10 +118,12 @@ type devServer struct {
 func newDevServer(root string, tools Toolchain, appPort int) *devServer {
 	site := filepath.Join(root, "site")
 	binary := filepath.Join(outDir(root), "dev", "dragrace-site")
-	return &devServer{root: root, site: site, tools: tools, binary: binary,
+	dev := &devServer{root: root, site: site, tools: tools, binary: binary,
 		app:    &devApp{binary: binary, dir: site, port: appPort, ready: newDevGate()},
 		seen:   map[string][32]byte{},
 		events: &devEvents{clients: map[chan devEvent]struct{}{}}}
+	dev.app.died = func(output string) { dev.fail("the app", "it exited:\n\n"+output) }
+	return dev
 }
 
 func (dev *devServer) dirs() []string {
@@ -414,6 +416,7 @@ type devApp struct {
 	binary, dir string
 	port        int
 	ready       *devGate
+	died        func(output string)
 	mutex       sync.Mutex
 	cmd         *exec.Cmd
 	exited      chan struct{}
@@ -453,6 +456,14 @@ func (app *devApp) restart(ctx context.Context) (string, error) {
 		go func() {
 			cmd.Wait()
 			close(exited)
+			// Not stopped by us (stop clears app.cmd first): it died, and the
+			// browser shows why rather than a bare "connection refused".
+			app.mutex.Lock()
+			died := app.cmd == cmd
+			app.mutex.Unlock()
+			if died {
+				app.died(tail.String())
+			}
 		}()
 	}
 	app.mutex.Unlock()
@@ -469,14 +480,29 @@ func (app *devApp) restart(ctx context.Context) (string, error) {
 			return "", ctx.Err()
 		default:
 		}
-		if connection, err := net.DialTimeout("tcp", address, 100*time.Millisecond); err == nil {
-			connection.Close()
+		if devAnswers(address) {
 			app.ready.open()
 			return "", nil
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	return tail.String(), fmt.Errorf("the app did not answer on %s in %s", address, devReadyTimeout)
+}
+
+// devAnswers is whether the app takes connections on every shard: roux
+// listens once per shard on one port (SO_REUSEPORT), and the kernel can
+// hand a connection to a shard not yet listening, which refuses it; one
+// connection that succeeds says little (found 2026-10-07: refusals just
+// after "up"). devReadyDials in a row, more than its shards, say enough.
+func devAnswers(address string) bool {
+	for dial := 0; dial < devReadyDials; dial++ {
+		connection, err := net.DialTimeout("tcp", address, 100*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		connection.Close()
+	}
+	return true
 }
 
 // stop ends the app: SIGTERM, then SIGKILL after devStopTimeout.
@@ -626,6 +652,7 @@ func (dev *devServer) handler() http.Handler {
 	target := &url.URL{Scheme: "http", Host: fmt.Sprintf("127.0.0.1:%d", dev.app.port)}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.FlushInterval = -1 // event streams pass as they come
+	proxy.Transport = &devTransport{base: http.DefaultTransport, gate: dev.app.ready}
 	direct := proxy.Director
 	proxy.Director = func(request *http.Request) {
 		direct(request)
@@ -636,6 +663,7 @@ func (dev *devServer) handler() http.Handler {
 		return devInject(response, dev.events.current())
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("dev: %s %s: %v", r.Method, r.URL.Path, err)
 		page := devPage("the app is down", err.Error(), dev.events.current())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadGateway)
@@ -683,6 +711,53 @@ func (dev *devServer) serveEvents(w http.ResponseWriter, r *http.Request) {
 		case event := <-client:
 			write(event)
 		}
+	}
+}
+
+// devTransport sends a request again when the app refused it because it
+// was restarting: a reload already on its way when the next save stopped
+// the app waits for the new one instead of failing (found 2026-10-07: the
+// browser got "connection refused" after the reload event had gone, and
+// stayed there). Only a request without a body, or one that can replay
+// it, is sent again; at most devRetries times.
+type devTransport struct {
+	base http.RoundTripper
+	gate *devGate
+}
+
+// devRetries at 25 ms more each: about 0.9 s in all, for a shard still
+// starting after the gate opened.
+const (
+	devRetries    = 8
+	devRetryStep  = 25 * time.Millisecond
+	devReadyDials = 32
+)
+
+func (transport *devTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	for attempt := 0; ; attempt++ {
+		response, err := transport.base.RoundTrip(request)
+		if err == nil || attempt == devRetries || !errors.Is(err, syscall.ECONNREFUSED) {
+			return response, err
+		}
+		if request.Body != nil && request.Body != http.NoBody {
+			if request.GetBody == nil {
+				return response, err
+			}
+			body, bodyErr := request.GetBody()
+			if bodyErr != nil {
+				return response, err
+			}
+			request.Body = body
+		}
+		ctx, cancel := context.WithTimeout(request.Context(), devHoldTimeout)
+		waitErr := transport.gate.wait(ctx)
+		cancel()
+		if waitErr != nil {
+			return response, err
+		}
+		// The gate opens once the new app answers; a dead app fails every
+		// attempt and ends the loop after devRetries.
+		time.Sleep(time.Duration(attempt+1) * devRetryStep)
 	}
 }
 
