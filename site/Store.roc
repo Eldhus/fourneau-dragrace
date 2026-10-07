@@ -146,19 +146,21 @@ Store :: [].{
 		raced : List(Pages.Commits),
 	}
 
-	## What the race page says of the racer, a sentence each: what races
+	## What the race page says of the racer, a banner each: what races
 	## now, what tonight's check will do, what was asked, what the last run
-	## that did not finish said.
-	status : Racer -> List(Str)
+	## that did not finish said. `items` are the banner's parts that must
+	## not break inside (a repository and its commit, a class and its
+	## state), apart from the sentence (the owner, 2026-10-07).
+	Banner : { text : Str, items : List(Str) }
+
+	status : Racer -> List(Banner)
 	status = |racer| {
 		newest = racer.recent.first()
+		said = |text| { text, items: [] }
 		racing =
 			match newest {
-				Ok(run) if run.status == "racing" => {
-					classes = racer.classes.map(|c| "${c.class} ${c.status}")
-					about = if classes.is_empty() "" else " (${Str.join_with(classes, ", ")})"
-					["Racing now: ${run.id}, ${racer.results.to_str()} results in${about}."]
-				}
+				Ok(run) if run.status == "racing" =>
+					[{ text: "Racing now: ${run.id}, ${racer.results.to_str()} results in", items: racer.classes.map(|c| "${c.class} ${c.status}") }]
 				_ => []
 			}
 		new = racer.heads.keep_if(|head| !racer.raced.any(|c| c.repository == head.repository and c.commit_sha == head.commit_sha))
@@ -168,17 +170,16 @@ Store :: [].{
 			if racer.heads.is_empty() or !racing.is_empty() {
 				[]
 			} else if new.is_empty() {
-				["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
+				[said("Nothing new since the last race: tonight's check (03:00 New York time) will skip it.")]
 			} else {
-				names = Str.join_with(new.map(|head| "${head.repository} ${short(head.commit_sha)}"), ", ")
-				["Racing tonight at 03:00 New York time: ${names}."]
+				[{ text: "Racing tonight at 03:00 New York time", items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
 			}
-		asked = if racer.waiting.any(|w| w.kind == "race") ["A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour)."] else []
+		asked = if racer.waiting.any(|w| w.kind == "race") [said("A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour).")] else []
 		last =
 			match newest {
 				Ok(run) if run.status != "racing" and run.status != "finished" => {
 					why = if run.reason.is_empty() "" else ": ${run.reason}"
-					["The last run, ${run.id}, was ${run.status}${why}."]
+					[said("The last run, ${run.id}, was ${run.status}${why}.")]
 				}
 				_ => []
 			}
@@ -235,15 +236,16 @@ expect {
 	raced = |repository, commit_sha| { repository, commit_sha, new: Bool.False }
 	quiet = { recent: [], classes: [], results: 0, waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
 	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
-	Store.status(quiet) == ["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
-	and Store.status(busy) == ["Racing tonight at 03:00 New York time: roux def1234."]
+	Store.status(quiet) == [{ text: "Nothing new since the last race: tonight's check (03:00 New York time) will skip it.", items: [] }]
+	and Store.status(busy) == [{ text: "Racing tonight at 03:00 New York time", items: ["roux def1234"] }]
 }
 
 expect {
 	run = |status, reason| { id: "r1", trigger: "timer", status, reason, started_at: "", finished_at: Null }
 	racing = { recent: [run("racing", "")], classes: [{ class: "smallest", status: "done", reason: "", seconds: 1.0 }], results: 12, waiting: [], heads: [], raced: [] }
 	skipped = { ..racing, recent: [run("skipped", "nothing new")], classes: [] }
-	Store.status(racing) == ["Racing now: r1, 12 results in (smallest done)."]
-	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == ["Racing now: r1, 12 results in (smallest done)."]
-	and Store.status(skipped) == ["The last run, r1, was skipped: nothing new."]
+	now = [{ text: "Racing now: r1, 12 results in", items: ["smallest done"] }]
+	Store.status(racing) == now
+	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == now
+	and Store.status(skipped) == [{ text: "The last run, r1, was skipped: nothing new.", items: [] }]
 }
