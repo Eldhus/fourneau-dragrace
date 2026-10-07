@@ -227,11 +227,11 @@ nav.tabs a + a { border-left: 0; }
 .drag .track { position: relative; }
 .drag .reach { flex: none; width: calc(var(--reach) * 72%); margin-left: -4px; }
 .drag .whisker {
-  position: absolute; top: calc(50% - 6px); height: 12px;
-  left: calc(var(--low) * 72% + 1px); width: calc((var(--high) - var(--low)) * 72%);
-  border-left: 2px solid var(--text); border-right: 2px solid var(--text);
-  background: linear-gradient(to bottom, transparent 5px, var(--text) 5px, var(--text) 7px, transparent 7px);
-  opacity: .75; pointer-events: none;
+  position: absolute; top: calc(50% - 5px); height: 10px;
+  left: calc(var(--low) * 72%); width: calc((var(--high) - var(--low)) * 72%);
+  border-left: 1px solid var(--text); border-right: 1px solid var(--text);
+  background: linear-gradient(to bottom, transparent 4.5px, var(--text) 4.5px, var(--text) 5.5px, transparent 5.5px);
+  opacity: .55; pointer-events: none;
 }
 
 /* The tables: one line a row, scrolled sideways when wide, never tall. */

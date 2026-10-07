@@ -506,3 +506,10 @@ line labels on a phone, so it has a legend (with the hollow point's key),
 and its axis says "100ms": at 20px on a phone "100 ms" ran off the left
 edge. Checked at 412 px (headless Brave, reduced motion: the bars' launch
 animation otherwise leaves them short of their whiskers in a screenshot).
+
+## 2026-10-06: quieter whiskers
+
+The owner: the whiskers looked like blots on the bars' tips. Two 2px
+caps a few pixels apart made a solid block where the rounds agreed. Now
+1px, at 55% opacity, and none at all when the rounds were within 2% of
+the strip's top bar (`whisker_share_min`): the table keeps the spread.

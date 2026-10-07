@@ -11,7 +11,7 @@ View :: [].{
 	## hollow points are.
 	## `low`, `high`: the slowest and fastest rounds as shares, the whisker's
 	## ends; `reach`, how far the whisker runs past the bar (median).
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, reach : Str, value : Str, hollow : Bool, tip : Str }
+	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, reach : Str, value : Str, ranged : Bool, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -198,7 +198,7 @@ strip = |run, class, workload| {
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", reach: "0", value: "DNF", hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", reach: "0", value: "DNF", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
 		value = Format.thousands(result.median_rps)
 		rounds = List.len(result.rounds).to_str()
@@ -213,6 +213,7 @@ row = |result, most, local|
 			high: Format.two_decimals(fastest / most),
 			reach: Format.two_decimals((fastest - result.median_rps) / most),
 			value,
+			ranged: (fastest - slowest) / most >= whisker_share_min,
 			hollow: !tag.is_empty(),
 			tip: "${result.competitor}: ${value} req/s, median of ${rounds} rounds (${Format.thousands(slowest)} to ${Format.thousands(fastest)}, ${Format.thousands(spread)}% apart), limited by ${limited_by(result, local)}; p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
 		}
@@ -620,6 +621,12 @@ expect {
 	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.True) == "connections (nothing saturated)"
 	and limited_by(result([round(64.0, 52.0, 190.0)]), Bool.False) == "connections (nothing saturated)"
 }
+
+## A whisker narrower than this share of the strip's top bar is a few
+## pixels: it reads as a blot on the bar's tip, not a range (the owner,
+## 2026-10-06), so it is not drawn; the rounds agreed.
+whisker_share_min : F64
+whisker_share_min = 0.02
 
 ## What limited a result besides the server's CPU, or that
 ## nothing did; empty for a server at its own CPU's limit, the case the
