@@ -541,13 +541,17 @@ open_chart = |{ title, summary, results, mixed }| {
 	lines = spread_open(results.map(|r| open_line(r, x, y, mixed)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
 	# The caption is one sentence on the load, as every strip's is: a mixed
-	# workload's own summary (it races only open loop), else the ladder; what
-	# is plotted is the axis's note (the owner, 2026-10-07).
+	# workload's own summary (it races only open loop), else the ladder, its
+	# shares from the run's own steps, never typed in (the owner,
+	# 2026-10-07); what is plotted is the axis's note.
+	least_share = steps.fold(1000.0, |least, s| if s.share < least s.share else least)
+	most_share = steps.fold(0.0, |most, s| if s.share > most s.share else most)
+	ladder = "The same requests at fixed rates, ${Format.thousands(least_share * 100.0)}% to ${Format.thousands(most_share * 100.0)}% of each server's own max."
 	{ caption, measure } =
 		if mixed {
 			{ caption: summary, measure: "p99 latency, the slowest request type's" }
 		} else {
-			{ caption: "The same requests at fixed rates, 50% to 120% of each server's own max.", measure: "p99 latency" }
+			{ caption: ladder, measure: "p99 latency" }
 		}
 	{ title, caption, measure, lines, ticks_x, ticks_y }
 }
