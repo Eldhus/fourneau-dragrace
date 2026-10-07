@@ -582,13 +582,13 @@ open_chart = |{ id, title, results, mixed }| {
 		drawn = open_metric(results, steps, x, metric, mixed)
 		{ key, label, checked: metric == shown, measure: drawn.measure, lines: drawn.lines, ticks_y: drawn.ticks_y }
 	})
-	# One caption, whichever latency is drawn (2026-10-07: one a measure,
-	# all four showed at once, the same sentence four times).
+	# One short caption, whichever latency is drawn; the Workloads page
+	# explains the ladders (the owner, 2026-10-07: "way more concise").
 	caption =
 		if mixed {
-			"Latency against the offered rate: the article list (50%), an article (30%), a comment (15%) and a favorite (5%) at once, open loop, at the same rates for every server, each climbing until it falls behind. A percentile is the slowest part's; the mean is over every request."
+			"Latency as the rate climbs; a percentile is the slowest request type's."
 		} else {
-			"Latency against the offered rate (open loop: requests arrive at a fixed rate whatever the server does). Each server is offered 50% to 120% of its own maximum above."
+			"Latency as the rate climbs, to 120% of each server's max."
 		}
 	{ id, title, caption, ticks_x, competitors: results.map(|r| r.competitor), metrics }
 }

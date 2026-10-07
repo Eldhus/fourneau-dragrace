@@ -12,7 +12,7 @@
 {{#table}}<tr><td>{{ competitor }}</td>{{?valid}}<td>{{ rps }}</td><td>{{ p95 }}</td><td>{{ p99 }}</td><td>{{ p999 }}</td><td>{{ rounds }}</td><td>{{ spread }}</td><td>{{ cpu }}</td><td>{{ loader }}</td><td>{{ net }}</td><td>{{ limit }}</td><td>{{ steal }}</td><td>{{ rss }}</td>{{/valid}}{{^valid}}<td colspan="12">not valid: {{ note }}</td>{{/valid}}</tr>
 {{/table}}</tbody></table></details></figure>
 {{/strips}}</div>
-{{#open}}<figure class="strip open"><figcaption><b>Under load: {{ title }}</b>{{ caption }}</figcaption>
+{{#open}}<figure class="strip open"><figcaption><b>Under load: {{ title }}</b>{{ caption }} <a href="/workloads">How</a></figcaption>
 <fieldset class="metrics"><legend>latency</legend>{{#metrics}}<label><input type="radio" name="{{ ../id }}" value="{{ key }}"{{?checked}} checked{{/checked}}><span>{{ label }}</span></label>{{/metrics}}</fieldset>
 {{#metrics}}<div class="chart-scroll metric m-{{ key }}"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ ../title }}: {{ measure }} by offered requests per second">
 {{#ticks_y}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
