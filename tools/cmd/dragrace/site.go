@@ -297,23 +297,26 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"/etc/dragrace-host/config.json": string(config)}, 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join([]string{
+	if err := putFiles(ctx, machine, hostFiles("05:30"), 0o644); err != nil {
+		return err
+	}
+	setup := strings.Join(append(hostSetup(),
 		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
 		"rm /tmp/dragrace-host-agent",
 		// The layout before self-hosting: the rrsync deploy user and its data.
 		"(id deploy >/dev/null 2>&1 && sudo userdel -r deploy || true)",
 		"sudo rm -rf /srv/dragrace",
-		"(test -L " + siteHome + "/current || sudo rm -rf " + siteHome + ")",
-		"sudo install -d -m 755 " + siteHome,
-		"sudo install -d -m 700 -o site -g site " + siteState + " " + siteState + "/secrets " +
-			siteState + "/backups",
-		"sudo ln -sfn " + siteHome + "/current/static " + siteState + "/static",
+		"(test -L "+siteHome+"/current || sudo rm -rf "+siteHome+")",
+		"sudo install -d -m 755 "+siteHome,
+		"sudo install -d -m 700 -o site -g site "+siteState+" "+siteState+"/secrets "+
+			siteState+"/backups",
+		"sudo ln -sfn "+siteHome+"/current/static "+siteState+"/static",
 		"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q sqlite3 >/dev/null 2>&1",
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
 		"sudo systemctl enable dragrace-site.service",
-	}, " && ")
+	), " && ")
 	if _, err := machine.Shell(ctx, setup); err != nil {
 		return err
 	}
@@ -338,6 +341,36 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	}
 	fmt.Printf("the site is serving https://%s/ (Let's Encrypt %s)\n", *host, *acme)
 	return nil
+}
+
+// hostFiles are what every host of the owner's (the site host, the racer)
+// is set up with, found missing on the first live audit (2026-10-07):
+// root's login refused outright (cloud-init's disable_root only gave root
+// a key that prints "login as ..."), and unattended-upgrades rebooting
+// when an update needs it, at `rebootUTC`: away from the 03:00 New York
+// race (07:00 UTC), as each host's own time is UTC.
+func hostFiles(rebootUTC string) map[string]string {
+	return map[string]string{
+		"/etc/ssh/sshd_config.d/10-dragrace.conf": "PermitRootLogin no\nPasswordAuthentication no\n",
+		"/etc/apt/apt.conf.d/52dragrace-reboot": "Unattended-Upgrade::Automatic-Reboot \"true\";\n" +
+			"Unattended-Upgrade::Automatic-Reboot-Time \"" + rebootUTC + "\";\n",
+	}
+}
+
+// hostSetup is the script that goes with hostFiles: sshd reloaded, a 512
+// MiB swap file (a 512 MB droplet thrashed in its first boot's package
+// checks), and Ubuntu's update-notifier and motd timers off (nobody logs
+// in to read them; on the racer they took a CPU for minutes).
+func hostSetup() []string {
+	return []string{
+		"sudo sshd -t && sudo systemctl reload ssh",
+		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +
+			"sudo mkswap -q /swapfile))",
+		"(swapon --show=NAME --noheadings | grep -q /swapfile || sudo swapon /swapfile)",
+		"(grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null)",
+		"sudo systemctl disable --now update-notifier-download.timer update-notifier-motd.timer " +
+			"motd-news.timer 2>/dev/null; true",
+	}
 }
 
 // putFiles copies each file to /tmp and installs it in place as root.

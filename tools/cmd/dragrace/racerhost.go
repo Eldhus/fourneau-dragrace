@@ -213,15 +213,19 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		"/etc/dragrace-racer/config.json": string(racerJSON)}, 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join([]string{
+	// Its reboots far from the race (07:00 UTC) and from the site's.
+	if err := putFiles(ctx, machine, hostFiles("15:30"), 0o644); err != nil {
+		return err
+	}
+	setup := strings.Join(append(hostSetup(),
 		"sudo install -m 755 /tmp/dragrace /usr/local/bin/dragrace-guard",
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
 		// A first racer binary: from then on it updates itself.
-		"(test -e /var/lib/dragrace-racer/bin/dragrace || sudo install -m 755 -o racer -g racer " +
+		"(test -e /var/lib/dragrace-racer/bin/dragrace || sudo install -m 755 -o racer -g racer "+
 			"/tmp/dragrace /var/lib/dragrace-racer/bin/dragrace)",
 		"rm /tmp/dragrace",
 		"sudo install -d -m 700 /etc/credstore.encrypted",
-	}, " && ")
+	), " && ")
 	if _, err := machine.Shell(ctx, setup); err != nil {
 		return err
 	}
