@@ -171,7 +171,7 @@ Store :: [].{
 				["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
 			} else {
 				names = Str.join_with(new.map(|head| "${head.repository} ${short(head.commit_sha)}"), ", ")
-				["New commits, ${names}: they race tonight at 03:00 New York time."]
+				["Racing tonight at 03:00 New York time: ${names}."]
 			}
 		asked = if racer.waiting.any(|w| w.kind == "race") ["A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour)."] else []
 		last =
@@ -236,7 +236,7 @@ expect {
 	quiet = { recent: [], classes: [], results: 0, waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
 	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
 	Store.status(quiet) == ["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
-	and Store.status(busy) == ["New commits, roux def1234: they race tonight at 03:00 New York time."]
+	and Store.status(busy) == ["Racing tonight at 03:00 New York time: roux def1234."]
 }
 
 expect {
