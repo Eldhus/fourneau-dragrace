@@ -177,10 +177,5 @@
   owner buys it and sets the record. Then the site should send
   `Strict-Transport-Security` (roux sends none; fourneau-static does).
   (2026-10-05)
-- [ ] The old site host (nyc3, 174.138.75.219, droplet 606524979) still
-  runs, serving the data as of 12:45 UTC 2026-10-07 and failing to
-  deploy each new build (the schema changed): delete it once the owner
-  agrees (its DigitalOcean backups go with it), then `site backups` for
-  the new one. (2026-10-07)
 
 ## Tickler

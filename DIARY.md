@@ -812,3 +812,14 @@ kept writing under the old id's directory; restarted, it follows the new.
 
 The old host still runs, stale, until the owner agrees to delete it
 (its DigitalOcean backups go with it).
+
+The owner agreed: the old site host (606524979, nyc3, 174.138.75.219)
+is deleted, its one DigitalOcean backup with it, its key out of
+`site-known-hosts`. `site backups` turned on the new host's: daily, seven
+kept, the first window 2026-10-08 16:00-20:00 UTC.
+
+A droplet keeps its public IPv4 for its whole life (reboots, power
+off, resizes); a new droplet gets a new one, as this move did. With a
+domain name, a move is the A record changed; a DigitalOcean reserved IP
+(free while assigned) would also survive one, but the name makes it
+unneeded.
