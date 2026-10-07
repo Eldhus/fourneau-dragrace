@@ -95,6 +95,26 @@
 
 ## Todo
 
+- [ ] **Did the c-4 loader fix dedicated-2?** Read the race of 2026-10-08
+  against 2026-10-07's (RACING.md, Cost): the closed loop should reach the
+  ladder's numbers (fourneau-zig ~89k templates, roux ~90k) with the
+  server at 90% or more and steady rounds. If the server still idles, the
+  next night tries more connections than 256 (one change a night). If the
+  loader reads 90% and more, ask DigitalOcean for dedicated sizes above 4
+  vCPUs (this account has none). (2026-10-07)
+- [ ] roux answers non-2xx under Conduit's load: 10,634 on dedicated-2's
+  4,000/s step and 8,132 on smallest's 2,000/s, in every part, reads
+  too; every other server none. Find out what (a queue's 503, SQLite
+  busy), in roux. And the chart: a step's p99 counts those fast refusals
+  while its rate counts only 2xx, so roux's line flatters it; a step with
+  refusals should show it (as a hollow point shows the loader). (2026-10-07)
+- [ ] Echo 4 KiB is the network on both classes (0.9 to 1.3 Gbit/s each
+  way, thousands of retransmits a round, Go's p99.9 240 ms), but the site
+  says "connections (nothing saturated)": its rule wants one retransmit
+  per 100 requests from 1,000 Mbit/s, and roux had one per 200. Lower it,
+  with an expect on 2026-10-07's figures. (2026-10-07)
+- [ ] Record the loader's steal, as the server's is: a shared loader's
+  busy figure hid it (schema change, so a migration). (2026-10-07)
 - [ ] Live demos on the site: roux's examples, running (the templates and
   database workloads are done: templates, conduit). (2026-10-05)
 - [ ] `dragrace diff`: differential tests of fourneau against Go and axum,

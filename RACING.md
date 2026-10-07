@@ -189,10 +189,17 @@ the site draws it hollow.
 Per nightly, two pairs at once in lon1, each a server and a loader with
 more vCPUs (`dragrace sizes` has the prices): s-1vcpu-512mb with
 c-4 (c-2 was 92-98% busy under fourneau-zig, 2026-10-06), and c-2 with
-s-8vcpu-16gb (c-4 was the limit for the fastest server, 98%
-busy at 152k plaintext requests/s, 2026-10-06, and lon1 offers no
-dedicated size above it: eight shared vCPUs give the loader headroom, its
-CPU recorded every round); about $0.27 an hour together,
+c-4 too. c-4 was the limit for the fastest server once (98% busy at 152k
+plaintext requests/s, 2026-10-06), and this account can make no
+dedicated size above 4 vCPUs (`dragrace sizes`; DigitalOcean raises such
+limits on request), so dedicated-2 ran an s-8vcpu-16gb loader from then.
+Its shared vCPUs hid their steal: on 2026-10-07 the closed loop
+under-drove every fast server (roux's plaintext rounds 88k to 115k with
+the server at 56-73%, while the open-loop ladder took fourneau-zig to 89k
+against its closed loop's 75k), and the smallest class, with a c-4
+loader, beat it. So c-4 again: a dedicated loader's busy figure is
+honest, and at ~110k it is half busy; past ~150k it is the limit, and
+the site says so. About $0.27 an hour together,
 billed per second (a minute at least). With five competitors, six
 workloads and the two ladders a class races for about 43 minutes: the
 first cloud race from the racer (2026-10-07) took 52 minutes from

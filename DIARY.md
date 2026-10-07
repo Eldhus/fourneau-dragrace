@@ -1045,3 +1045,32 @@ Checked: the queries on the live data's copy (Conduit: list 50%, article
 120%); 113 expects (the new one: a card's route without the query, its
 line closed and mixed); the page read through `site dev`; a search of
 site/ for the old figures finds none.
+
+## 2026-10-07: dedicated-2's loader back to c-4
+
+The owner asked why dedicated-2's fast servers stop short of their CPU.
+Read from the race of 2026-10-07 (every round, step and part; the local
+copy of the live database):
+- dedicated-2's closed loop is under-driven. roux plaintext's rounds 115k,
+  88k, 98k with the server at 73, 56, 64% and nothing retransmitted;
+  fourneau-zig at 47-60% on every workload. The ladder proves headroom:
+  templates at 120% gave fourneau-zig 89k (closed loop 75k, server 70%)
+  and roux 90.5k (closed loop 83k). The smallest class, server at 93-100%
+  everywhere with a c-4 loader, beat it (fourneau-zig plaintext 110k
+  against 84k). The loader was s-8vcpu-16gb, shared: its busy 34-46%
+  leaves out steal, which no one records for the loader.
+- fourneau-zig's 50% on two vCPUs looked like one shard doing all the
+  work; the ladder's 70% at 89k says not.
+- Echo is the network on both classes (0.9-1.3 Gbit/s each way, up to
+  39k retransmits a round), which the site's rule misses (TODO).
+- roux refuses requests under Conduit's load where no other server does
+  (TODO).
+- Elsewhere clean: success 1.0 and no errors everywhere; Go and
+  basic-webserver CPU-bound in every row.
+
+The fix wanted was a dedicated c-8 loader, as on 2026-10-05; `dragrace
+sizes` shows this account none above 4 vCPUs in any region, which is
+why s-8vcpu was chosen on 2026-10-06 after c-4 hit 98% at 152k. c-4 again
+for dedicated-2: honest about its busy time, half busy at ~110k on the
+smallest class; past ~150k it is the limit and says so. One change for
+tonight's race; TODO says how to read it.
