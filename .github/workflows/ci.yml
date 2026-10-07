@@ -35,6 +35,21 @@ jobs:
         with:
           path: ~/.cache/fourneau-dragrace
           key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
+      # The competitors' dependencies and builds, kept between runs: 7.5 of
+      # a build's 8 minutes went to compiling them from scratch (2026-10-07).
+      # Cargo, Go, Zig and Roc each key their own caches by content.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            fourneau-dragrace/competitors/axum/target
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/zig
+            ~/.cache/roc
+          key: deps-${{ hashFiles('fourneau-dragrace/competitors/axum/Cargo.lock', 'fourneau-dragrace/competitors/go/go.sum', 'fourneau-dragrace/versions.json') }}
+          restore-keys: deps-
       # The conduit workload's seeded database is made with the sqlite3 shell.
       - name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
