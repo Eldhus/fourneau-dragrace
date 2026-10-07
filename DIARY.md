@@ -762,3 +762,26 @@ reboots only when `/run/reboot-required` exists, and on the racer only
 when no run is racing (its `racing` mark; a restart ends a run). The
 updates move to 01:30 New York with no random delay (Ubuntu's default,
 06:00 UTC plus up to an hour, could install after the reboot's look).
+
+## 2026-10-07: no CPU pin
+
+The owner would rather a night's machines match than every night's. A
+night's comparison already is on one CPU: every competitor of a class
+races on the one server droplet, in interleaved rounds. And the classes
+cannot match each other: the first race's shared droplets (s-1vcpu,
+s-8vcpu) reported 6:79:1, an older generation than any dedicated one
+(8280 6:85:7, 8358 6:106:6). So the pin, which cost five minutes and six
+c-2s for an 8168 lon1 never gave, is gone: `server_cpu`, the replacing
+loop, and the machines' `cpu_wanted`, `cpu_matched` and `attempts`
+columns. Every machine still records its model and family:model:stepping.
+
+The schema change is a migration (roux checks the schema's text exactly,
+so no `DROP COLUMN`): a new database made from the new schema.sql, every
+table copied from the old one attached (`INSERT INTO t SELECT * FROM
+old.t`; run_classes and machines by their remaining columns). Tried on
+the newest copy: every count the same, integrity and foreign keys ok,
+the new site serving every page from it.
+
+The first racer's race also closes "a race took 63 minutes of racing":
+with the workers on the loaders, 45 minutes of racing for about 40 of
+load.

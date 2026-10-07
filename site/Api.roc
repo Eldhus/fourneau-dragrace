@@ -52,7 +52,7 @@ Api :: [].{
 		versions : List({ name : Str, version : Str }),
 		competitors : List({ name : Str, title : Str, language : Str, framework : Str }),
 		workloads : List(WorkloadPost),
-		classes : List({ name : Str, label : Str, title : Str, size : Str, loader_size : Str, server_cpu : Str }),
+		classes : List({ name : Str, label : Str, title : Str, size : Str, loader_size : Str }),
 	}
 
 	WorkloadPost : {
@@ -92,9 +92,6 @@ Api :: [].{
 		cpus : I64,
 		kernel : Str,
 		cpu_id : Str,
-		cpu_wanted : Str,
-		cpu_matched : Bool,
-		attempts : I64,
 	}
 
 	## A result, as results.go's Result: the rounds and open-loop steps whole.
@@ -443,7 +440,7 @@ Api :: [].{
 		}
 		$position = 0
 		for c in race.classes.take_first(items_max) {
-			Runs.add_class!(tx, { run_id, name: c.name, position: $position, label: c.label, title: c.title, size: c.size, loader_size: c.loader_size, server_cpu: c.server_cpu })?
+			Runs.add_class!(tx, { run_id, name: c.name, position: $position, label: c.label, title: c.title, size: c.size, loader_size: c.loader_size })?
 			$position = $position + 1
 		}
 		Ok({})
@@ -672,9 +669,6 @@ Api :: [].{
 						cpus: m.cpus,
 						kernel: m.kernel,
 						cpu_id: m.cpu_id,
-						cpu_wanted: m.cpu_wanted,
-						cpu_matched: m.cpu_matched,
-						attempts: m.attempts,
 					})
 					match written {
 						Ok({}) => {}

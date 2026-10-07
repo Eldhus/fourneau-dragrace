@@ -261,25 +261,6 @@ func TestCoresApart(t *testing.T) {
 	}
 }
 
-func TestCPUMatches(t *testing.T) {
-	model := "Intel(R) Xeon(R) Platinum 8168 CPU @ 2.70GHz"
-	cases := []struct {
-		wanted, model, id string
-		match             bool
-	}{
-		{"", model, "6:85:4", true},
-		{"Platinum 8168", model, "6:85:4", true},
-		{"Platinum 8168", "Intel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz", "6:85:7", false},
-		{"6:85:4", "DO-Regular", "6:85:4", true},
-		{"6:85:4", "DO-Regular", "6:106:6", false},
-	}
-	for _, c := range cases {
-		if cpuMatches(c.wanted, c.model, c.id) != c.match {
-			t.Errorf("%q against %q (%s): want %v", c.wanted, c.model, c.id, c.match)
-		}
-	}
-}
-
 func TestDropletImagePinsAgree(t *testing.T) {
 	root := "../../.."
 	race, err := loadRace(root)

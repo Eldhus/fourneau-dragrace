@@ -62,9 +62,6 @@ Store :: [].{
 				cpu: m.cpu,
 				cpus: m.cpus.to_u32_try() ?? 0,
 				kernel: m.kernel,
-				cpu_wanted: m.cpu_wanted,
-				cpu_matched: m.cpu_matched,
-				attempts: m.attempts.to_u32_try() ?? 0,
 			}),
 			results: results.map(|r| {
 				same = |x| x.class == r.class and x.workload == r.workload and x.competitor == r.competitor

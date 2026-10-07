@@ -138,7 +138,6 @@ type ServerClassPost struct {
 	Title      string `json:"title"`
 	Size       string `json:"size"`
 	LoaderSize string `json:"loader_size"`
-	ServerCPU  string `json:"server_cpu"`
 }
 
 type EndPost struct {
@@ -677,8 +676,7 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 	}
 	config := WorkerConfig{RunID: run.ID, Class: class, Seed: seed, Site: racer.site.base,
 		Token: run.WorkerToken, ServerHost: server.address("private"), Key: home + "/key",
-		KnownHosts: home + "/known_hosts", Attempts: fleet.serverAttempts[class.Name],
-		Results: home + "/results.json"}
+		KnownHosts: home + "/known_hosts", Results: home + "/results.json"}
 	encoded, err := json.Marshal(config)
 	if err != nil {
 		return nil, err

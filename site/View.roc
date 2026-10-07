@@ -177,7 +177,7 @@ class_view = |run, class| {
 	described = run.machines.keep_if(|machine| machine.class == class.name or machine.class == "loader")
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
-	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)} · ${m.cpu} · Linux ${m.kernel}${cpu_note(m)}" })
+	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)} · ${m.cpu} · Linux ${m.kernel}" })
 	strips = closed(run.race.workloads).map(|workload| strip(run, class.name, workload))
 	{ name: class.name, label: class.label, title: class.title, machines, strips, open: open_charts(run, class.name) }
 }
@@ -672,16 +672,6 @@ whisker_share_min = 0.02
 ## server at its CPU's limit that also met the network is saturated.
 saturated : Data.Result, Bool -> Bool
 saturated = |result, local| limits(result, local).any(|limit| limit == "server CPU")
-
-## A server not on the CPU its class asks for says so: its numbers are not
-## comparable night to night with the ones that are.
-cpu_note : Data.Machine -> Str
-cpu_note = |m|
-	if m.cpu_wanted.is_empty() or m.cpu_matched {
-		""
-	} else {
-		" · not the ${m.cpu_wanted} this class asks for (${m.attempts.to_str()} droplets tried)"
-	}
 
 ## The slowest and the fastest round.
 round_range : Data.Result -> { slowest : F64, fastest : F64 }

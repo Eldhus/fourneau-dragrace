@@ -37,11 +37,6 @@ type MachineInfo struct {
 	// family:model:stepping, from /proc/cpuinfo: the CPU's generation
 	// even where the model name is hidden ("DO-Regular").
 	CPUID string `json:"cpu_id"`
-	// The server CPU the class asked for (ServerCPU), whether it got it,
-	// and the droplets it took.
-	CPUWanted  string `json:"cpu_wanted"`
-	CPUMatched bool   `json:"cpu_matched"`
-	Attempts   int    `json:"attempts"`
 }
 
 // Result is one competitor on one workload on one server class.

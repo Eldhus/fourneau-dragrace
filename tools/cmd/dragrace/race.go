@@ -629,12 +629,3 @@ func cpuID(ctx context.Context, machine Machine) string {
 	}
 	return strings.TrimSpace(id)
 }
-
-// cpuMatches says whether a machine's CPU is the one a class asks for: a
-// part of its model name, or its family:model:stepping exactly.
-func cpuMatches(wanted, model, id string) bool {
-	if wanted == "" {
-		return true
-	}
-	return strings.Contains(model, wanted) || id == wanted
-}

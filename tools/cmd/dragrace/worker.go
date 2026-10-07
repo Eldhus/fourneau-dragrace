@@ -32,8 +32,6 @@ type WorkerConfig struct {
 	ServerHost string `json:"server_host"`
 	Key        string `json:"key"`
 	KnownHosts string `json:"known_hosts"`
-	// Droplets the racer tried for the server's CPU (pinServerCPU).
-	Attempts int `json:"attempts"`
 	// Where every result is kept as raced, for the racer.
 	Results string `json:"results"`
 }
@@ -127,9 +125,6 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 		target.LoaderThreads = loaderInfo.CPUs
 	}
 	serverInfo := machineInfo(ctx, server, "server", config.Class.Name, config.Class.Size)
-	serverInfo.CPUWanted = config.Class.ServerCPU
-	serverInfo.CPUMatched = cpuMatches(config.Class.ServerCPU, serverInfo.CPU, serverInfo.CPUID)
-	serverInfo.Attempts = max(config.Attempts, 1)
 	machines := []MachineInfo{loaderInfo, serverInfo}
 	if err := site.post(ctx, "/api/runs/"+config.RunID+"/machines", machines, nil); err != nil {
 		return err

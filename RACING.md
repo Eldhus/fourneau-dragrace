@@ -131,19 +131,21 @@ packets from 1,320 Mbit/s on 2026-10-06, p99 205 ms), or none of them: then
 the closed loop's 256 connections and their round trips were the limit,
 and the server was under-driven.
 
-## The same machine every night
+## The same machine within a night, not across nights
 
 DigitalOcean gives a size whatever host has room, and hosts of one size
-differ by a CPU generation (c-2 on a Xeon 8280 one night, an 8168 the
-next), which moves results night to night. Every machine records its CPU
-model and its `family:model:stepping` (the generation, even where the
-name is hidden: the smallest droplet says only "DO-Regular"). A class may
-ask for one (`server_cpu`: part of the model name, or family:model:stepping);
-a server on another CPU is deleted and another requested, up to six
-droplets (a minute of a c-2 is a tenth of a cent). Past that the race goes
-on, and the run and the site say the server was not the asked-for CPU.
-dedicated-2 asks for the Platinum 8168; the smallest droplet will once its
-usual family:model:stepping is known.
+differ by a CPU generation: lon1's c-2s were Xeon 8280s and 8358s on
+2026-10-07, an 8168 in nyc3 the day before. Within a night that changes
+nothing: every competitor of a class races on the one server droplet, in
+interleaved rounds, so a night's comparison is always on one CPU. Across
+nights it moves the numbers, so every machine records its CPU model and
+its `family:model:stepping` (the generation, even where the name is
+hidden: the shared droplets say only "DO-Regular", 6:79:1 so far), and
+the history is read with them. Pinning a CPU (asking again until one
+came up) was tried and dropped (owner, 2026-10-07): six c-2s in a row
+missed the 8168, five minutes for nothing, and a night's fairness never
+needed it. The two classes cannot share one: the shared droplets are an
+older generation than the dedicated ones.
 
 Each class has a `label` (its tab: small, medium) and a `title` (its
 heading: what it is for); each run keeps its classes as raced.

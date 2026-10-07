@@ -119,14 +119,6 @@ type ServerClass struct {
 	Title      string `json:"title"`
 	Size       string `json:"size"`
 	LoaderSize string `json:"loader_size"`
-	// ServerCPU, when set, is the CPU the server must have: a part of its
-	// model name ("Platinum 8168") or its family:model:stepping ("6:85:4",
-	// for droplets that hide the name). DigitalOcean gives a size whatever
-	// host has room, and two hosts of one size differ by a CPU generation
-	// (2026-10-06: c-2 on an 8280 one night, an 8168 the next), which moves
-	// results night to night. A server on another CPU is replaced, up to
-	// serverCPUAttemptsMax times (a minute of a c-2 is a tenth of a cent).
-	ServerCPU string `json:"server_cpu"`
 }
 
 type Local struct {

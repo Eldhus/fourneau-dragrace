@@ -133,11 +133,6 @@
   - Steal read 0 on every shared droplet: check DigitalOcean reports it
     at all before trusting a 0.
   (2026-10-06)
-- [ ] Pin the smallest droplet's CPU (`server_cpu` in race.json) once a few
-  races have recorded its `cpu_id` (it reports only "DO-Regular" by name):
-  the most frequent family:model:stepping. Also check whether pinning
-  dedicated-2 to the 8168 needs more than six droplets some nights (the
-  log says each try). (2026-10-06)
 - [ ] For the owner (fourneau, roux; not this repository): under the open
   loop, fourneau-zig and roux have the worst tails at moderate load. At
   50% of their own maximum on dedicated-2: p99 20 ms (fourneau-zig) and
@@ -149,13 +144,9 @@
 - [ ] Night-to-night variance on one CPU model: roux plaintext on
   dedicated-2's Xeon 8168 did 152k one race and 119k the next, the server
   at 95-99% both times; the loader type changed between them (c-4 to
-  s-8vcpu-16gb). Pinning the CPU is not enough: compare a few races
-  before trusting a trend under ~20%; consider pinning the loader too.
-  (2026-10-06)
-- [ ] A race took 63 minutes of racing for ~40 of load when every
-  measurement was SSH round trips from GitHub's US runner to lon1. The
-  worker now runs on the loader in lon1: compare the first cloud race's
-  racing time, then close this or cut the calls further. (2026-10-06)
+  s-8vcpu-16gb). The CPU is not pinned now (RACING.md, "The same
+  machine within a night"): read the history with each night's CPU, and
+  compare a few races before trusting a trend under ~20%. (2026-10-06)
 - [ ] The site host runs Ubuntu 24.04 (kernel 6.8): it was provisioned
   before the 26.04 pin, which the racer and the race droplets follow. A
   new site host on 26.04 means a new IP address, so a new certificate and
@@ -172,10 +163,6 @@
 - [ ] The class's data link (`/data/classes/ID/CLASS.json`) is the page's
   model: a subset of each round's measures. Every measure is in the
   database: an export of it whole. (2026-10-07)
-- [ ] dedicated-2 asks for a Xeon 8168, and the first racer's race got
-  six c-2s in lon1, 8358s and 8280s, none an 8168: five minutes and five
-  droplets for nothing. Pin what lon1's c-2s are now (the machines
-  table's attempts over a few races), or stop pinning. (2026-10-07)
 - [ ] Every commit is new to the nightly check, docs and TODO too: a
   night races again ($0.29) for commits that change nothing raced.
   Owner's call: skip commits touching only docs? (2026-10-07)
