@@ -24,6 +24,22 @@
       ]
     },
     {
+      "cwd": ".",
+      "argv": [
+        "cp",
+        "workloads/conduit/schema.sql",
+        "competitors/roux/db/schema.sql"
+      ]
+    },
+    {
+      "cwd": "competitors/roux",
+      "argv": [
+        "{roux}/zig-out/bin/roux-db",
+        "gen",
+        "db"
+      ]
+    },
+    {
       "cwd": "competitors/roux",
       "argv": [
         "{roux}/zig-out/bin/rocstache-gen",
@@ -47,7 +63,8 @@
       "{bin}"
     ],
     "env": {
-      "ROUX_ADDRESS": "{address}"
+      "ROUX_ADDRESS": "{address}",
+      "ROUX_DATABASE": "{db}"
     },
     "fixed_port": 8080
   }
