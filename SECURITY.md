@@ -42,9 +42,13 @@ panel: **API → Tokens → Generate New Token**.
 - Name: `fourneau-dragrace`
 - Expiration: 90 days (a reminder is in TODO.md)
 - Scopes: **Custom Scopes**, then exactly:
-  - `droplet`: create, read, delete (and `update`, once, for `site backups`)
+  - `droplet`: create, read, update, delete (`update`: droplet actions,
+    such as `site backups` turning on DigitalOcean's backups)
   - `ssh_key`: create, read, delete
   - `tag`: create, read
+
+  A token's scopes cannot be changed once it is made (DigitalOcean,
+  2026-10-07): a scope missing means a new token, and the old one deleted.
 
   The panel adds the read scopes these require on its own. If a race fails
   with 403 on create, add `regions:read`, `sizes:read`, `image:read` and

@@ -124,7 +124,9 @@
 - **Rotate the GitHub token `fourneau-dragrace-racer`** before it
   expires (a year): a new one with the same settings (SECURITY.md), into
   the keyring, `dragrace racer install` again, delete the old one.
-  - Last done: never (to be made 2026-10-07; due by 2027-10-01).
+  - Last done: 2026-10-07 (made; GitHub says it expires 2027-10-08:
+    checked to reach this repository's Actions only, every other write
+    refused).
 
 - **Rotate the DigitalOcean race token** before it expires (90 days):
   make a new one with the same scopes, update the keyring and the
