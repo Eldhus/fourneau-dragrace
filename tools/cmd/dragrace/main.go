@@ -17,6 +17,7 @@
 //	dragrace site provision|install-server|deploy   the 24/7 site droplet
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
+//	dragrace bundle [-out DIR]      pack a build for a release (build.yml)
 //
 // The services of self-hosting (docs/self-hosting.md), which run outside
 // a checkout:
@@ -25,6 +26,7 @@
 //	dragrace racer serve            take the site's requests and race them
 //	dragrace racer check            ask the site for a check (the 03:00 timer)
 //	dragrace racer once -local DIR  take one request, racing on this machine
+//	dragrace host-agent             deploy the newest build's site (a timer)
 //
 // Every other command runs from anywhere inside the repository.
 package main
@@ -77,6 +79,8 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 		return commandGuard(ctx, args)
 	case "racer":
 		return commandRacer(ctx, args)
+	case "host-agent":
+		return commandHostAgent(ctx, args)
 	}
 	return errNotService
 }
@@ -117,6 +121,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandSite(ctx, root, args)
 	case "worker":
 		return commandWorker(ctx, root, args)
+	case "bundle":
+		return commandBundle(ctx, root, args)
 	}
 	usage()
 	return nil
