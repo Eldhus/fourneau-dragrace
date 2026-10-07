@@ -159,6 +159,12 @@ func (do *DigitalOcean) deleteDroplet(ctx context.Context, id int) error {
 	return do.call(ctx, http.MethodDelete, fmt.Sprintf("/v2/droplets/%d", id), nil, nil)
 }
 
+// enableBackups turns on a droplet's weekly backups.
+func (do *DigitalOcean) enableBackups(ctx context.Context, id int) error {
+	return do.call(ctx, http.MethodPost, fmt.Sprintf("/v2/droplets/%d/actions", id),
+		map[string]string{"type": "enable_backups"}, nil)
+}
+
 type SSHKey struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`

@@ -41,6 +41,16 @@ func (machine SSHMachine) Shell(ctx context.Context, script string) (string, err
 	return strings.TrimRight(string(bytes), "\n"), err
 }
 
+// ShellInput runs a script with input on its standard input: how a secret
+// reaches a host, never on a command line.
+func (machine SSHMachine) ShellInput(ctx context.Context, script, input string) error {
+	argv := append(machine.options(), machine.User+"@"+machine.Host, "bash -c "+quote(script))
+	cmd := exec.CommandContext(ctx, "ssh", argv...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func (machine SSHMachine) Put(ctx context.Context, local, remote string) error {
 	if _, err := machine.Shell(ctx, "mkdir -p "+quote(filepath.Dir(remote))); err != nil {
 		return err

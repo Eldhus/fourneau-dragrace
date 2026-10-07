@@ -79,12 +79,9 @@ type Workload struct {
 }
 
 type Cloud struct {
-	Region  string        `json:"region"`
-	Image   string        `json:"image"`
-	Servers []ServerClass `json:"servers"`
-	// Retired: classes raced once and no longer, kept for their label and
-	// title on old runs (relabel). Never raced.
-	Retired       []ServerClass `json:"retired"`
+	Region        string        `json:"region"`
+	Image         string        `json:"image"`
+	Servers       []ServerClass `json:"servers"`
 	Tag           string        `json:"tag"`
 	MaxAgeMinutes int           `json:"max_age_minutes"`
 }

@@ -3,3 +3,5 @@ Top.roc
 Bottom.roc
 *Page.roc
 *Classes.roc
+# Generated from db/schema.sql and db/*.sql by roux-db (dragrace site build).
+db/*.roc

@@ -47,7 +47,6 @@ jobs:
       - name: Build the site
         working-directory: fourneau-dragrace
         run: |
-          out/dragrace publish -into site/data out/results/*.json
           out/dragrace site build
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -55,5 +54,4 @@ jobs:
           path: |
             fourneau-dragrace/out/bin/dragrace-site
             fourneau-dragrace/site/static
-            fourneau-dragrace/site/data
           retention-days: 7

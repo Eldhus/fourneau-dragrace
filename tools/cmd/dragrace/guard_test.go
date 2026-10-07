@@ -296,3 +296,20 @@ func TestGuardOverItsSocket(t *testing.T) {
 		t.Fatalf("left: %v", fake.droplets)
 	}
 }
+
+func TestGuardConfigAllowsRaceJSONsSizesOnly(t *testing.T) {
+	race := Race{Cloud: Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180,
+		Servers: []ServerClass{{Name: "a", Size: "c-2", LoaderSize: "c-4"}}}}
+	config := guardConfigFor(race, map[string]float64{"c-2": 0.0625, "c-4": 0.125, "c-32": 1}, 25)
+	if err := config.check(); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Sizes) != 2 || config.Sizes["c-2"] != 0.0782 || config.Sizes["c-4"] != 0.1563 {
+		t.Fatalf("sizes %v", config.Sizes)
+	}
+	for _, unit := range racerUnits() {
+		if strings.Contains(unit, "digitalocean-token") && !strings.Contains(unit, "User=guard") {
+			t.Fatalf("a unit other than the guard's loads the DigitalOcean token:\n%s", unit)
+		}
+	}
+}
