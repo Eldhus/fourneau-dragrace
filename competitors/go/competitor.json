@@ -6,5 +6,5 @@
   "build": [
     { "cwd": "competitors/go", "argv": ["go", "build", "-trimpath", "-o", "{out}/go", "."], "env": { "CGO_ENABLED": "0" } }
   ],
-  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}"] }
+  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}", "--database", "{db}"] }
 }

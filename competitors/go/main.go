@@ -45,9 +45,17 @@ var dishes = []Dish{
 func main() {
 	address := flag.String("address", "127.0.0.1", "address to listen on")
 	port := flag.String("port", "8080", "port to listen on")
+	database := flag.String("database", "", "the conduit workload's SQLite database")
 	flag.Parse()
 
 	mux := http.NewServeMux()
+	if *database != "" {
+		conduit, err := openConduit(*database)
+		if err != nil {
+			log.Fatal(err)
+		}
+		conduit.routes(mux)
+	}
 	mux.HandleFunc("GET /plaintext", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, "Hello, World!")
