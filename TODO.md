@@ -131,7 +131,10 @@
 - **Rotate the DigitalOcean race token** before it expires (90 days):
   make a new one with the same scopes, update the keyring and the
   `dragrace` environment, delete the old one.
-  - Last done: never (made 2026-10-05 or after; due by 2026-12-28).
+  - Last done: 2026-10-07 (made anew with `droplet:update`, scopes
+    cannot be changed; the old one deleted by the owner; checked: droplet,
+    ssh_key and tag allowed, domains, databases, billing, volumes,
+    firewalls and projects refused; due by 2027-01-05).
 
 ## Todo
 
