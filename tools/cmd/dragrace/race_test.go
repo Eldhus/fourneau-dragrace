@@ -308,3 +308,17 @@ func TestKeyNotYetKnown(t *testing.T) {
 		t.Fatalf("a quota refusal must not be retried")
 	}
 }
+
+// Every host of the owner's refuses root's login and reboots for its
+// updates at its own time, never the race's (07:00 UTC).
+func TestHostFiles(t *testing.T) {
+	files := hostFiles("05:30")
+	if files["/etc/ssh/sshd_config.d/10-dragrace.conf"] != "PermitRootLogin no\nPasswordAuthentication no\n" {
+		t.Fatalf("sshd: %q", files["/etc/ssh/sshd_config.d/10-dragrace.conf"])
+	}
+	reboot := files["/etc/apt/apt.conf.d/52dragrace-reboot"]
+	if !strings.Contains(reboot, `Automatic-Reboot "true";`) ||
+		!strings.Contains(reboot, `Automatic-Reboot-Time "05:30";`) {
+		t.Fatalf("reboot: %q", reboot)
+	}
+}
