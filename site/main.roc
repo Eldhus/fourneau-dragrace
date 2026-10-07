@@ -1,13 +1,20 @@
 app [Context, program] { pf: platform "../../roux/platform/main.roc" }
 
 ## The dragrace site, a roux app: every page a rocstache template, the races
-## read from disk (data/) on each request, so a nightly's results show the
-## moment they land. style.css and demo.js are static files the host serves
-## itself (static/). This site is the demo: it runs on what it races.
+## read from its SQLite database (site.db, db/), which the racer and the race
+## workers fill through the API (Api.roc, docs/self-hosting.md), so a result
+## shows the moment it lands. style.css and demo.js are static files the
+## host serves itself (static/). This site is the demo: it runs on what it
+## races. Paths are relative to where it runs: site.db, backups/, secrets/
+## (racer-token and manual-token, one line each) and static/.
 
 import pf.Server
 import pf.File
 import pf.Sse
+import pf.Sqlite
+import db/Database
+import Api
+import Store
 import Data
 import View
 import IndexPage
@@ -21,39 +28,60 @@ import ContributePage
 import AboutPage
 import NotFoundPage
 
-Context : {}
+Context : { db : Sqlite.Db, tokens : Api.Tokens }
 
 program = { init!, respond! }
 
-init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64)])
-init! = || Ok({ config: { port: 443, static_dir: "static" }, context: {} })
+init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64), DbErr(Sqlite.Err), FileErr(File.FileErr)])
+init! = || {
+	# FULL: a result is on the disk when its post is answered (owner, 2026-10-06).
+	db = Sqlite.open!(Database.at("site.db"), { synchronous: Full })?
+	tokens = { racer: secret!("secrets/racer-token")?, manual: secret!("secrets/manual-token")? }
+	Ok({ config: { port: 443, static_dir: "static" }, context: { db, tokens } })
+}
 
-respond! : Server.Request, Context => Try(Server.Response, [BadRequest(Str), BadData(Str), FileErr(File.FileErr), SseErr(Sse.SseErr)])
-respond! = |request, _context| {
+## A token from its file, its line break dropped; "" when there is no file
+## (that token then opens nothing: Api.same_secret).
+secret! : Str => Try(Str, [FileErr(File.FileErr)])
+secret! = |path|
+	match File.read_utf8!(path, 1024) {
+		Ok(text) => Ok(text.trim())
+		Err(FileErr(FileNotFound)) => Ok("")
+		Err(err) => Err(err)
+	}
+
+Err : [BadRequest(Str), DbErr(Sqlite.Err), SseErr(Sse.SseErr), EncodeErr(Str)]
+
+respond! : Server.Request, Context => Try(Server.Response, Err)
+respond! = |request, { db, tokens }| {
 	path = path_of(request.target)
 	wanted = query_value(request.target, "class")
-	match path {
-		"/" => index!(wanted)
-		"/history" => history!(wanted)
-		"/race-classes" => race_classes!(request, wanted)
-		"/history-classes" => history_classes!(request, wanted)
-		"/workloads" => Ok(page(WorkloadsPage.render(frame("Workloads", "/workloads"))))
-		"/competitors" => competitors!()
-		"/method" => Ok(page(MethodPage.render(frame("Method", "/method"))))
-		"/contribute" => Ok(page(ContributePage.render(frame("Contribute", "/contribute"))))
-		"/about" => Ok(page(AboutPage.render(frame("About", "/about"))))
-		"/data/latest.json" => json!("data/latest.json")
-		"/data/index.json" => json!("data/index.json")
-		_ =>
-			if path.starts_with("/data/runs/") {
-				run_file!(path)
-			} else if path.starts_with("/data/classes/") {
-				class_file!(path)
-			} else if path.ends_with(".html") {
-				Ok(moved(old_address(path)))
-			} else {
-				Ok(not_found())
-			}
+	if path.starts_with("/api/") {
+		Api.respond!(request, db, tokens, path)
+	} else {
+		match path {
+			"/" => index!(db, request, wanted)
+			"/history" => history!(db, request, wanted)
+			"/race-classes" => race_classes!(db, request, wanted)
+			"/history-classes" => history_classes!(db, request, wanted)
+			"/workloads" => Ok(page(WorkloadsPage.render(frame("Workloads", "/workloads"))))
+			"/competitors" => competitors!(db, request)
+			"/method" => Ok(page(MethodPage.render(frame("Method", "/method"))))
+			"/contribute" => Ok(page(ContributePage.render(frame("Contribute", "/contribute"))))
+			"/about" => Ok(page(AboutPage.render(frame("About", "/about"))))
+			"/data/latest.json" => latest_file!(db, request)
+			"/data/index.json" => index_file!(db, request)
+			_ =>
+				if path.starts_with("/data/runs/") {
+					run_file!(db, request, path)
+				} else if path.starts_with("/data/classes/") {
+					class_file!(db, request, path)
+				} else if path.ends_with(".html") {
+					Ok(moved(old_address(path)))
+				} else {
+					Ok(not_found())
+				}
+		}
 	}
 }
 
@@ -61,14 +89,14 @@ respond! = |request, _context| {
 
 ## The newest race, one server class at a time (`?class=NAME`), with a tab
 ## per class.
-index! : Str => Try(Server.Response, [BadData(Str), FileErr(File.FileErr)])
-index! = |wanted| {
+index! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+index! = |db, request, wanted| {
 	base = frame("FOURNEAU HTTP DRAG RACE", "/")
 	{ ready, latest } =
-		match latest!() {
+		match Store.latest!(db, request) {
 			Ok(run) => { ready: Bool.True, latest: View.latest(run) }
-			Err(FileErr(FileNotFound)) => { ready: Bool.False, latest: no_race }
-			Err(err) => return Err(err)
+			Err(NotFound) => { ready: Bool.False, latest: no_race }
+			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
 	Ok(page(IndexPage.render({
@@ -87,10 +115,10 @@ index! = |wanted| {
 	})))
 }
 
-history! : Str => Try(Server.Response, [BadData(Str), FileErr(File.FileErr)])
-history! = |wanted| {
+history! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+history! = |db, request, wanted| {
 	base = frame("History", "/history")
-	view = history_view!()?
+	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
 	Ok(page(HistoryPage.render({
 		title: base.title,
@@ -104,23 +132,24 @@ history! = |wanted| {
 	})))
 }
 
-competitors! : () => Try(Server.Response, [BadData(Str), FileErr(File.FileErr)])
-competitors! = || {
+competitors! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+competitors! = |db, request| {
 	base = frame("Competitors", "/competitors")
 	pins =
-		match latest!() {
+		match Store.latest!(db, request) {
 			Ok(run) => View.pins(run)
-			Err(_) => []
+			Err(NotFound) => []
+			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	Ok(page(CompetitorsPage.render({ title: base.title, home: base.home, nav: base.nav, pins })))
 }
 
-history_view! : () => Try(View.History, [BadData(Str), FileErr(File.FileErr)])
-history_view! = ||
-	match latest!() {
-		Ok(run) => Ok(View.history(run, Data.index(File.read_utf8!("data/index.json", data_bytes_max)?)?))
-		Err(FileErr(FileNotFound)) => Ok(no_history)
-		Err(err) => Err(err)
+history_view! : Sqlite.Db, Server.Request => Try(View.History, [DbErr(Sqlite.Err)])
+history_view! = |db, request|
+	match Store.latest!(db, request) {
+		Ok(run) => Ok(View.history(run, Store.history!(db, request)?))
+		Err(NotFound) => Ok(no_history)
+		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
 ## Before the first race: the pages say so.
@@ -130,42 +159,50 @@ no_history = { waiting: Bool.True, note: "", competitors: [], classes: [] }
 no_race : View.Latest
 no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], classes: [] }
 
-latest! : () => Try(Data.Run, [BadData(Str), FileErr(File.FileErr)])
-latest! = || Data.run(File.read_utf8!("data/latest.json", data_bytes_max)?)
-
 # --- the raw data -------------------------------------------------------------
 
-json! : Str => Try(Server.Response, [FileErr(File.FileErr)])
-json! = |file|
-	match File.read_utf8!(file, data_bytes_max) {
-		Ok(text) => Ok({ status: 200, headers: [{ name: "Content-Type", value: "application/json" }], body: Str.to_utf8(text) })
-		Err(FileErr(FileNotFound)) => Ok(not_found())
-		Err(err) => Err(err)
+## The newest run whole, as the race page reads it.
+latest_file! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+latest_file! = |db, request|
+	match Store.latest!(db, request) {
+		Ok(run) => json(Json.to_str_try(run))
+		Err(NotFound) => Ok(not_found())
+		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
-## /data/runs/ID.json, where ID is letters, digits and dashes only: a
-## request names a run, never a path.
-run_file! : Str => Try(Server.Response, [BadRequest(Str), FileErr(File.FileErr)])
-run_file! = |path| {
+## Every finished run's medians.
+index_file! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+index_file! = |db, request| json(Json.to_str_try(Store.history!(db, request)?))
+
+## /data/runs/ID.json, where ID is letters, digits and dashes only.
+run_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+run_file! = |db, request, path| {
 	name = path.drop_prefix("/data/runs/")
 	id = name.drop_suffix(".json")
-	if id == name or id.is_empty() or !Str.to_utf8(id).all(is_id_byte) {
+	if id == name or !is_name(id) {
 		Err(BadRequest("not a run: ${path}"))
 	} else {
-		json!("data/runs/${id}.json")
+		match Store.run!(Sqlite.read(db, request), id) {
+			Ok(run) => json(Json.to_str_try(run))
+			Err(NotFound) => Ok(not_found())
+			Err(DbErr(err)) => Err(DbErr(err))
+		}
 	}
 }
 
-## /data/classes/ID/CLASS.json: one server class of one run, its raw data
-## (the dragrace tool writes them). Both parts letters, digits and dashes.
-class_file! : Str => Try(Server.Response, [BadRequest(Str), FileErr(File.FileErr)])
-class_file! = |path| {
+## /data/classes/ID/CLASS.json: one server class of one run.
+class_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+class_file! = |db, request, path| {
 	rest = path.drop_prefix("/data/classes/")
 	match rest.split_first("/") {
 		Ok(parts) => {
 			class = parts.after.drop_suffix(".json")
 			if is_name(parts.before) and is_name(class) and class != parts.after {
-				json!("data/classes/${parts.before}/${class}.json")
+				match Store.run!(Sqlite.read(db, request), parts.before) {
+					Ok(run) => json(Json.to_str_try(for_class(run, class)))
+					Err(NotFound) => Ok(not_found())
+					Err(DbErr(err)) => Err(DbErr(err))
+				}
 			} else {
 				Err(BadRequest("not a class of a run: ${path}"))
 			}
@@ -174,6 +211,21 @@ class_file! = |path| {
 	}
 }
 
+## A run with one class's machines and results only.
+for_class : Data.Run, Str -> Data.Run
+for_class = |run, class| {
+	..run,
+	machines: run.machines.keep_if(|m| m.class == class),
+	results: run.results.keep_if(|r| r.class == class),
+}
+
+json : Try(Str, _) -> Try(Server.Response, Err)
+json = |encoded|
+	match encoded {
+		Ok(text) => Ok({ status: 200, headers: [{ name: "Content-Type", value: "application/json" }], body: Str.to_utf8(text) })
+		Err(err) => Err(EncodeErr(Str.inspect(err)))
+	}
+
 is_name : Str -> Bool
 is_name = |name| !name.is_empty() and Str.to_utf8(name).all(is_id_byte)
 
@@ -181,9 +233,6 @@ is_id_byte : U8 -> Bool
 is_id_byte = |b| (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 45
 
 # --- the frame every page shares ---------------------------------------------
-
-## The largest data file read: the index grows a few KiB a race.
-data_bytes_max = 16 * 1024 * 1024
 
 pages = [
 	{ href: "/", label: "Race" },
@@ -262,9 +311,14 @@ expect !is_name("..") and !is_name("a/b") and !is_name("")
 
 ## The race page's tabs and class, alone: what a tab's click swaps in
 ## (Datastar patches #race-classes in place, so the page does not move).
-race_classes! : Server.Request, Str => Try(Server.Response, [BadData(Str), FileErr(File.FileErr), SseErr(Sse.SseErr)])
-race_classes! = |request, wanted| {
-	latest = View.latest(latest!()?)
+race_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+race_classes! = |db, request, wanted| {
+	latest =
+		match Store.latest!(db, request) {
+			Ok(run) => View.latest(run)
+			Err(NotFound) => no_race
+			Err(DbErr(err)) => return Err(DbErr(err))
+		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
 	patch!(request, RaceClasses.render({
 		id: latest.id,
@@ -273,9 +327,9 @@ race_classes! = |request, wanted| {
 	}))
 }
 
-history_classes! : Server.Request, Str => Try(Server.Response, [BadData(Str), FileErr(File.FileErr), SseErr(Sse.SseErr)])
-history_classes! = |request, wanted| {
-	view = history_view!()?
+history_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+history_classes! = |db, request, wanted| {
+	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
 	patch!(request, HistoryClasses.render({
 		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),

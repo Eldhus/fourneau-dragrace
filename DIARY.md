@@ -537,3 +537,33 @@ Tested by driving headless Brave over the DevTools protocol (scratch
 script, not committed): scrolled to Templates on small at 390 px, clicked
 medium: Templates stayed at 120 px, the address `?class=dedicated-2`;
 the same on History, and at 1280 px.
+
+## 2026-10-06: the site keeps the races in SQLite, and takes them by API
+
+WIP 5's first part on this side (docs/self-hosting.md is the design).
+The site opens `site.db` (roux, `synchronous` FULL) and reads its two
+tokens from `secrets/` at start. `site/db/schema.sql` holds every run as
+rows: requests, runs (trigger, status, why), each repository's commit
+and whether it was new, race.json's settings, pins, competitors,
+workloads and classes per run, machines, droplets, results, every
+round's 35 measures, open-loop steps, class status, and the heads the
+racer saw. roux-db typed all 38 statements on the first try.
+
+`Api.roc` takes the posts (Bearer tokens compared in constant time; a
+worker's token is its run's, good only while the run races). Every post
+replaces what it posted before, in one transaction, so a retry through a
+deploy changes nothing twice. `Store.roc` rebuilds the pages' `Data.Run`
+from the rows, so View.roc and the templates did not change; the raw data
+links serve JSON made from the rows.
+
+Two roux needs surfaced and were fixed there: `Sqlite.backup!` (the
+racer asks for a copy after each run, `POST /api/backup`) and
+`File.read_utf8!` in `init!` (it answered `FileUnreadable` off a shard).
+
+Checked: 109 expects; the site built and run locally; a scratch script
+posted the 2026-10-06 run through the API: the refusals (no token, the
+racer asking a race, a worker token making a run, a wrong worker token,
+a result after the run ended: 409, a CHECK broken: 400 with SQLite's
+words, bad JSON: 400), the repeats (a run, a result, a request asked
+twice), 32 results, machines, classes, the end, heads, a backup; then
+every page and raw data file from the database (200), a missing run 404.
