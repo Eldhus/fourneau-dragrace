@@ -382,17 +382,25 @@ func (racer *Racer) findBuild(ctx context.Context, heads map[string]string) (Bui
 	if err != nil {
 		return Build{}, err
 	}
-	for _, build := range builds {
-		if sameCommits(build.Info.Commits, heads) {
-			return build, nil
-		}
+	if build, found := buildOf(builds, heads, time.Time{}); found {
+		return build, nil
 	}
-	dispatched := time.Now()
-	log.Printf("no build of these heads: dispatching %s", racer.config.Workflow)
-	if err := racer.github.dispatch(ctx, racer.config.Workflow); err != nil {
+	asked := time.Now()
+	// A push's build already running builds these heads: wait for it
+	// rather than ask for a second build of the same commits.
+	running, err := racer.github.building(ctx, racer.config.Workflow)
+	if err != nil {
 		return Build{}, err
 	}
-	for time.Since(dispatched) < buildWaitMax {
+	if running {
+		log.Printf("no build of these heads yet; %s is running: waiting for it", racer.config.Workflow)
+	} else {
+		log.Printf("no build of these heads: dispatching %s", racer.config.Workflow)
+		if err := racer.github.dispatch(ctx, racer.config.Workflow); err != nil {
+			return Build{}, err
+		}
+	}
+	for time.Since(asked) < buildWaitMax {
 		if err := sleepContext(ctx, 30*time.Second); err != nil {
 			return Build{}, err
 		}
@@ -401,15 +409,31 @@ func (racer *Racer) findBuild(ctx context.Context, heads map[string]string) (Bui
 			log.Printf("builds: %v", err)
 			continue
 		}
-		// The heads may have moved since: the newest build made after the
-		// dispatch is the one, whatever it built.
-		for _, build := range builds {
-			if build.CreatedAt.After(dispatched.Add(-time.Minute)) {
-				return build, nil
-			}
+		if build, found := buildOf(builds, heads, asked); found {
+			return build, nil
 		}
 	}
 	return Build{}, fmt.Errorf("no build after %s", buildWaitMax)
+}
+
+// buildOf is the build of exactly these heads, or, since `after` (zero:
+// never), the newest published since: the heads may have moved on while
+// it built, and then it built newer ones. Builds come newest first.
+func buildOf(builds []Build, heads map[string]string, after time.Time) (Build, bool) {
+	for _, build := range builds {
+		if sameCommits(build.Info.Commits, heads) {
+			return build, true
+		}
+	}
+	if after.IsZero() {
+		return Build{}, false
+	}
+	for _, build := range builds {
+		if build.PublishedAt.After(after) {
+			return build, true
+		}
+	}
+	return Build{}, false
 }
 
 // pruneRuns keeps the newest `keep` run directories.
