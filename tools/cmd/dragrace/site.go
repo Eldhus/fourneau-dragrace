@@ -392,13 +392,17 @@ WantedBy=timers.target
 	}
 }
 
-// hostSetup is the script that goes with hostFiles: sshd reloaded, the
-// reboot timer on, a 512 MiB swap file (a 512 MB droplet thrashed in its
+// hostSetup is the script that goes with hostFiles: the first boot's
+// cloud-init waited for (DigitalOcean's per-instance script can replace
+// the machine id late, and the racer's credentials, encrypted before it,
+// stopped decrypting at the next restart: found 2026-10-07), sshd
+// reloaded, the reboot timer on, a 512 MiB swap file (a 512 MB droplet thrashed in its
 // first boot's package checks), and Ubuntu's update-notifier and motd
 // timers off (nobody logs in to read them; on the racer they took a CPU
 // for minutes).
 func hostSetup() []string {
 	return []string{
+		"(cloud-init status --wait >/dev/null; true)",
 		"sudo sshd -t && sudo systemctl reload ssh",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-reboot.timer",

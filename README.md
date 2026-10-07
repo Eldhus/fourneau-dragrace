@@ -12,11 +12,13 @@ served by fourneau itself.
 A drag race: a straight line, the same track for everyone, the clock
 decides. Part of [Eldhus](https://github.com/Eldhus).
 
-Status: the site is up at https://174.138.75.219/; it is moving to keep
-the races itself and run them from its own racer
-([docs/self-hosting.md](docs/self-hosting.md), [TODO.md](TODO.md)). Workloads today:
-plaintext, a 4 KiB echo, a templated page, connection churn; databases
-on roux are coming, with live demos.
+Status: the site is up at https://104.248.175.105/; it keeps the races
+in its own database and runs them from its own racer, every night at
+03:00 New York time when a repository has a new commit
+([docs/self-hosting.md](docs/self-hosting.md), [TODO.md](TODO.md)).
+Workloads: plaintext, a 4 KiB echo, a templated page, Datastar SSE,
+connection churn, and RealWorld's Conduit on SQLite; live demos are
+coming.
 
 ## Build
 

@@ -39,6 +39,14 @@ The racer droplet has no DigitalOcean backups, so no copy of that disk
 exists outside it; destroying the droplet (and rotating the token) is the
 answer to a racer taken over.
 
+The key is tied to the machine: when DigitalOcean's per-instance script
+replaced the racer's machine id on its second boot (its first, starved
+of memory, had skipped it), the credentials stopped decrypting at the
+racer's next restart (`Failed to determine local credential key`; the
+racer was down 16 minutes on 2026-10-07). `racer install` again makes a
+new key and re-encrypts all three; it now waits for the first boot's
+cloud-init before encrypting.
+
 Fork pull requests run `ci.yml` only, which has no secrets.
 
 ## The DigitalOcean token
@@ -118,6 +126,43 @@ From then on the racer asks for a check at 03:00 New York time, and races
 when a repository has a new commit. `install-server` and `racer install`
 are run again only to change a unit, a config, a token or the pinned
 guard and host agent.
+
+## Moving the site host, or giving it a name
+
+The site's data is one SQLite file; its address is in three places: the
+certificate (`ROUX_ACME_IDENTIFIER`, from `install-server -host`), the
+host agent's health check, and the racer's config (`racer install
+-site`). Moved 2026-10-07 from nyc3 on 24.04 to lon1 on 26.04:
+
+1. `out/dragrace site provision` (race.json's region, versions.json's
+   image).
+2. A fresh copy on the old host (`POST /api/backup` with the racer
+   token), moved into the new host's `/var/lib/dragrace-site/site.db`
+   (owner `site`, mode 600), before `site install-server -host NEW`.
+3. `racer install -host RACER -site NEW`; check the page shows the
+   racer's newest heads.
+4. Delete the old droplet (its DigitalOcean backups go with it), then
+   `site backups` for the new one (it wants exactly one site droplet).
+
+A domain name, when there is one:
+
+1. Buy it at any registrar.
+2. An `A` record for the name (or `@`) to the site host's address, TTL
+   300 to start; no `AAAA` (the site listens on IPv4 only). The
+   registrar's DNS will do, or DigitalOcean's (free: point the name's
+   nameservers at `ns1.digitalocean.com` .. `ns3`, add the domain in the
+   control panel). Optionally a `CAA` record, `0 issue "letsencrypt.org"`.
+3. Wait until `dig +short NAME` answers the address.
+4. `site install-server -host NAME`: the certificate is then for the name
+   (Let's Encrypt's http-01 on port 80, as for the address), port 80
+   redirects to `https://NAME`, and the host agent checks
+   `https://NAME/api/health`. SSH by the name pins the host's key anew
+   (`accept-new`): it is the same key as the address's.
+5. `racer install -host RACER -site NAME`.
+
+From then on a new host needs only the record changed. The site sends
+no `Strict-Transport-Security` yet (browsers ignore it for an address):
+with a name it should (TODO).
 
 ## Rotating a token
 

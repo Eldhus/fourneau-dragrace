@@ -1,16 +1,16 @@
 # Self-hosting: the site keeps the races, and runs them
 
-The design of TODO's WIP 5 (owner, 2026-10-06): which machine does what,
-what crosses between them, and what each one can do if it is taken. Not
-how to race (RACING.md) or the secrets' setup steps (SECURITY.md, once
-built). Everything here is planned until TODO says otherwise.
+Which machine does what, what crosses between them, and what each one
+can do if it is taken (designed with the owner 2026-10-06, live since
+2026-10-07). Not how to race (RACING.md) or the secrets' setup steps
+(SECURITY.md).
 
 ## Machines
 
 | machine | runs | holds | inbound |
 |---|---|---|---|
-| site host (exists, nyc3, $4) | the site (roux, SQLite FULL); `dragrace host-agent` (a timer) | the races' database and its copies; the racer and manual tokens | 22 (owner), 80, 443 |
-| racer (new, lon1, $4) | `dragrace racer` (a service); `dragrace guard` (a service) | the DigitalOcean token (the guard's only); a GitHub token (Actions only); the racer token | 22 (owner) |
+| site host (lon1, $4) | the site (roux, SQLite FULL); `dragrace host-agent` (a timer) | the races' database and its copies; the racer and manual tokens | 22 (owner), 80, 443 |
+| racer (lon1, $4) | `dragrace racer` (a service); `dragrace guard` (a service) | the DigitalOcean token (the guard's only); a GitHub token (Actions only); the racer token | 22 (owner) |
 | race droplets (per race) | a server; a loader running `dragrace worker` | the run's SSH key; the run's worker token | 22 (the run's key) |
 | GitHub | `build.yml`: builds and releases; `ci.yml` as today | nothing secret | |
 

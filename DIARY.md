@@ -785,3 +785,30 @@ the new site serving every page from it.
 The first racer's race also closes "a race took 63 minutes of racing":
 with the workers on the loaders, 45 minutes of racing for about 40 of
 load.
+
+## 2026-10-07: the site host in lon1, on 26.04
+
+The site host was in nyc3 only because `site provision` said so, from
+when GitHub's US runner raced; it now takes race.json's region, beside
+the racer and the workers that post to it. A new droplet (606940468,
+104.248.175.105, Ubuntu 26.04.1, kernel 7.0) replaced the 24.04 one: a
+fresh copy from the old site (`POST /api/backup`), migrated to the
+schema without the pin's columns (same counts, integrity ok), put in
+place as `site.db` before `install-server`, which deployed the newest
+build onto it: every page 200, the certificate for the new address
+(Let's Encrypt, six days), the redirect, the reboot timer at 06:30 UTC
+(02:30 New York, daylight time). Then `racer install -site` the new
+address, and the racer posted its heads there within a minute.
+
+Found on the way: the racer had been down since 12:32 (`Failed to
+determine local credential key`, a restart every 10 s). At 12:11 its
+reboot had come up fine, decrypting under the old machine id; at 12:11:52
+DigitalOcean's per-instance script set a new one (it had been skipped by
+the first, starved boot); the self-update's restart at 12:32 then could
+not use the key made under the old id. `racer install` made a new key
+and re-encrypted; a reboot proved it (guard and racer up, the socket
+there). Installs now wait for the first boot's cloud-init. journald had
+kept writing under the old id's directory; restarted, it follows the new.
+
+The old host still runs, stale, until the owner agrees to delete it
+(its DigitalOcean backups go with it).

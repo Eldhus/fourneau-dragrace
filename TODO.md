@@ -33,8 +33,11 @@
      `created_at`) and is fixed. The audit, the system written up end to
      end, its findings (the owner's doc, "The fourneau drag race: how it
      works, end to end"): open ones below in Todo.
+   - 2026-10-07, after: the site host moved to lon1 on Ubuntu 26.04
+     (104.248.175.105), its data migrated (no CPU pin, so three columns
+     fewer); both hosts reboot for updates at 02:30 New York time.
    - Next: the 03:00 check tonight (it races: new commits) proves the
-     timer path; then this item goes.
+     timer path and the new site; then this item goes.
 
 ## Chores
 
@@ -147,29 +150,37 @@
   s-8vcpu-16gb). The CPU is not pinned now (RACING.md, "The same
   machine within a night"): read the history with each night's CPU, and
   compare a few races before trusting a trend under ~20%. (2026-10-06)
-- [ ] The site host runs Ubuntu 24.04 (kernel 6.8): it was provisioned
-  before the 26.04 pin, which the racer and the race droplets follow. A
-  new site host on 26.04 means a new IP address, so a new certificate and
-  link (owner's call; with a domain name, only the name's record moves).
-  Moving the data is one file: the newest copy in `backups/`. (2026-10-07)
-- [ ] The site's build is not reproducible: two builds of the same source
-  differ only in symbol names (`__anon_<n>`), so every push restarts the
-  site for nothing (a second; clients retry). Strip the symbols in
-  `dragrace bundle` (also some 10 MB of debug information), or find where
-  the numbering comes from (Roc or Zig). (2026-10-07)
+- [ ] Long term (owner, 2026-10-07): reproducible builds, the answer to
+  both of these, rather than skipping docs-only commits by path (a rule
+  that guesses what is raced, and goes wrong the day a doc file is
+  built in):
+  - The site's build is not reproducible: two builds of the same source
+    differ only in symbol names (`__anon_<n>`), so every push restarts
+    the site for nothing (a second; clients retry). Find where the
+    numbering comes from (Roc or Zig); stripping the symbols in `dragrace
+    bundle` would hide it, not fix it.
+  - Every commit is new to the nightly check, docs and TODO too: a night
+    races again ($0.29) for commits that change nothing raced. With
+    reproducible competitor builds, the check could compare what was
+    built (the binaries' hashes) instead of the commits. (2026-10-07)
 - [ ] Conduit has no history line: its runs keep steps, not a median.
   Plot, say, the highest rate a server held under 90%, night by night.
   (2026-10-07)
 - [ ] The class's data link (`/data/classes/ID/CLASS.json`) is the page's
   model: a subset of each round's measures. Every measure is in the
   database: an export of it whole. (2026-10-07)
-- [ ] Every commit is new to the nightly check, docs and TODO too: a
-  night races again ($0.29) for commits that change nothing raced.
-  Owner's call: skip commits touching only docs? (2026-10-07)
 - [ ] Conduit's chart: rates double each step, and the linear axis kept
   for likeness bunches the low ones; a log axis would read them.
   (2026-10-07)
-- [ ] A domain name for the site (owner, 2026-10-06: wants one). Then
-  ACME for the name, HSTS takes effect. (2026-10-05)
+- [ ] A domain name for the site (owner, 2026-10-06: wants one). The
+  steps: SECURITY.md, "Moving the site host, or giving it a name"; the
+  owner buys it and sets the record. Then the site should send
+  `Strict-Transport-Security` (roux sends none; fourneau-static does).
+  (2026-10-05)
+- [ ] The old site host (nyc3, 174.138.75.219, droplet 606524979) still
+  runs, serving the data as of 12:45 UTC 2026-10-07 and failing to
+  deploy each new build (the schema changed): delete it once the owner
+  agrees (its DigitalOcean backups go with it), then `site backups` for
+  the new one. (2026-10-07)
 
 ## Tickler
