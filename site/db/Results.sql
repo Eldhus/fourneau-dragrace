@@ -31,6 +31,14 @@ ON CONFLICT (run_id, class, workload, competitor) DO UPDATE SET valid = excluded
 DELETE FROM rounds WHERE run_id = :run_id AND class = :class AND workload = :workload
   AND competitor = :competitor;
 
+-- name: clear_parts :exec
+-- @param run_id : Str
+-- @param class : Str
+-- @param workload : Str
+-- @param competitor : Str
+DELETE FROM open_step_parts WHERE run_id = :run_id AND class = :class
+  AND workload = :workload AND competitor = :competitor;
+
 -- name: clear_steps :exec
 -- @param run_id : Str
 -- @param class : Str
@@ -114,9 +122,30 @@ VALUES (:run_id, :class, :workload, :competitor, :round, :rps, :p50_ms, :p90_ms,
 -- @param loader_cpu_busy_pct : F64
 -- @param net_rx_mbps : F64
 -- @param net_tx_mbps : F64
+-- @param mean_ms : F64
 INSERT INTO open_steps (run_id, class, workload, competitor, step, share, offered_rps,
   achieved_rps, p50_ms, p90_ms, p99_ms, p999_ms, errors, non_2xx, cpu_busy_pct,
-  loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps)
+  loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps, mean_ms)
 VALUES (:run_id, :class, :workload, :competitor, :step, :share, :offered_rps,
   :achieved_rps, :p50_ms, :p90_ms, :p99_ms, :p999_ms, :errors, :non_2xx, :cpu_busy_pct,
-  :loader_cpu_busy_pct, :net_rx_mbps, :net_tx_mbps);
+  :loader_cpu_busy_pct, :net_rx_mbps, :net_tx_mbps, :mean_ms);
+
+-- name: add_part :exec
+-- @param run_id : Str
+-- @param class : Str
+-- @param workload : Str
+-- @param competitor : Str
+-- @param step : I64
+-- @param part : Str
+-- @param offered_rps : F64
+-- @param achieved_rps : F64
+-- @param mean_ms : F64
+-- @param p50_ms : F64
+-- @param p99_ms : F64
+-- @param p999_ms : F64
+-- @param errors : I64
+-- @param non_2xx : I64
+INSERT INTO open_step_parts (run_id, class, workload, competitor, step, part, offered_rps,
+  achieved_rps, mean_ms, p50_ms, p99_ms, p999_ms, errors, non_2xx)
+VALUES (:run_id, :class, :workload, :competitor, :step, :part, :offered_rps,
+  :achieved_rps, :mean_ms, :p50_ms, :p99_ms, :p999_ms, :errors, :non_2xx);

@@ -41,6 +41,15 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
+	race, err := loadRace(root)
+	if err != nil {
+		return err
+	}
+	if race.hasMixed() {
+		if err := buildConduitDatabase(ctx, root); err != nil {
+			return err
+		}
+	}
 	values := map[string]string{
 		"out":      out,
 		"zig":      tools.Zig,

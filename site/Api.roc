@@ -57,6 +57,7 @@ Api :: [].{
 
 	WorkloadPost : {
 		name : Str,
+		kind : Str,
 		title : Str,
 		summary : Str,
 		method : Str,
@@ -164,6 +165,21 @@ Api :: [].{
 		loader_cpu_busy_pct : F64,
 		net_rx_mbps : F64,
 		net_tx_mbps : F64,
+		mean_ms : F64,
+		parts : List(PartPost),
+	}
+
+	## One part of a mixed step (mixed.go, OpenPart).
+	PartPost : {
+		name : Str,
+		offered_rps : F64,
+		achieved_rps : F64,
+		mean_ms : F64,
+		p50_ms : F64,
+		p99_ms : F64,
+		p999_ms : F64,
+		errors : I64,
+		non_2xx : I64,
 	}
 
 	ClassPost : { status : Str, reason : Str, seconds : F64 }
@@ -413,6 +429,7 @@ Api :: [].{
 				run_id,
 				name: w.name,
 				position: $position,
+				kind: w.kind,
 				title: w.title,
 				summary: w.summary,
 				method: w.method,
@@ -540,6 +557,7 @@ Api :: [].{
 			median_p999_ms: r.median_p999_ms,
 		})?
 		Results.clear_rounds!(tx, key)?
+		Results.clear_parts!(tx, key)?
 		Results.clear_steps!(tx, key)?
 		var $index = 0.I64
 		for round in r.rounds.take_first(items_max) {
@@ -567,7 +585,26 @@ Api :: [].{
 				loader_cpu_busy_pct: step.loader_cpu_busy_pct,
 				net_rx_mbps: step.net_rx_mbps,
 				net_tx_mbps: step.net_tx_mbps,
+				mean_ms: step.mean_ms,
 			})?
+			for part in step.parts.take_first(16) {
+				Results.add_part!(tx, {
+					run_id,
+					class: r.class,
+					workload: r.workload,
+					competitor: r.competitor,
+					step: $index,
+					part: part.name,
+					offered_rps: part.offered_rps,
+					achieved_rps: part.achieved_rps,
+					mean_ms: part.mean_ms,
+					p50_ms: part.p50_ms,
+					p99_ms: part.p99_ms,
+					p999_ms: part.p999_ms,
+					errors: part.errors,
+					non_2xx: part.non_2xx,
+				})?
+			}
 			$index = $index + 1
 		}
 		Ok({})

@@ -119,6 +119,9 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	if err := loader.Put(ctx, filepath.Join(binDir(root), "oha"), target.LoaderHome+"/oha"); err != nil {
 		return err
 	}
+	if err := putConduitSeed(ctx, root, race, target); err != nil {
+		return err
+	}
 	loaderInfo := machineInfo(ctx, loader, "loader", config.Class.Name, config.Class.LoaderSize)
 	if config.ServerHost != "" {
 		target.LoaderThreads = loaderInfo.CPUs
@@ -186,6 +189,9 @@ func (poster *Poster) send(result Result) {
 func normalizedResult(result Result) Result {
 	result.Rounds = append([]Round{}, result.Rounds...)
 	result.OpenLoop = append([]OpenStep{}, result.OpenLoop...)
+	for i := range result.OpenLoop {
+		result.OpenLoop[i].Parts = append([]OpenPart{}, result.OpenLoop[i].Parts...)
+	}
 	result.summarize()
 	return result
 }

@@ -70,6 +70,7 @@ ON CONFLICT DO NOTHING;
 -- @param run_id : Str
 -- @param name : Str
 -- @param position : I64
+-- @param kind : Str
 -- @param title : Str
 -- @param summary : Str
 -- @param method : Str
@@ -78,9 +79,9 @@ ON CONFLICT DO NOTHING;
 -- @param content_type : Str
 -- @param connections : I64
 -- @param keepalive : Bool
-INSERT INTO run_workloads (run_id, name, position, title, summary, method, path,
+INSERT INTO run_workloads (run_id, name, position, kind, title, summary, method, path,
   body_bytes, content_type, connections, keepalive)
-VALUES (:run_id, :name, :position, :title, :summary, :method, :path,
+VALUES (:run_id, :name, :position, :kind, :title, :summary, :method, :path,
   :body_bytes, :content_type, :connections, :keepalive)
 ON CONFLICT DO NOTHING;
 

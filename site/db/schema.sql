@@ -94,6 +94,9 @@ CREATE TABLE run_workloads (
   run_id TEXT NOT NULL REFERENCES runs (id),
   name TEXT NOT NULL,
   position INTEGER NOT NULL,
+  -- closed: rounds at full load, drawn as bars; mixed: an open-loop ladder
+  -- of several requests at once (conduit), drawn as a line.
+  kind TEXT NOT NULL CHECK (kind IN ('closed', 'mixed')),
   title TEXT NOT NULL,
   summary TEXT NOT NULL,
   method TEXT NOT NULL,
@@ -224,7 +227,8 @@ CREATE TABLE rounds (
     REFERENCES results (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;
 
--- One rate of the open-loop ladder (open_loop.go, OpenStep).
+-- One rate of an open-loop ladder (open_loop.go, OpenStep): of one
+-- workload, or of a mixed one, whose parts are in open_step_parts.
 CREATE TABLE open_steps (
   run_id TEXT NOT NULL,
   class TEXT NOT NULL,
@@ -244,9 +248,33 @@ CREATE TABLE open_steps (
   loader_cpu_busy_pct REAL NOT NULL,
   net_rx_mbps REAL NOT NULL,
   net_tx_mbps REAL NOT NULL,
+  -- The mean over every request of the step.
+  mean_ms REAL NOT NULL,
   PRIMARY KEY (run_id, class, workload, competitor, step),
   FOREIGN KEY (run_id, class, workload, competitor)
     REFERENCES results (run_id, class, workload, competitor)
+) STRICT, WITHOUT ROWID;
+
+-- One part of a mixed step (mixed.go, OpenPart): a kind of request, its
+-- own rate and latency.
+CREATE TABLE open_step_parts (
+  run_id TEXT NOT NULL,
+  class TEXT NOT NULL,
+  workload TEXT NOT NULL,
+  competitor TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  part TEXT NOT NULL,
+  offered_rps REAL NOT NULL,
+  achieved_rps REAL NOT NULL,
+  mean_ms REAL NOT NULL,
+  p50_ms REAL NOT NULL,
+  p99_ms REAL NOT NULL,
+  p999_ms REAL NOT NULL,
+  errors INTEGER NOT NULL,
+  non_2xx INTEGER NOT NULL,
+  PRIMARY KEY (run_id, class, workload, competitor, step, part),
+  FOREIGN KEY (run_id, class, workload, competitor, step)
+    REFERENCES open_steps (run_id, class, workload, competitor, step)
 ) STRICT, WITHOUT ROWID;
 
 -- Each repository's newest commit as the racer last saw it: the race page

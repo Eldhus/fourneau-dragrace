@@ -108,7 +108,7 @@ View :: [].{
 			name: class.name,
 			label: class.label,
 			title: class.title,
-			charts: run.race.workloads.map(|workload| chart(shown, class.name, workload, run.race.competitors)),
+			charts: closed(run.race.workloads).map(|workload| chart(shown, class.name, workload, run.race.competitors)),
 		})
 		{ waiting: List.len(shown) < 2, note, competitors: run.race.competitors, classes }
 	}
@@ -177,9 +177,14 @@ class_view = |run, class| {
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
 	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)} · ${m.cpu} · Linux ${m.kernel}${cpu_note(m)}" })
-	strips = run.race.workloads.map(|workload| strip(run, class.name, workload))
+	strips = closed(run.race.workloads).map(|workload| strip(run, class.name, workload))
 	{ name: class.name, label: class.label, title: class.title, machines, strips, open: open_charts(run, class.name) }
 }
+
+## The workloads raced in rounds, drawn as bars and in the history; a
+## mixed one (conduit) is a ladder only, drawn as a line (open_charts).
+closed : List(Data.Workload) -> List(Data.Workload)
+closed = |workloads| workloads.keep_if(|w| w.kind != "mixed")
 
 ## One workload on one server class: a bar per competitor, fastest first.
 strip : Data.Run, Str, Data.Workload -> View.Strip
@@ -467,27 +472,40 @@ took = |timing| {
 loader_limit_pct : F64
 loader_limit_pct = 85.0
 
-## The class's open-loop chart, when the race had a ladder: one, for the
-## workload it climbed.
+## The class's open-loop charts, a ladder each: the closed workload's
+## (p99 against the rate, each server at shares of its own maximum), and
+## each mixed workload's (the mean over every request, at rates the same
+## for every server).
 open_charts : Data.Run, Str -> List(View.OpenChart)
-open_charts = |run, class| {
-	results = run.results.keep_if(|r| r.class == class and r.valid and !r.open_loop.is_empty())
-	match List.first(results) {
-		Err(_) => []
-		Ok(first) => {
-			title = run.race.workloads.find_first(|w| w.name == first.workload).map_ok(|w| w.title) ?? first.workload
-			[open_chart(title, results)]
+open_charts = |run, class|
+	run.race.workloads.keep_oks(|workload| {
+		results = run.results.keep_if(|r| r.class == class and r.workload == workload.name and r.valid and !r.open_loop.is_empty())
+		if results.is_empty() {
+			Err(NoLadder)
+		} else if workload.kind == "mixed" {
+			Ok(open_chart("${workload.title}: mean latency", results, Mean))
+		} else {
+			Ok(open_chart(workload.title, results, P99))
 		}
-	}
-}
+	})
 
-open_chart : Str, List(Data.Result) -> View.OpenChart
-open_chart = |title, results| {
+## What an open chart draws: p99, or the mean (a mixed workload's).
+Metric : [P99, Mean]
+
+metric_of : Metric, Data.OpenStep -> F64
+metric_of = |metric, s|
+	match metric {
+		P99 => s.p99_ms
+		Mean => s.mean_ms
+	}
+
+open_chart : Str, List(Data.Result), Metric -> View.OpenChart
+open_chart = |title, results, metric| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
-	slowest = steps.fold(0.0, |worst, s| if s.p99_ms > worst s.p99_ms else worst)
-	fastest = steps.fold(slowest, |best, s| if s.p99_ms > 0.0 and s.p99_ms < best s.p99_ms else best)
+	slowest = steps.fold(0.0, |worst, s| if metric_of(metric, s) > worst metric_of(metric, s) else worst)
+	fastest = steps.fold(slowest, |best, s| if metric_of(metric, s) > 0.0 and metric_of(metric, s) < best metric_of(metric, s) else best)
 	decades = decades_between(fastest, slowest)
 	low = List.first(decades) ?? 0.1
 	high = List.last(decades) ?? 1000.0
@@ -496,28 +514,42 @@ open_chart = |title, results| {
 		clamped = if ms < low low else ms
 		top + (1.0 - (log10(clamped) - log10(low)) / (log10(high) - log10(low))) * (height - top - bottom)
 	}
-	lines = spread_open(results.map(|r| open_line(r, x, y)))
+	lines = spread_open(results.map(|r| open_line(r, x, y, metric)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
 	ticks_x = [0.0, 0.25, 0.5, 0.75, 1.0].map(|t| { x: Format.one_decimal(x(t * x_ceiling)), label: Format.compact(t * x_ceiling) })
 	{ title, lines, ticks_x, ticks_y }
 }
 
-open_line : Data.Result, (F64 -> F64), (F64 -> F64) -> View.OpenLine
-open_line = |result, x, y| {
-	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(s.p99_ms) })
+open_line : Data.Result, (F64 -> F64), (F64 -> F64), Metric -> View.OpenLine
+open_line = |result, x, y, metric| {
+	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(metric_of(metric, s)) })
 	path = Str.join_with(points.map_with_index(|p, i| "${if i == 0 "M" else "L"}${Format.one_decimal(p.px)} ${Format.one_decimal(p.py)}"), " ")
 	dots = points.map(|p| {
 		cx: Format.one_decimal(p.px),
 		cy: Format.one_decimal(p.py),
 		hollow: p.s.loader_cpu_busy_pct >= loader_limit_pct,
-		title: step_title(result.competitor, p.s),
+		title: step_title(result.competitor, p.s, metric),
 	})
-	last = List.last(points) ?? { s: { share: 0.0, offered_rps: 0.0, achieved_rps: 0.0, p99_ms: 0.0, p999_ms: 0.0, cpu_busy_pct: 0.0, loader_cpu_busy_pct: 0.0 }, px: 0.0, py: 0.0 }
-	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last.px + 10.0), label_y: Format.one_decimal(last.py + 4.0), end_y: last.py }
+	{ last_x, last_y } =
+		match List.last(points) {
+			Ok(p) => { last_x: p.px, last_y: p.py }
+			Err(_) => { last_x: 0.0, last_y: 0.0 }
+		}
+	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last_x + 10.0), label_y: Format.one_decimal(last_y + 4.0), end_y: last_y }
 }
 
-step_title : Str, Data.OpenStep -> Str
-step_title = |competitor, s| {
+step_title : Str, Data.OpenStep, Metric -> Str
+step_title = |competitor, s, metric|
+	match metric {
+		P99 => p99_step_title(competitor, s)
+		Mean => {
+			limit = if s.loader_cpu_busy_pct >= loader_limit_pct " (the loader was the limit)" else ""
+			"${competitor}: ${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered; mean ${Format.latency(s.mean_ms)} ms, the slowest part's p99 ${Format.latency(s.p99_ms)} ms; server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"
+		}
+	}
+
+p99_step_title : Str, Data.OpenStep -> Str
+p99_step_title = |competitor, s| {
 	share = Format.thousands(s.share * 100.0)
 	limit = if s.loader_cpu_busy_pct >= loader_limit_pct " (the loader was the limit)" else ""
 	"${competitor} at ${share}% of its max: ${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered; p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"

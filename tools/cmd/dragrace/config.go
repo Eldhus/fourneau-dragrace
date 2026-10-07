@@ -76,6 +76,28 @@ type Workload struct {
 	ContentType string `json:"content_type"`
 	Connections int    `json:"connections"`
 	Keepalive   bool   `json:"keepalive"`
+	// Mixed, when set, makes this an open-loop-only workload of several
+	// parts at once (mixed.go): conduit.
+	Mixed *Mixed `json:"mixed,omitempty"`
+}
+
+// kind is how the site draws a workload: "closed" (bars of the rounds) or
+// "mixed" (a line, latency against the rate offered).
+func (workload Workload) kind() string {
+	if workload.Mixed != nil {
+		return "mixed"
+	}
+	return "closed"
+}
+
+// hasMixed says whether a race needs the conduit database.
+func (race Race) hasMixed() bool {
+	for _, workload := range race.Workloads {
+		if workload.Mixed != nil {
+			return true
+		}
+	}
+	return false
 }
 
 type Cloud struct {

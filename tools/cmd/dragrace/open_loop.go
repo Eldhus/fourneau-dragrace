@@ -42,6 +42,10 @@ type OpenStep struct {
 	LoaderCPUBusyPct float64 `json:"loader_cpu_busy_pct"`
 	NetRxMbps        float64 `json:"net_rx_mbps"`
 	NetTxMbps        float64 `json:"net_tx_mbps"`
+	// A mixed workload's step: the mean over every request, and each part
+	// (mixed.go). Empty on a ladder of one workload.
+	MeanMs float64    `json:"mean_ms"`
+	Parts  []OpenPart `json:"parts"`
 }
 
 // openLoop climbs the ladder for every valid competitor, after the rounds,

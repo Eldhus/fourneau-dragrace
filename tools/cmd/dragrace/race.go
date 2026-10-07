@@ -78,9 +78,11 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 		}
 	}
 	if race.OpenLoop.enabled() {
-		return openLoop(ctx, race, competitors, target, bodies, valid, run)
+		if err := openLoop(ctx, race, competitors, target, bodies, valid, run); err != nil {
+			return err
+		}
 	}
-	return nil
+	return mixedLoop(ctx, race, competitors, target, valid, run)
 }
 
 func raceCompetitor(ctx context.Context, race Race, competitor Competitor, target Target,
@@ -104,6 +106,9 @@ func raceCompetitor(ctx context.Context, race Race, competitor Competitor, targe
 	name.Write([]byte(competitor.Name))
 	order := shuffled(race.Workloads, run.Seed+int64(round)*7919+int64(name.Sum64()>>1))
 	for _, workload := range order {
+		if workload.Mixed != nil {
+			continue // open loop only, after the rounds (mixedLoop)
+		}
 		result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
 		result.Valid = valid[competitor.Name] == ""
 		result.Note = valid[competitor.Name]
@@ -176,6 +181,7 @@ func startServer(ctx context.Context, race Race, competitor Competitor, target T
 		"bin":     target.ServerHome + "/bin/" + competitor.Name,
 		"address": target.Address,
 		"port":    strconv.Itoa(race.Port),
+		"db":      target.ServerHome + "/" + conduitDatabaseName,
 	}
 	var command strings.Builder
 	command.WriteString("cd " + quote(target.ServerHome) + " && ")

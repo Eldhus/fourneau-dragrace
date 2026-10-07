@@ -392,6 +392,11 @@ func raceClass(ctx context.Context, root string, tools Toolchain, race Race,
 	if _, err := server.Shell(ctx, "chmod +x "+home+"/bin/*"); err != nil {
 		return err
 	}
+	if race.hasMixed() {
+		if err := server.Put(ctx, conduitDatabase(root), home+"/"+conduitSeedName); err != nil {
+			return err
+		}
+	}
 	serverInfo := machineInfo(ctx, server, "server", class.Name, class.Size)
 	serverInfo.CPUWanted = class.ServerCPU
 	serverInfo.CPUMatched = cpuMatches(class.ServerCPU, serverInfo.CPU, serverInfo.CPUID)
