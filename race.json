@@ -62,7 +62,7 @@
     {
       "name": "conduit",
       "title": "RealWorld (Conduit)",
-      "summary": "An article listing, an article, a comment and a favorite, all at once, on SQLite.",
+      "summary": "An article listing, an article, a comment and a favorite, all at once, on SQLite (WAL, synchronous=NORMAL).",
       "method": "MIXED",
       "path": "/api/articles",
       "connections": 256,
