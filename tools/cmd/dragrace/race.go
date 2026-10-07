@@ -35,6 +35,15 @@ type Target struct {
 	LoaderCPUs string
 	// oha's threads: the loader's CPUs (0: oha's default).
 	LoaderThreads int
+	// Report, if set, is told each result as it grows: after each round of
+	// a competitor, and after its open loop (a worker posts it to the site).
+	Report func(Result)
+}
+
+func (target Target) report(result Result) {
+	if target.Report != nil {
+		target.Report(result)
+	}
 }
 
 func (target Target) taskset(cpus string) string {
@@ -60,6 +69,11 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 			log.Printf("[%s] round %d/%d: %s", target.Class.Name, round, race.Rounds, competitor.Name)
 			if err := raceCompetitor(ctx, race, competitor, target, bodies, round, valid, run); err != nil {
 				return err
+			}
+			for _, result := range run.Results {
+				if result.Class == target.Class.Name && result.Competitor == competitor.Name {
+					target.report(result)
+				}
 			}
 		}
 	}

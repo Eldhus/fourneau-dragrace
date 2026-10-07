@@ -104,6 +104,7 @@ func commandRaceCloud(ctx context.Context, root string, args []string) error {
 type Fleet struct {
 	dir      string
 	key      SSHKey
+	private  string             // the key's private half, in dir
 	loaders  map[string]Droplet // by class name
 	servers  map[string]Droplet // by class name
 	created  []int
@@ -198,6 +199,7 @@ func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet
 	if err != nil {
 		return fleet, err
 	}
+	fleet.private = private
 	fleet.key, err = do.createKey(ctx, name, public)
 	if err != nil {
 		return fleet, err
