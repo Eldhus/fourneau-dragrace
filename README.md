@@ -28,7 +28,13 @@ out/dragrace toolchain           # Zig, Roc, oha and the musl files, at versions
 out/dragrace race local          # race on this machine (server and loader on separate CPUs)
 out/dragrace site build          # the site, a roux app
 (cd site && ROUX_PORT=8090 ../out/bin/dragrace-site)   # http://127.0.0.1:8090/, its races in site/site.db
+out/dragrace site dev            # working on the UI: http://127.0.0.1:8090/ rebuilt and reloaded on each save
 ```
+
+`site build` is LLVM's optimized build (about 90 s), for races and
+deploys. `site dev` builds with Roc's dev backend (2 to 3 s from a save
+to the reloaded page; a static file, at once) and shows a failed build or
+failing expects over the page.
 
 Go from `tools/go.mod`; everything else pinned in `versions.json`
 ([VERSIONS.md](VERSIONS.md)).

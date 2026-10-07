@@ -55,6 +55,31 @@
      site host run `docs/migrations/2026-10-07-machine-memory.sql` as its
      header says, `sudo rm /opt/dragrace-site/failed/*`, and start the
      host agent's timer. Check the HSTS header and the tabs.
+2. **`dragrace site dev`: edit a template, see it in under a second.**
+   (owner, 2026-10-07) A watcher over the templates, queries, Roc and
+   static files; regeneration and a dev-backend build (`--opt=dev`); the
+   app restarted behind a proxy that reloads the browser. The testing
+   ground for a build server in roux; races and deploys keep the
+   optimized build.
+   - Measured (2026-10-07): `roc build` (LLVM, optimized) 83 to 94 s every
+     time, unchanged or not (LIR passes 31 s, LLVM 49 s); `--opt=dev` 1.8
+     to 2.7 s, 1.5 s of it Roc's shared lowering; the interpreter 3 s and
+     0.2 to 0.9 s a page. rocstache-gen 3 ms, roux-db 11 ms, `roc test`
+     1 s. The dev binary serves every page byte for byte as the optimized
+     one.
+   - Where it stands (2026-10-07): built and in use
+     (`tools/cmd/dragrace/site_dev.go`). Save to reloaded page measured
+     at 3.0 s for a template (the dev build 2.4 to 2.9 s, the restart 40 to
+     70 ms), 10 ms for a static file. Under a second is not reached: Roc
+     lowers the whole program on every build (1.5 to 1.7 s, none of it
+     cached), and `--specialize=no` crashes the compiler (SIGSEGV,
+     nightly-2026-10-04).
+   - Next, the owner's call: report the SIGSEGV and ask upstream for
+     incremental lowering (the one path to under a second while
+     templates are Roc); or, a big experiment, a dev mode in which
+     rocstache templates are interpreted, not compiled, which needs the
+     contexts as data (Roc has no reflection). Then port the devserver
+     into roux (Zig) once it has settled.
 
 ## Chores
 

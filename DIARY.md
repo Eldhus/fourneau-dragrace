@@ -910,3 +910,40 @@ Mono at 0.6 em). The names are 11 px, from 12.
 Checked: 112 expects (the new one: a name pushed under one above, one
 beside it not); on the live data's race, axum's name is at its own end.
 Not looked at in a browser.
+
+## 2026-10-07: `site dev`, the site rebuilt as it is edited
+
+The owner: the build is far too slow to iterate on the UI. Measured, step
+by step (`--timings`): roux's zig steps 0.1 s, roux-db 11 ms,
+rocstache-gen 3 ms per template, `roc test` 1 s, and `roc build` 83 to
+94 s every time, unchanged or not: LIR passes 31 s, LLVM 49 s, nothing
+cached. `--opt=dev` (Roc's x64 backend) builds in 1.8 to 2.9 s, 1.5 to
+1.7 s of it Roc's shared lowering of the whole program; `--opt=interpreter`
+3 s, its pages 0.2 to 0.9 s each. The dev binary serves `/` and
+`/history` byte for byte as the optimized one, in 7 to 14 ms.
+`--specialize=no` (boxy lowering) crashes the compiler: SIGSEGV.
+
+`dragrace site dev` (`site_dev.go`; the legacy rocstache's `dev` was a
+watcher thread inside the app, regenerating while `roc` ran): one inotify
+watcher on site/, site/db and site/static and one serial pass, so a build
+never races a generator. A pass hashes every input (sha256, at most 512
+files of 4 MiB); a changed template is regenerated, a changed query
+regenerates the db modules, and only when the Roc sources' digest then
+differs from the last good build does it build (`--opt=dev`, to a new
+file moved over the old) and restart the app (SIGTERM, then wait until it
+answers). Content, not mtimes or event kinds, decides: a save that
+changes nothing, and the generators' own writes, cost nothing; a static
+file only reloads. The browser talks to a proxy that injects a script
+into HTML pages (event streams pass untouched; pages asked for
+uncompressed): `/_dev/events` sends the build's generation on connect, so
+a page that missed a reload or loaded under a failed build learns it;
+a failure shows its output over the page while the old app keeps serving;
+requests wait (up to 30 s) while the app restarts. `roc test` runs after
+each build beside it; failures are a banner.
+
+Measured with an event listener: a template save to the reload event
+3.0 s (built 2.9 s, up 69 ms); later saves 2.4 s; a CSS save 10 ms. A
+broken template: the type error in the browser, the old site still 200.
+Go tests for the pure parts (change detection, the digest ignoring
+static files and templates, which files count, the injection and what it
+leaves alone). Under a second is not reached: TODO says what would.

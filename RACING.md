@@ -173,6 +173,7 @@ the site draws it hollow.
 | `dragrace reap [-all]` | delete race droplets and keys older than `race.json` allows |
 | `dragrace fingerprint` | the commits a race would race |
 | `dragrace site build` | build the site into `out/bin/dragrace-site` |
+| `dragrace site dev [-port 8090 -app-port 8091]` | the site rebuilt (Roc's dev backend) and the browser reloaded on each save, for UI work |
 | `dragrace bundle` | pack a build for a release (`build.yml`) |
 | `dragrace site provision \| install-server \| backups` | the 24/7 site host (SECURITY.md) |
 | `dragrace site race-now -host H` | ask the site for a race now (the manual token) |

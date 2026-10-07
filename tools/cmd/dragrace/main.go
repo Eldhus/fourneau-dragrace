@@ -10,6 +10,8 @@
 //	dragrace reap                   delete race droplets older than allowed
 //	dragrace fingerprint            the commits a race would race, as JSON
 //	dragrace site build             build the site (a roux app) into out/bin
+//	dragrace site dev               the site rebuilt and reloaded as it is
+//	                                edited (Roc's dev backend; for the UI)
 //	dragrace site provision|install-server   the 24/7 site droplet, set up
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
 //	dragrace site backups           DigitalOcean's daily backups of the site

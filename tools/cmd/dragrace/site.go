@@ -155,11 +155,13 @@ WantedBy=timers.target
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|provision|install-server|race-now|backups")
+		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups")
 	}
 	switch args[0] {
 	case "build":
 		return siteBuildCommand(ctx, root, args[1:])
+	case "dev":
+		return siteDevCommand(ctx, root, args[1:])
 	case "provision":
 		return siteProvision(ctx, root, args[1:])
 	case "install-server":
