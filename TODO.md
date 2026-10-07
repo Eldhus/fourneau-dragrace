@@ -88,8 +88,15 @@
      owner's SSH; the site never holds it. The racer enforces the budget
      (fixed sizes, a monthly cap on its own disk). Builds are GitHub's;
      the site host and the racer pull them.
-   - Where it stands (2026-10-06): planned. Next: roux, a synchronous
-     setting per database and `Sqlite.backup!`.
+   - Open (owner): the read-write workload as a slice of RealWorld's
+     "Conduit" API (realworld-docs.netlify.app) instead of a todo list,
+     suggested by the owner 2026-10-06. Recommended: the article list
+     (joins, pagination), one article, a comment and a favorite; tokens
+     issued beforehand (no password hashing in the load); our own
+     implementation per competitor.
+   - Where it stands (2026-10-06): roux has `synchronous` per database
+     (541b801) and `Sqlite.backup!` (a8413c5). Next: the site's schema
+     and API.
 
 ## Chores
 
