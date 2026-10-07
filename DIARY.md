@@ -519,3 +519,9 @@ The owner's phone showed the top whisker looking adrift: it was right
 bar to past it), but the 4px rounded tip hid where the bar ends. Tips are
 2px now, and the longest bar takes 66% of its track, not 72%, so the
 fastest round's whisker and a six-digit number fit at 375 px.
+
+The outlined bar's key moved into the competitors' legend as "server not
+saturated" (the owner: a line of its own per class, and "set it", read
+oddly). The outline now means exactly that, the server's CPU under 90%:
+a server at its limit that also met the network (dedicated-2's echo) is
+a filled bar, as the label says.

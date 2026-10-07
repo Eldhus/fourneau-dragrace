@@ -249,5 +249,4 @@ nav.tabs a + a { border-left: 0; }
 .drag .bar.hollow { background: transparent; box-shadow: inset 0 0 0 2px var(--series); }
 .swatch.hollow-bar, .swatch.hollow-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--text-2); }
 .swatch.hollow-dot { border-radius: 50%; }
-.key { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); margin: 4px 0 12px; }
 .open .legend { margin: 8px 0 0; font-size: 13px; }

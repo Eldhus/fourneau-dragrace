@@ -204,7 +204,6 @@ row = |result, most, local|
 		rounds = List.len(result.rounds).to_str()
 		{ slowest, fastest } = round_range(result)
 		spread = spread_pct(result)
-		tag = tag_of(result, local)
 		{
 			competitor: result.competitor,
 			valid: Bool.True,
@@ -214,7 +213,7 @@ row = |result, most, local|
 			reach: Format.two_decimals((fastest - result.median_rps) / most),
 			value,
 			ranged: (fastest - slowest) / most >= whisker_share_min,
-			hollow: !tag.is_empty(),
+			hollow: !saturated(result, local),
 			tip: "${result.competitor}: ${value} req/s, median of ${rounds} rounds (${Format.thousands(slowest)} to ${Format.thousands(fastest)}, ${Format.thousands(spread)}% apart), limited by ${limited_by(result, local)}; p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
 		}
 	}
@@ -620,6 +619,7 @@ expect {
 	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.False) == "network"
 	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.True) == "connections (nothing saturated)"
 	and limited_by(result([round(64.0, 52.0, 190.0)]), Bool.False) == "connections (nothing saturated)"
+	and !saturated(result([round(64.0, 52.0, 190.0)]), Bool.False)
 }
 
 ## A whisker narrower than this share of the strip's top bar is a few
@@ -628,16 +628,12 @@ expect {
 whisker_share_min : F64
 whisker_share_min = 0.02
 
-## What limited a result besides the server's CPU, or that
-## nothing did; empty for a server at its own CPU's limit, the case the
-## race is for.
-tag_of : Data.Result, Bool -> Str
-tag_of = |result, local| {
-	found = limits(result, local)
-	others = found.keep_if(|limit| limit != "server CPU")
-	limit = if found.is_empty() ["under-driven"] else others
-	Str.join_with(limit, ", ")
-}
+## Whether the server ran out of CPU, the case the race is for. A bar that
+## did not is drawn as an outline ("server not saturated"): the loader, the
+## network or too few connections set it, and the table says which. A
+## server at its CPU's limit that also met the network is saturated.
+saturated : Data.Result, Bool -> Bool
+saturated = |result, local| limits(result, local).any(|limit| limit == "server CPU")
 
 ## A server not on the CPU its class asks for says so: its numbers are not
 ## comparable night to night with the ones that are.
@@ -671,5 +667,6 @@ expect {
 	at = |net, retransmits| { rps: 35000.0, p99_ms: 200.0, cpu_busy_pct: 93.0, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: 26.0, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: retransmits, load_seconds: 20.0 }
 	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, median_rps: 35000.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
 	limited_by(result([at(1322.0, 47363.0)]), Bool.False) == "server CPU, network"
+	and saturated(result([at(1322.0, 47363.0)]), Bool.False)
 	and limited_by(result([at(1322.0, 100.0)]), Bool.False) == "server CPU"
 }
