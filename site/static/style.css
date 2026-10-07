@@ -187,6 +187,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .card h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 10px; font-size: 16px; }
 .card .lang { color: var(--text-3); margin: 0; font-size: 13px; }
 .card a { margin-right: 10px; font-size: 13px; white-space: nowrap; }
+/* The workloads, a full-width card each, stacked (the owner, 2026-10-07). */
+.workloads { display: grid; gap: 10px; margin: 18px 0; }
+.workloads .card h3 { font-size: 15px; color: var(--flame); flex-wrap: wrap; }
+.workloads .card p { margin: 0; }
+.workloads .card a { margin: 0; font-size: inherit; white-space: normal; }
+.workloads .spec { margin-top: 6px; }
 
 footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--grid); padding: 0 16px 28px; }
 
