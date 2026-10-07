@@ -94,9 +94,21 @@
      (joins, pagination), one article, a comment and a favorite; tokens
      issued beforehand (no password hashing in the load); our own
      implementation per competitor.
-   - Where it stands (2026-10-06): roux has `synchronous` per database
-     (541b801) and `Sqlite.backup!` (a8413c5). Next: the site's schema
-     and API.
+   - Where it stands (2026-10-07): built and tested locally, committed,
+     not pushed or deployed. roux: `synchronous` per database, `Sqlite.backup!`,
+     file reads in `init!`. Here: the site on SQLite with its API and the
+     racer's status line; the guard (checked against real DigitalOcean),
+     the racer, the worker, the host agent, `bundle`, `build.yml`; the
+     runner workflows, `publish`, the deploy key and the results branch's
+     writer gone; SECURITY.md and docs/self-hosting.md. End to end on the
+     laptop, including the site restarted mid-race.
+   - Next: (1) the owner pushes roux and this repository, and makes the
+     GitHub token (SECURITY.md); (2) `site install-server`, `site backups`,
+     `racer provision`, `racer install`; (3) `site race-now`: the first
+     cloud race, which checks what the laptop could not (a worker on a
+     loader, the guard on the racer); (4) a commit to see the 03:00 check
+     race; (5) the read-write workload (RealWorld or todo: the owner's
+     choice), then delete the `results` branch.
 
 ## Chores
 
