@@ -66,6 +66,31 @@
      certificate). The first forced race died on a new key DigitalOcean
      did not know yet (now retried); next: its rerun on 26.04.
 
+5. **Self-hosting: the site keeps the races, and runs them.** (owner,
+   2026-10-06) Results in the site's SQLite (roux, `synchronous=FULL`),
+   every run's metadata first class (a JSON field only where it pays); a
+   unique run ID unifying a run; each run says how it started (manual or
+   timer, and which repositories had new commits), and a check with no
+   new commits is recorded as skipped. Race workers push their results
+   straight to the site, retrying for well past a deploy, so a deploy
+   during a race loses nothing. Push to GitHub is the whole deploy
+   (GitHub builds, owner's choice; the host pulls); no GitHub runner held
+   for a race. A private authenticated endpoint to start a run, and one a
+   cron may hit to check for new commits; the race page says when new
+   commits will race tonight. Backups automatic (nightly copies on the
+   host, DigitalOcean's droplet backups); migrations over SSH for now.
+   A budget cap. Legacy data dropped. Clean up the runner workflows, the
+   deploy key and the results branch. A new mixed read-write workload in
+   every competitor: a todo list, SQLite in the loop, `synchronous=NORMAL`
+   everywhere, open loop, the same line chart, mean latency.
+   - Decided (2026-10-06): the DigitalOcean token lives on a second small
+     droplet, the racer, with no service and no inbound port but the
+     owner's SSH; the site never holds it. The racer enforces the budget
+     (fixed sizes, a monthly cap on its own disk). Builds are GitHub's;
+     the site host and the racer pull them.
+   - Where it stands (2026-10-06): planned. Next: roux, a synchronous
+     setting per database and `Sqlite.backup!`.
+
 ## Chores
 
 - **Check that every value kept in two places agrees.** Each row of
