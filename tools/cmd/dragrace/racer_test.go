@@ -25,6 +25,32 @@ func TestCommitsSayWhichAreNew(t *testing.T) {
 	}
 }
 
+// The build of the heads is taken whatever its dates; after asking, the
+// newest published since; a release dated by an old commit never counts.
+func TestBuildOfTheHeads(t *testing.T) {
+	heads := map[string]string{"fourneau-dragrace": "a", "fourneau": "b", "roux": "c"}
+	asked := time.Date(2026, 10, 7, 10, 49, 0, 0, time.UTC)
+	exact := Build{Info: BuildInfo{Commits: heads}, PublishedAt: asked.Add(-time.Hour)}
+	newer := Build{Info: BuildInfo{Commits: map[string]string{"fourneau-dragrace": "d",
+		"fourneau": "b", "roux": "c"}}, PublishedAt: asked.Add(8 * time.Minute)}
+	older := Build{Info: BuildInfo{Commits: map[string]string{"fourneau-dragrace": "z"}},
+		PublishedAt: asked.Add(-time.Hour)}
+	if build, found := buildOf([]Build{older, exact}, heads, time.Time{}); !found ||
+		build.Info.Commits["fourneau-dragrace"] != "a" {
+		t.Fatal("the build of the heads, published long ago, was not taken")
+	}
+	if _, found := buildOf([]Build{older}, heads, time.Time{}); found {
+		t.Fatal("another build taken before asking")
+	}
+	if build, found := buildOf([]Build{newer, older}, heads, asked); !found ||
+		build.Info.Commits["fourneau-dragrace"] != "d" {
+		t.Fatal("the build published after asking was not taken")
+	}
+	if _, found := buildOf([]Build{older}, heads, asked); found {
+		t.Fatal("a build published before asking was taken")
+	}
+}
+
 func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 	info := BuildInfo{Commits: map[string]string{"fourneau-dragrace": "a", "fourneau": "b",
 		"roux": "c"}, Files: map[string]string{"race.tar.gz": "00"}}
@@ -34,7 +60,7 @@ func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 			t.Errorf("path %s", r.URL.Path)
 		}
 		json.NewEncoder(w).Encode([]map[string]any{
-			{"tag_name": "build-20261007T060000Z", "body": string(body), "created_at": time.Now(),
+			{"tag_name": "build-20261007T060000Z", "body": string(body), "published_at": time.Now(),
 				"assets": []map[string]string{{"name": "race.tar.gz", "browser_download_url": "u"}}},
 			{"tag_name": "v1", "body": string(body)},
 			{"tag_name": "build-broken", "body": "not json"},

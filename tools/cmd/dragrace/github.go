@@ -48,9 +48,13 @@ type BuildInfo struct {
 
 // Build is a release of build.yml.
 type Build struct {
-	Info      BuildInfo
-	CreatedAt time.Time
-	Assets    map[string]string // file name -> download URL
+	Info BuildInfo
+	// When the release was published. Not GitHub's `created_at`: for a
+	// release that is the date of the tagged commit, which can be long
+	// before the build (found 2026-10-07: the racer waited on a build of
+	// a commit made a minute before its dispatch).
+	PublishedAt time.Time
+	Assets      map[string]string // file name -> download URL
 }
 
 func (github *GitHub) request(ctx context.Context, method, url string, body any) (*http.Response, error) {
@@ -117,10 +121,10 @@ func (github *GitHub) heads(ctx context.Context) (map[string]string, error) {
 // whose body is not a build.json is not one.
 func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
 	var releases []struct {
-		TagName   string    `json:"tag_name"`
-		Body      string    `json:"body"`
-		CreatedAt time.Time `json:"created_at"`
-		Assets    []struct {
+		TagName     string    `json:"tag_name"`
+		Body        string    `json:"body"`
+		PublishedAt time.Time `json:"published_at"`
+		Assets      []struct {
 			Name string `json:"name"`
 			URL  string `json:"browser_download_url"`
 		} `json:"assets"`
@@ -138,13 +142,32 @@ func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
 		if json.Unmarshal([]byte(release.Body), &info) != nil || len(info.Commits) == 0 {
 			continue
 		}
-		build := Build{Info: info, CreatedAt: release.CreatedAt, Assets: map[string]string{}}
+		build := Build{Info: info, PublishedAt: release.PublishedAt, Assets: map[string]string{}}
 		for _, asset := range release.Assets {
 			build.Assets[asset.Name] = asset.URL
 		}
 		builds = append(builds, build)
 	}
 	return builds, nil
+}
+
+// building says whether a run of the workflow is queued or in progress:
+// a push's build, which will build the heads too.
+func (github *GitHub) building(ctx context.Context, workflow string) (bool, error) {
+	for _, status := range []string{"queued", "in_progress"} {
+		var runs struct {
+			TotalCount int `json:"total_count"`
+		}
+		path := "/repos/" + github.repository + "/actions/workflows/" + workflow +
+			"/runs?per_page=1&status=" + status
+		if err := github.call(ctx, http.MethodGet, path, nil, &runs); err != nil {
+			return false, err
+		}
+		if runs.TotalCount > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // dispatch asks build.yml to build the heads of main.
