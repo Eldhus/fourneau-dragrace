@@ -1,0 +1,116 @@
+app [Context, program] { pf: platform "../../../roux/platform/main.roc" }
+
+# The roux competitor: a Roc app on roux, the Roc platform
+# built on fourneau. Each request runs `respond!` on its connection's
+# fiber; the host listens on ROUX_ADDRESS, the app says the port.
+
+import pf.Server
+import pf.Sse
+import pf.Url
+import Menu
+
+## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
+## (compiled by rocstache-gen at build time) renders them per request.
+Context : { dishes : List({ name : Str, price : U32 }) }
+
+program = { init!, respond! }
+
+init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64)])
+init! = || Ok({
+	config: { port: 8080, static_dir: "" },
+	context: {
+		dishes: [
+			{ name: "Roux", price: 120 },
+			{ name: "Fish & chips", price: 290 },
+			{ name: "Crème brûlée", price: 180 },
+			{ name: "<b>Bold</b> stew", price: 240 },
+			{ name: "Skyr & berries", price: 150 },
+			{ name: "Hákarl", price: 990 },
+			{ name: "Plokkfiskur", price: 310 },
+			{ name: "Kjötsúpa", price: 270 },
+			{ name: "Rúgbrauð <warm>", price: 90 },
+			{ name: "Pylsa með öllu", price: 120 },
+			{ name: "Flatkaka & hangikjöt", price: 210 },
+			{ name: "1 < 2 > 0 pie", price: 160 },
+		],
+	},
+})
+
+respond! : Server.Request, Context => Try(Server.Response, [NotFound, BadRequest(Str), SseErr(Sse.SseErr)])
+respond! = |request, context| {
+	path =
+		match request.target.split_first("?") {
+			Ok({ before, .. }) => before
+			Err(_) => request.target
+		}
+	match (request.method, path) {
+		("GET", "/plaintext") => Ok(Server.text("Hello, World!"))
+		("POST", "/echo") =>
+			match Server.read_body!(request, 1_048_576) {
+				Ok(body) =>
+					Ok(
+						{
+							status: 200,
+							headers: [{ name: "Content-Type", value: "application/octet-stream" }],
+							body,
+						},
+					)
+				Err(BodyErr(err)) => Err(BadRequest(Str.inspect(err)))
+			}
+		("GET", "/menu") => Ok(Server.html(Menu.render(context)))
+		("GET", "/sse") =>
+			match signals(request.target) {
+				Ok({ count }) => datastar!(request, count.to_u64() + 1)
+				Err(BadSignals) => Err(BadRequest("bad signals"))
+			}
+		_ => Err(NotFound)
+	}
+}
+
+# --- the SSE workload: a Datastar action ----------------------------------------
+
+## Datastar's signals: JSON in the `datastar` query parameter.
+signals : Str -> Try({ count : U32 }, [BadSignals])
+signals = |target|
+	match Url.query_value(target, "datastar") {
+		Ok(json) =>
+			match Json.parse(json) {
+				Ok(parsed) => Ok(parsed)
+				Err(_) => Err(BadSignals)
+			}
+		Err(_) => Err(BadSignals)
+	}
+
+log_lines : U64
+log_lines = 8
+
+## The new count as a signal, the count's element, then the log lines,
+## each event made and sent in turn, a chunk each.
+datastar! : Server.Request, U64 => Try(Server.Response, [SseErr(Sse.SseErr), BadRequest(Str)])
+datastar! = |request, count| {
+	stream = Sse.start!(request, [])?
+	n = count.to_str()
+	Sse.send!(stream, patch("datastar-patch-signals", "signals {\"count\":${n}}"))?
+	Sse.send!(stream, patch("datastar-patch-elements", "elements <span id=\"count\">${n}</span>"))?
+	for line in 1..=log_lines {
+		data = "selector #log\nmode append\nelements <li>Event ${line.to_str()} of ${log_lines.to_str()}</li>"
+		Sse.send!(stream, patch("datastar-patch-elements", data))?
+	}
+	Sse.end!(stream)
+}
+
+## A Datastar event; its two names have no line breaks.
+patch : Str, Str -> Sse.Event
+patch = |name, data|
+	match Sse.Event.named(name, data) {
+		Ok(event) => event
+		Err(InvalidEventName) => crash "a Datastar event name has no line break"
+	}
+
+expect signals("/sse?datastar=%7B%22count%22%3A41%7D") == Ok({ count: 41 })
+expect signals("/sse?datastar=%7B%22count%22%3A4294967295%7D") == Ok({ count: 4294967295 })
+expect signals("/sse") == Err(BadSignals)
+expect signals("/sse?datastar=%7B%7D") == Err(BadSignals)
+expect signals("/sse?datastar=%7B%22count%22%3A-1%7D") == Err(BadSignals)
+expect signals("/sse?datastar=%7B%22count%22%3A4294967296%7D") == Err(BadSignals)
+expect signals("/sse?datastar=%") == Err(BadSignals)

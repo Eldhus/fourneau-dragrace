@@ -1,0 +1,9 @@
+</main>
+<footer>
+  <p>This site is a <a href="https://github.com/Eldhus/roux">roux</a> app on <a href="https://github.com/Eldhus/fourneau">fourneau</a>
+  &middot; <a href="https://github.com/Eldhus/fourneau-dragrace">source</a>
+  &middot; part of <a href="https://github.com/Eldhus">Eldhus</a></p>
+</footer>
+<script src="/demo.js" defer></script>
+</body>
+</html>

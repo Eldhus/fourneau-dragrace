@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Menu</title></head>
+<body>
+<h1>Menu</h1>
+<table>
+<tr><th>Dish</th><th>Price</th></tr>
+{% for dish in dishes %}<tr><td>{{ dish.name }}</td><td>{{ dish.price }}</td></tr>
+{% endfor %}</table>
+</body>
+</html>

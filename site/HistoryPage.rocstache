@@ -1,0 +1,10 @@
+{{> Top}}<article class="prose">
+<h1>History</h1>
+<p>The median of each night&rsquo;s rounds, race by race. A line that jumps is a commit: every race&rsquo;s <a href="/data/index.json">data</a> names the commits it raced.</p>
+</article>
+<section id="history" class="results">
+{{?waiting}}<p class="pending">// HISTORY NEEDS TWO RACES // check back after the next nightly</p>{{/waiting}}{{^waiting}}<ul class="legend" aria-label="Competitors">{{#competitors}}<li><span class="swatch s-{{ . }}"></span>{{ . }}</li>{{/competitors}}</ul>
+<p class="machines">{{ note }}</p>
+{{> HistoryClasses}}{{/waiting}}
+</section>
+{{> Bottom}}

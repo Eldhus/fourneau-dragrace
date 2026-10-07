@@ -1,0 +1,54 @@
+{
+  "title": "roux (Roc on fourneau)",
+  "language": "Roc",
+  "framework": "roux: a Roc platform whose host is fourneau",
+  "links": {
+    "roux": "https://github.com/Eldhus/roux",
+    "Roc": "https://www.roc-lang.org"
+  },
+  "build": [
+    {
+      "cwd": "{roux}",
+      "argv": [
+        "{zig}",
+        "build",
+        "platform"
+      ]
+    },
+    {
+      "cwd": "{roux}",
+      "argv": [
+        "{zig}",
+        "build",
+        "tools"
+      ]
+    },
+    {
+      "cwd": "competitors/roux",
+      "argv": [
+        "{roux}/zig-out/bin/rocstache-gen",
+        "-o",
+        "Menu.roc",
+        "Menu.rocstache"
+      ]
+    },
+    {
+      "cwd": "competitors/roux",
+      "argv": [
+        "{roc}",
+        "build",
+        "main.roc",
+        "--output={out}/roux"
+      ]
+    }
+  ],
+  "run": {
+    "argv": [
+      "{bin}"
+    ],
+    "env": {
+      "ROUX_ADDRESS": "{address}"
+    },
+    "fixed_port": 8080
+  }
+}

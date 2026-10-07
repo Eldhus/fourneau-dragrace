@@ -1,0 +1,7 @@
+out/
+competitors/axum/target/
+competitors/fourneau-zig/zig-out/
+competitors/fourneau-zig/.zig-cache/
+.zig-cache/
+site/data/
+tools/dragrace
