@@ -62,7 +62,7 @@
     {
       "name": "conduit",
       "title": "RealWorld (Conduit)",
-      "summary": "RealWorld's Conduit API on SQLite: articles listed and read, comments and favorites written, all at once, at rising rates the same for every server.",
+      "summary": "An article listing, an article, a comment and a favorite, all at once, on SQLite.",
       "method": "MIXED",
       "path": "/api/articles",
       "connections": 256,
