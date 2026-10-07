@@ -173,7 +173,7 @@ Store :: [].{
 				names = Str.join_with(new.map(|head| "${head.repository} ${short(head.commit_sha)}"), ", ")
 				["New commits, ${names}: they race tonight at 03:00 New York time."]
 			}
-		asked = if racer.waiting.any(|w| w.kind == "race") ["A race is asked for; it starts within a minute or two."] else []
+		asked = if racer.waiting.any(|w| w.kind == "race") ["A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour)."] else []
 		last =
 			match newest {
 				Ok(run) if run.status != "racing" and run.status != "finished" => {
