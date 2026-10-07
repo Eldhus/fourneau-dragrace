@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="/style.css">
 <script type="module" src="/datastar-v1.0.2.js"></script>
 </head>
-<body{{?home}} class="home"{{/home}}>
+<body>
 <div class="crt" aria-hidden="true"></div>
 <header class="masthead">
 {{?home}}  <canvas id="fire" aria-hidden="true"></canvas>
