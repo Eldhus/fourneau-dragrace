@@ -895,3 +895,18 @@ results. Then `docs/migrations/2026-10-07-machine-memory.sql` ran on it as
 its header says: integrity and foreign keys ok, counts the same, and the
 new build serves `/`, `/history` and `/competitors` from it. That is the
 migration tested on the live data before it runs on the host.
+
+## 2026-10-07: the charts' names beside their own lines
+
+The owner, on the open-loop chart: the names are misaligned. axum's sat
+two rows under its line's end, pushed by basic-webserver's name, which
+ends far to the left: the spreading looked only at height, right for the
+history charts (every line ends on the last race) but not where lines end
+at different rates. One `label_ys` now places both charts' names (two
+copies before): each beside its end, pushed down only past a name it
+overlaps across as well as down (its width from its length, 11 px Space
+Mono at 0.6 em). The names are 11 px, from 12.
+
+Checked: 112 expects (the new one: a name pushed under one above, one
+beside it not); on the live data's race, axum's name is at its own end.
+Not looked at in a browser.

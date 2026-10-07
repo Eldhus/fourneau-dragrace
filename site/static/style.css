@@ -162,6 +162,9 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .chart { width: 100%; min-width: 560px; height: auto; display: block; }
 .chart text { font-family: var(--mono); fill: var(--text-2); font-size: 12px; }
 .chart .grid { stroke: var(--grid); stroke-width: 1; }
+/* A line's name at its end; View.roc's label_gap and label_char_width
+   assume this size. */
+.chart .end { font-size: 11px; }
 .chart .tick { text-anchor: end; fill: var(--text-3); font-size: 11px; }
 .chart .date { text-anchor: middle; fill: var(--text-3); font-size: 11px; }
 .s-go { --series: var(--series-go); }

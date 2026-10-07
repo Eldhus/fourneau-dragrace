@@ -35,14 +35,14 @@ View :: [].{
 	## The open-loop ladder: p99 against the offered rate, a line per
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
-	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_y : F64 }
+	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `measure`: what the y axis is; `caption`, how the ladder was climbed.
 	OpenChart : { title : Str, measure : Str, caption : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
-	## `end_y`: where the line ends, for spreading the labels apart.
-	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_y : F64 }
+	## `end_x`, `end_y`: where the line ends, for spreading the labels apart.
+	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	Tick : { line_y : Str, text_y : Str, label : Str }
 	Mark : { x : Str, label : Str }
 	Chart : { title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
@@ -344,6 +344,7 @@ line = |entries, competitor, value, x, y| {
 		dots: $dots,
 		label_x: Format.one_decimal($last_x + 10.0),
 		label_y: Format.one_decimal($last_y + 4.0),
+		end_x: $last_x,
 		end_y: $last_y,
 	}
 }
@@ -419,31 +420,57 @@ expect {
 vcpus : U32 -> Str
 vcpus = |count| if count == 1 "1 vCPU" else "${count.to_str()} vCPUs"
 
-## The labels at the lines' ends, at least `label_gap` apart, so two lines
-## ending close together do not print one name over the other: sorted by
-## where they end, each pushed below the one above when too close.
+## A label's height and a character's width, in the charts' units (the
+## `.end` text: 11 px Space Mono, 0.6 em to a character).
 label_gap : F64
-label_gap = 14.0
+label_gap = 13.0
+
+label_char_width : F64
+label_char_width = 6.6
+
+## Where each line's name goes, in the order given: beside its line's end,
+## pushed down below any name already placed that it would overlap, across
+## and down, so lines ending close together do not print one name over the
+## other, and a name is never pushed by one far to its side (2026-10-07:
+## on the open-loop chart, where lines end at different rates, axum's name
+## was pushed under basic-webserver's). Placed from the highest end down;
+## an undrawn line's name neither moves nor pushes.
+label_ys : List({ competitor : Str, x : F64, y : F64, drawn : Bool }) -> List(F64)
+label_ys = |ends| {
+	by_y = |a, b| if a.y < b.y Before else if a.y > b.y After else Same
+	sorted = ends
+		.map_with_index(|e, i| { i, x: e.x, y: e.y, drawn: e.drawn, width: Str.to_utf8(e.competitor).len().to_f64() * label_char_width })
+		.sort_with(by_y)
+	var $placed = []
+	var $ys = []
+	for e in sorted {
+		var $y = e.y + 4.0
+		if e.drawn {
+			for p in $placed.sort_with(by_y) {
+				across = e.x < p.x + p.width and p.x < e.x + e.width
+				if across and $y > p.y - label_gap and $y < p.y + label_gap {
+					$y = p.y + label_gap
+				}
+			}
+			$placed = $placed.append({ ..e, y: $y })
+		}
+		$ys = $ys.append({ i: e.i, y: $y })
+	}
+	$ys.sort_with(|a, b| if a.i < b.i Before else if a.i > b.i After else Same).map(|p| p.y)
+}
 
 spread_labels : List(View.Line) -> List(View.Line)
 spread_labels = |lines| {
-	sorted = lines.sort_with(|a, b| if a.end_y < b.end_y Before else if a.end_y > b.end_y After else Same)
-	var $floor = -1000.0
-	var $placed = []
-	for l in sorted {
-		wanted = l.end_y + 4.0
-		y = if l.drawn and wanted < $floor + label_gap $floor + label_gap else wanted
-		$floor = if l.drawn y else $floor
-		$placed = $placed.append({ ..l, label_y: Format.one_decimal(y) })
-	}
-	$placed
+	ys = label_ys(lines.map(|l| { competitor: l.competitor, x: l.end_x, y: l.end_y, drawn: l.drawn }))
+	List.map2(lines, ys, |l, y| { ..l, label_y: Format.one_decimal(y) })
 }
 
 expect vcpus(1) == "1 vCPU" and vcpus(4) == "4 vCPUs"
 expect {
-	at = |name, y| { competitor: name, drawn: Bool.True, path: "", dots: [], label_x: "0", label_y: "", end_y: y }
-	spread = spread_labels([at("b", 100.0), at("a", 95.0), at("c", 200.0)])
-	spread.map(|l| l.label_y) == ["99.0", "113.0", "204.0"]
+	at = |name, x, y| { competitor: name, x, y, drawn: Bool.True }
+	# b is pushed under a; c is clear below; d, beside a, is not pushed.
+	label_ys([at("b", 0.0, 100.0), at("a", 0.0, 95.0), at("c", 0.0, 200.0), at("d", 100.0, 96.0)])
+		== [112.0, 99.0, 204.0, 100.0]
 }
 
 ## A race's date on a chart's axis: the day, and the time when another
@@ -546,7 +573,7 @@ open_line = |result, x, y, metric| {
 			Ok(p) => { last_x: p.px, last_y: p.py }
 			Err(_) => { last_x: 0.0, last_y: 0.0 }
 		}
-	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last_x + 10.0), label_y: Format.one_decimal(last_y + 4.0), end_y: last_y }
+	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last_x + 10.0), label_y: Format.one_decimal(last_y + 4.0), end_x: last_x, end_y: last_y }
 }
 
 step_title : Str, Data.OpenStep, Metric -> Str
@@ -569,16 +596,8 @@ p99_step_title = |competitor, s| {
 ## The open chart's labels, spread as the history charts' are.
 spread_open : List(View.OpenLine) -> List(View.OpenLine)
 spread_open = |lines| {
-	sorted = lines.sort_with(|a, b| if a.end_y < b.end_y Before else if a.end_y > b.end_y After else Same)
-	var $floor = -1000.0
-	var $placed = []
-	for l in sorted {
-		wanted = l.end_y + 4.0
-		y = if wanted < $floor + label_gap $floor + label_gap else wanted
-		$floor = y
-		$placed = $placed.append({ ..l, label_y: Format.one_decimal(y) })
-	}
-	$placed
+	ys = label_ys(lines.map(|l| { competitor: l.competitor, x: l.end_x, y: l.end_y, drawn: Bool.True }))
+	List.map2(lines, ys, |l, y| { ..l, label_y: Format.one_decimal(y) })
 }
 
 ## Powers of ten from at or below `low` to at or above `high`, at least
