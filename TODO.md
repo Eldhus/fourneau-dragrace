@@ -63,26 +63,6 @@
      rocstache templates are interpreted, not compiled, which needs the
      contexts as data (Roc has no reflection). Then port the devserver
      into roux (Zig) once it has settled.
-3. **The site's pages type in what race.json and the racer decide.**
-   (owner, 2026-10-07: "don't do nasty things like that; audit for
-   more") An audit of site/ for figures typed into views and templates
-   that a run's data, race.json or the racer's timer already hold; they go
-   stale when those change. Fixed: the ladder's caption ("50% to 120%",
-   now from the run's steps).
-   - Found, for the owner's call (render each from the run's data, keep
-     as prose and add to the two-places chore, or cut):
-     - "03:00 New York time": `site/Store.roc` (the race page's status
-       line) and `IndexPage.rocstache`; the racer's timer holds it.
-     - `IndexPage.rocstache`: "Five workloads raced flat out" and their
-       list; "Three rounds".
-     - `MethodPage.rocstache`: 5 s warmup, 20 s measured, three rounds.
-     - `WorkloadsPage.rocstache`: each workload's connections (256, 64),
-       the 4,096-byte body, 13 bytes, Conduit's shares (50/30/15/5%) and
-       rates (250 to 32,000), the seed (100 users, 1,000 articles), the
-       warmup and rounds, the ladder's steps (50% to 120%), the loader's
-       85% (also `loader_limit_pct` in View.roc).
-     - Worked examples (256 connections at 50,000/s is about 5 ms;
-       "20,000 requests a second") are prose, not settings: keep.
 
 ## Chores
 

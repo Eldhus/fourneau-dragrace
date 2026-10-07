@@ -1,5 +1,6 @@
 import Data
 import Format
+import db/Pages
 
 ## What the pages show, made from the races: every number formatted, every
 ## bar's share and every chart's path computed here, so the templates only
@@ -50,6 +51,24 @@ View :: [].{
 	History : { waiting : Bool, note : Str, competitors : List(Str), classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
+
+	## The Workloads page, every figure from the newest race (the owner,
+	## 2026-10-07: nothing typed in that race.json decides). `spec`: what
+	## the loader asked, small under the card.
+	WorkloadCard : { title : Str, route : Str, summary : Str, spec : Str }
+	Workloads : { ready : Bool, cards : List(WorkloadCard), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
+
+	workloads : List(Pages.WorkloadSpecs), Pages.RaceSettings -> Workloads
+	workloads = |specs, settings| {
+		ready: Bool.True,
+		cards: specs.map(workload_card),
+		rounds: settings.rounds.to_str(),
+		warmup: settings.warmup_seconds.to_str(),
+		measure: settings.measure_seconds.to_str(),
+		shares: settings.shares,
+		ladder: settings.ladder,
+		loader_limit: Format.thousands(loader_limit_pct),
+	}
 
 	## A server class's tab: a link to the same page showing that class.
 	## `label` is the class's short name; its title heads the class below.
@@ -504,6 +523,36 @@ took = |timing| {
 ## closed loop does (measured 2026-10-06).
 loader_limit_pct : F64
 loader_limit_pct = 85.0
+
+## A workload's card: its route without the query (SSE's carries the
+## signals), and what the loader asked of it.
+workload_card : Pages.WorkloadSpecs -> View.WorkloadCard
+workload_card = |w| {
+	path =
+		match w.path.split_first("?") {
+			Ok({ before, after: _ }) => before
+			Err(_) => w.path
+		}
+	if w.kind == "mixed" {
+		rates = "${Format.thousands(w.lowest.to_f64())} to ${Format.thousands(w.highest.to_f64())} requests a second"
+		{ title: w.title, route: path, summary: w.summary, spec: "Open loop only: ${w.mix}; ${rates}, the same for every server, each climbing until it falls behind." }
+	} else {
+		reuse = if w.keepalive "kept alive" else "a new one per request"
+		body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
+		{ title: w.title, route: "${w.method} ${path}", summary: w.summary, spec: "${w.connections.to_str()} connections, ${reuse}${body}." }
+	}
+}
+
+expect {
+	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
+	echo = workload_card(spec("closed", "POST", "/echo", 4096, 256, Bool.True))
+	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False))
+	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True))
+	echo.spec == "256 connections, kept alive, 4,096-byte body."
+	and sse.route == "GET /sse" and sse.spec == "64 connections, a new one per request."
+	and conduit.route == "/api/articles"
+	and conduit.spec == "Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."
+}
 
 ## The class's open-loop charts, a ladder each: the closed workload's
 ## (each server at shares of its own maximum), and each mixed workload's

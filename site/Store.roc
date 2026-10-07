@@ -17,6 +17,16 @@ Store :: [].{
 		run!(reads, id)
 	}
 
+	## What the newest finished run asked of each workload, and its rounds
+	## and ladder: the Workloads page. `NotFound` before the first race.
+	workloads! : Sqlite.Db, Server.Request => Try({ specs : List(Pages.WorkloadSpecs), settings : Pages.RaceSettings }, [NotFound, DbErr(Sqlite.Err)])
+	workloads! = |db, request| {
+		reads = Sqlite.read(db, request)
+		{ id } = Pages.latest!(reads)?
+		key = { run_id: id }
+		Ok({ specs: Pages.workload_specs!(reads, key)?, settings: Pages.race_settings!(reads, key)? })
+	}
+
 	## One run, as Data.Run.
 	run! : Sqlite.Read, Str => Try(Data.Run, [NotFound, DbErr(Sqlite.Err)])
 	run! = |reads, id| {
@@ -170,9 +180,11 @@ Store :: [].{
 			if racer.heads.is_empty() or !racing.is_empty() {
 				[]
 			} else if new.is_empty() {
-				[said("Nothing new since the last race: tonight's check (03:00 New York time) will skip it.")]
+				[said("Nothing new since the last race: tonight's check will skip it.")]
 			} else {
-				[{ text: "Racing tonight at 03:00 New York time", items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
+				# Not the hour: the racer's timer holds it, and the site has no
+				# copy to go stale (the owner, 2026-10-07).
+				[{ text: "Racing tonight", items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
 			}
 		asked = if racer.waiting.any(|w| w.kind == "race") [said("A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour).")] else []
 		last =
@@ -236,8 +248,8 @@ expect {
 	raced = |repository, commit_sha| { repository, commit_sha, new: Bool.False }
 	quiet = { recent: [], classes: [], results: 0, waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
 	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
-	Store.status(quiet) == [{ text: "Nothing new since the last race: tonight's check (03:00 New York time) will skip it.", items: [] }]
-	and Store.status(busy) == [{ text: "Racing tonight at 03:00 New York time", items: ["roux def1234"] }]
+	Store.status(quiet) == [{ text: "Nothing new since the last race: tonight's check will skip it.", items: [] }]
+	and Store.status(busy) == [{ text: "Racing tonight", items: ["roux def1234"] }]
 }
 
 expect {

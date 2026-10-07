@@ -1019,3 +1019,29 @@ only a newer build. The site was down 20:37 to 20:39 UTC, until started
 by hand; then `/`, `/history`, `/competitors`, `/workloads` 200 and the
 HSTS header there. SECURITY.md now says both (start the site when current
 is already the new build; checkpoint before deleting a WAL).
+
+## 2026-10-07: no figure typed into the pages
+
+The audit's findings (figures typed into the pages that race.json or the
+racer decide), done as the owner said: from the data where a query gives
+it, else worded away; less fragile is better. The Workloads page is now
+read from the newest finished run: a card per workload (its title, route,
+race.json summary), the line under it from `run_workloads` (connections,
+kept alive or not, body size), a mixed workload's parts and rates from the
+run's own `race_json` through SQLite's `json_each` (two typed queries,
+`workload_specs` and `race_settings`), the warmup, measure and rounds and
+the ladder's workload and steps from `run_settings`, the loader's limit
+from View's `loader_limit_pct`. Before the first race it says so. The
+hand-written card prose (each stack's engine, the reference links, the
+seed's size) gave way to the summaries; the check against a reference is
+one line in the intro, linking Method. Worded away: "03:00 New York time"
+(the banner says "Racing tonight"; the hour is the racer's timer, which
+the site does not hold), the front page's list of five workloads and
+"three rounds", Method's 5 s, 20 s and three rounds (it links Workloads).
+The worked examples (Little's law) stay prose.
+
+Checked: the queries on the live data's copy (Conduit: list 50%, article
+30%, comment 15%, favorite 5%; 250 to 32,000; ladder Templates at 50% to
+120%); 113 expects (the new one: a card's route without the query, its
+line closed and mixed); the page read through `site dev`; a search of
+site/ for the old figures finds none.

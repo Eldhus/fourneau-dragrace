@@ -1,24 +1,15 @@
 {{> Top}}<article class="prose">
 <h1>Workloads</h1>
-<p>Six workloads, each one part of a server&rsquo;s job. Every server must answer the same bytes.</p>
-<div class="workloads">
-<section class="card"><h3>Plaintext <code>GET /plaintext</code></h3>
-<p><code>Hello, World!</code> on kept-alive connections: the floor cost of HTTP.</p><span class="spec">256 connections.</span></section>
-<section class="card"><h3>Echo 4 KiB <code>POST /echo</code></h3>
-<p>A 4 KiB body read and written back.</p><span class="spec">256 connections, 4,096-byte body.</span></section>
-<section class="card"><h3>Connection churn <code>GET /plaintext</code></h3>
-<p>A new TCP connection per request: accept and close.</p><span class="spec">64 connections.</span></section>
-<section class="card"><h3>Templates <code>GET /menu</code></h3>
-<p>A 12-row table rendered and escaped per request, in each stack&rsquo;s own engine: <code>html/template</code>, askama, rocstache, <code>Html</code>, a comptime template in Zig. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/menu.html">the reference page</a>.</p><span class="spec">256 connections.</span></section>
-<section class="card"><h3>SSE (Datastar) <code>GET /sse</code></h3>
-<p>A Datastar action: signals in the query, ten events streamed back, a chunk each. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/sse.txt">the reference stream</a>, chunk by chunk.</p><span class="spec">256 connections.</span></section>
-<section class="card"><h3>RealWorld (Conduit) <code>/api/articles</code></h3>
-<p><a href="https://realworld-docs.netlify.app/">RealWorld</a>&rsquo;s Conduit API on SQLite (WAL, <code>synchronous=NORMAL</code>): the article list (joined, newest first), an article, a comment and a favorite, at once, on a fresh copy of one seeded database (100 users, 1,000 articles). Answers checked field by field.</p><span class="spec">Open loop only: list 50%, article 30%, comment 15%, favorite 5%; 250 to 32,000 requests a second, the same for every server, until it answers under 90% of the rate. Charted: the slowest part&rsquo;s p99.</span></section>
-</div>
-<p>The first five: 5&nbsp;s warmup, 20&nbsp;s measured, three rounds, the median reported. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
-
+<p>Each workload is one part of a server&rsquo;s job. Every server must answer the same bytes, checked against a reference before it races (<a href="/method">Method</a>).</p>
+{{?ready}}<div class="workloads">
+{{#cards}}<section class="card"><h3>{{ title }} <code>{{ route }}</code></h3>
+<p>{{ summary }}</p><span class="spec">{{ spec }}</span></section>
+{{/cards}}</div>
+<p>Each closed-loop workload: {{ warmup }}&nbsp;s warmup, {{ measure }}&nbsp;s measured, {{ rounds }} rounds, the median reported. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
+{{/ready}}{{^ready}}<p class="pending">No race yet: the workloads show once the first has run.</p>
+{{/ready}}
 <h2>Closed loop</h2>
-<p><a href="https://github.com/hatoo/oha">oha</a> holds <i>N</i> connections (256; 64 for churn), each sending its next request when the last answer lands, so every server runs flat out at its own pace. By Little&rsquo;s law latency &asymp; <i>N</i> &divide; throughput: these are a saturated server&rsquo;s latencies, and they hide three things.</p>
+<p><a href="https://github.com/hatoo/oha">oha</a> holds <i>N</i> connections (each workload&rsquo;s above), each sending its next request when the last answer lands, so every server runs flat out at its own pace. By Little&rsquo;s law latency &asymp; <i>N</i> &divide; throughput: these are a saturated server&rsquo;s latencies, and they hide three things.</p>
 <ul>
 <li><b>Coordinated omission.</b> A stall stalls the generator too; the requests users would have sent meanwhile never exist, so the tail is understated, most for servers that pause.</li>
 <li><b>Latency at a given rate.</b> Each server runs at its own maximum, so no two latencies are at the same load.</li>
@@ -26,13 +17,13 @@
 </ul>
 
 <h2>Open loop</h2>
-<p>So each server then climbs a ladder on one workload: fixed offered rates at 50, 75, 90, 100 and 120% of its own closed-loop median, latency counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each percentile belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed. 120% is past saturation on purpose: the queue grows for the whole step.</p>
-<p>Pacing costs oha about half again the CPU of its closed loop, so at the fastest servers&rsquo; rates the loader can bind. A step with the loader 85% busy or more is drawn hollow.</p>
+<p>So each server then climbs a ladder{{?ready}} on {{ ladder }}{{/ready}}: fixed offered rates{{?ready}} at {{ shares }}{{/ready}} of its own closed-loop median, latency counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each percentile belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed. The top step is past saturation on purpose: the queue grows for the whole step.</p>
+<p>Pacing costs oha about half again the CPU of its closed loop, so at the fastest servers&rsquo; rates the loader can bind. A step with the loader {{ loader_limit }}% busy or more is drawn hollow.</p>
 
 <h2>Caveats</h2>
 <ul>
 <li>The loader runs on a bigger droplet, its CPU recorded every round.</li>
-<li>Echo 4 KiB on the larger classes fills the network link first: the fast servers tie there (each round records the traffic).</li>
+<li>Echo on the larger classes can fill the network link first: the fast servers tie there (each round records the traffic).</li>
 <li>Only 2xx answers count.</li>
 </ul>
 </article>

@@ -82,3 +82,42 @@ ORDER BY class;
 -- @param run_id : Str
 -- @column results : I64
 SELECT count(*) AS results FROM results WHERE run_id = :run_id;
+
+-- The Workloads page, from the newest finished run: what each workload
+-- asked, so the page never types in what race.json decides (the owner,
+-- 2026-10-07). A mixed workload's parts and rates are only in the race's
+-- own race.json: `mix` ("list 50%, article 30%, ..."), and `lowest` and
+-- `highest` of its rates (0 for a closed one).
+-- name: workload_specs :many(64)
+-- @param run_id : Str
+-- @column keepalive : Bool
+-- @column mix : Str
+-- @column lowest : I64
+-- @column highest : I64
+SELECT w.name, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes, w.connections,
+  w.keepalive,
+  coalesce((SELECT group_concat(json_extract(p.value, '$.name') || ' '
+      || CAST(round(json_extract(p.value, '$.share') * 100) AS INTEGER) || '%', ', ')
+    FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
+      json_each(d.value, '$.mixed.parts') AS p
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS mix,
+  coalesce((SELECT min(r.value) FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
+      json_each(d.value, '$.mixed.rates') AS r
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), 0) AS lowest,
+  coalesce((SELECT max(r.value) FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
+      json_each(d.value, '$.mixed.rates') AS r
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), 0) AS highest
+FROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;
+
+-- The rounds and the ladder of a run: `shares`, the ladder's steps as
+-- percentages ("50%, 75%, ..."); `ladder`, the workload it climbs.
+-- name: race_settings :one
+-- @param run_id : Str
+-- @column shares : Str
+-- @column ladder : Str
+SELECT s.rounds, s.warmup_seconds, s.measure_seconds,
+  (SELECT group_concat(CAST(round(j.value * 100) AS INTEGER) || '%', ', ')
+    FROM json_each(s.open_loop_shares) AS j) AS shares,
+  coalesce((SELECT w.title FROM run_workloads w
+    WHERE w.run_id = s.run_id AND w.name = s.open_loop_workload), s.open_loop_workload) AS ladder
+FROM run_settings s WHERE s.run_id = :run_id;
