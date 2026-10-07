@@ -65,9 +65,11 @@ code { font-family: var(--mono); background: var(--surface-3); padding: 0 .35em;
   overflow: hidden;
   border-bottom: 1px solid var(--grid);
 }
-.home .masthead { padding-top: 84px; min-height: 360px; }
+/* The masthead is the same on every page, the logo, the menu and the bar
+   in the same place (the owner, 2026-10-07); on the front page the fire
+   burns up from the bar behind the menu and the logo. */
 #fire {
-  position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; height: 40%; z-index: 0;
+  position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; height: 70%; z-index: 0;
   image-rendering: pixelated; opacity: .6;
   mask-image: linear-gradient(to top, black 40%, transparent);
 }
@@ -101,10 +103,6 @@ nav a:hover, nav a[aria-current="page"] {
   animation: copper 6s linear infinite;
 }
 @keyframes copper { to { background-position: 200% 0; } }
-/* On the front page the bar closes the header under the fire, as it does on
-   every other page, rather than following the menu across the fire's top
-   (2026-10-07). */
-.home .copper { position: absolute; left: 16px; right: 16px; bottom: 0; }
 
 main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 /* Prose keeps a readable measure, left-aligned with the results below it
@@ -192,12 +190,11 @@ footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 
 @media (max-width: 560px) {
   body { font-size: 15px; }
   nav a { font-size: 9px; padding: 7px 8px; }
-  /* The logo at the same height on every page (the owner, 2026-10-06):
-     the front page keeps room below for its fire, not above. */
-  .home .masthead { padding-top: 48px; min-height: 300px; }
   .drag .name, .drag .value { font-size: 12px; }
   .class { font-size: 11px; }
   main { padding-top: 24px; }
+  /* A page's title close under the bar: 32 px, not 64. */
+  .prose h1:first-child { margin-top: 8px; }
 }
 
 /* The server-class tabs over the results: one row of short names, joined

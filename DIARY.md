@@ -870,3 +870,18 @@ fire now, as on every other page.
 Checked on localhost (a scratch site.db seeded from the 2026-10-06 runs,
 memory placeholders): 112 expects; tabs, memory and the bar at 390 and
 1280 px.
+
+## 2026-10-07: one masthead on every page
+
+The owner: the front page's bar, pinned under the fire, sat lower than on
+every other page; the bar belongs in one place, the fire raised. The
+front page's masthead overrides are gone (its taller padding and
+min-height, the bar's absolute position, the mobile override and the
+body's `home` class that carried them): the masthead is the same
+everywhere, the bar right under the menu, and the fire burns up from the
+bar behind the menu and the logo (70% of the masthead's height, was 40%
+of a taller one). On a phone a page's title sat 64 px under the bar
+(main's 24 and the h1's 40); the first h1 keeps 8.
+
+Built and served on localhost: the front page has the fire, History none,
+neither a body class. Not looked at in a browser: the owner checks it.

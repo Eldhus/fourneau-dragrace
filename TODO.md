@@ -42,7 +42,9 @@
    fire.** (owner, 2026-10-07)
    - Where it stands (2026-10-07): done and tested on localhost; pushed in
      08ce01c (another session's commit took the uncommitted files with
-     it). The build adds `machines.memory_mib`, so it fails the live
+     it). The bar under the fire was redone (owner): one masthead on
+     every page, the fire raised behind the menu; the owner checks it on
+     localhost. The build adds `machines.memory_mib`, so it fails the live
      schema check and the host agent keeps the old site (live at 18:03
      UTC: no HSTS header, the old style.css), which holds back 08ce01c's
      HSTS too. Tonight's race is safe meanwhile: the new workers post
