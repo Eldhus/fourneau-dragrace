@@ -13,15 +13,13 @@
 {{/table}}</tbody></table></details></figure>
 {{/strips}}</div>
 {{#open}}<figure class="strip open"><figcaption><b>Under load: {{ title }}</b>{{ caption }} <a href="/workloads">How</a></figcaption>
-<fieldset class="metrics"><legend>latency</legend>{{#metrics}}<label><input type="radio" name="{{ ../id }}" value="{{ key }}"{{?checked}} checked{{/checked}}><span>{{ label }}</span></label>{{/metrics}}</fieldset>
-{{#metrics}}<div class="chart-scroll metric m-{{ key }}"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ ../title }}: {{ measure }} by offered requests per second">
+<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: p99 latency by offered requests per second">
 {{#ticks_y}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
-{{/ticks_y}}{{#../ticks_x}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>
-{{/../ticks_x}}{{#lines}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
+{{/ticks_y}}{{#ticks_x}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>
+{{/ticks_x}}{{#lines}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
 {{#dots}}<circle class="point s-{{ ../competitor }}{{?hollow}} hollow{{/hollow}}" cx="{{ cx }}" cy="{{ cy }}" r="4"><title>{{ title }}</title></circle>
 {{/dots}}<text class="end" x="{{ label_x }}" y="{{ label_y }}">{{ competitor }}</text>
-{{/lines}}</svg></div>
-{{/metrics}}<p class="axis-note">offered requests per second &rarr;</p>
-<ul class="legend" aria-label="Lines">{{#competitors}}<li><span class="swatch s-{{ . }}"></span>{{ . }}</li>{{/competitors}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li></ul></figure>
+{{/lines}}</svg></div><p class="axis-note">offered requests per second &rarr;</p>
+<ul class="legend" aria-label="Lines">{{#lines}}<li><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/lines}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li></ul></figure>
 {{/open}}{{/classes}}
 </div>
