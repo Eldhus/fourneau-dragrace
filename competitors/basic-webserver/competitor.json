@@ -1,5 +1,5 @@
 {
-  "title": "basic-webserver (Roc)",
+  "title": "basic-webserver",
   "language": "Roc",
   "framework": "basic-webserver 0.17.0: Roc's own platform, a Rust host on hyper and tokio",
   "links": {
