@@ -90,6 +90,11 @@ each part's rate, mean, p50, p99 and p99.9.
 
 ## A race
 
+A cloud race runs on its own droplets, started by the racer (docs/self-hosting.md):
+a `dragrace worker` on each class's loader drives that class's server over
+the private network and posts each result to the site as it lands.
+`dragrace race local` runs the same race on one machine.
+
 For each server class, for each round (a new random order every round, from
 a seed recorded in the results), for each competitor: start it, wait until
 it answers, check it (first round), then for each workload a warmup

@@ -2,7 +2,7 @@
 <nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav>
 {{#classes}}<h2 class="class">{{ title }}</h2>
 <dl class="machines">{{#machines}}<dt>{{ role }}</dt><dd>{{ text }}</dd>{{/machines}}</dl>
-<p class="raw"><a href="/data/classes/{{ ../id }}/{{ name }}.json">raw data</a> for this class, every round</p>
+<p class="raw"><a href="/data/classes/{{ ../id }}/{{ name }}.json">this class's data</a>, as the page draws it</p>
 <div class="strips">
 {{#strips}}<figure class="strip"><figcaption><b>{{ title }}</b>{{ summary }}</figcaption>
 <div class="drag" role="list">

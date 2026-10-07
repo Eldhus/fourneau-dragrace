@@ -32,6 +32,13 @@ A build, which GitHub makes, runs on the racer (it updates itself) and on
 the site host: GitHub's account is in the trust, as it was when the
 nightly ran there.
 
+The racer's credentials are encrypted by systemd with a key on the same
+disk (`/var/lib/systemd/credential.secret`, not on encrypted media): that
+keeps them from every user but root, not from root or a copy of the disk.
+The racer droplet has no DigitalOcean backups, so no copy of that disk
+exists outside it; destroying the droplet (and rotating the token) is the
+answer to a racer taken over.
+
 Fork pull requests run `ci.yml` only, which has no secrets.
 
 ## The DigitalOcean token

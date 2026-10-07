@@ -260,6 +260,10 @@ func (racer *Racer) postHeads(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return racer.postHeadsOf(ctx, heads)
+}
+
+func (racer *Racer) postHeadsOf(ctx context.Context, heads map[string]string) error {
 	var posts []map[string]string
 	for _, name := range racedRepositories {
 		posts = append(posts, map[string]string{"repository": name, "commit_sha": heads[name]})
@@ -296,6 +300,12 @@ func (racer *Racer) handle(ctx context.Context, request Request, raced map[strin
 	heads, err := racer.heads(ctx)
 	if err != nil {
 		return racer.notRaced(ctx, run, "failed", "the heads: "+err.Error())
+	}
+	// The race page's line on tonight shows these heads at once: posted
+	// from the idle loop only, they would stand still for the hour a
+	// request takes (seen live, 2026-10-07).
+	if err := racer.postHeadsOf(ctx, heads); err != nil {
+		log.Printf("heads: %v", err)
 	}
 	commits, anyNew := commitsPost(heads, raced)
 	run.Commits = commits
