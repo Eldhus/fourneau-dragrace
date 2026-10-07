@@ -9,6 +9,10 @@ const fourneau = @import("fourneau");
 const Evented = @import("zig_io_evented");
 const Template = @import("template.zig").Template;
 const datastar = @import("datastar.zig");
+const conduit = @import("conduit.zig");
+
+/// The shard's connection to the conduit workload's database (`--database`).
+threadlocal var shard_db: ?conduit.Db = null;
 
 /// The templates workload's page: a head, a row per dish, a tail.
 const MenuHead = Template(
@@ -75,6 +79,9 @@ const App = struct {
         if (head.method == .get and std.mem.eql(u8, path_of(head.path_and_query), "/sse")) {
             return sse(request);
         }
+        if (shard_db) |*db| {
+            if (std.mem.startsWith(u8, head.path_and_query, "/api/")) return api(request, db);
+        }
         return .{ .status = 404, .headers = text_plain, .body = "not found" };
     }
 
@@ -114,6 +121,43 @@ const App = struct {
         }
         request.stream_end() catch return streamed;
         return streamed;
+    }
+
+    const application_json: []const Header = &.{
+        .{ .name = "Content-Type", .value = "application/json" },
+    };
+
+    /// The conduit workload: a comment's body read first, the answer
+    /// written into this connection's scratch memory.
+    fn api(request: *Server.Request, db: *conduit.Db) Response {
+        const head = request.head;
+        var body_buffer: [16 * 1024]u8 = undefined;
+        var used: usize = 0;
+        const method: conduit.Method = switch (head.method) {
+            .get => .get,
+            .post => .post,
+            else => .other,
+        };
+        if (method == .post) {
+            for (0..body_buffer.len + 1) |_| {
+                if (used == body_buffer.len) {
+                    return .{ .status = 413, .headers = text_plain, .body = "body too large" };
+                }
+                const got = request.read_body(body_buffer[used..]) catch {
+                    return .{ .status = 400, .headers = text_plain, .body = "bad body" };
+                };
+                if (got == 0) break;
+                used += got;
+            } else unreachable; // each pass reads a byte or ends
+        }
+        var authorization: ?[]const u8 = null;
+        for (head.headers) |header| {
+            if (std.ascii.eqlIgnoreCase(header.name, "authorization")) authorization = header.value;
+        }
+        const answer = conduit.answer(db, method, head.path_and_query, authorization,
+            body_buffer[0..used], request.scratch) orelse
+            return .{ .status = 404, .headers = text_plain, .body = "not found" };
+        return .{ .status = answer.status, .headers = application_json, .body = answer.body };
     }
 
     /// The body, into this connection's scratch memory, and back.
@@ -160,6 +204,8 @@ const Server = fourneau.server.ServerType(App, .{
 const Options = struct {
     address: []const u8 = "127.0.0.1",
     port: u16 = 8080,
+    /// The conduit workload's database; "" for none.
+    database: [:0]const u8 = "",
 };
 
 pub fn main(init: std.process.Init.Minimal) !void {
@@ -173,6 +219,8 @@ pub fn main(init: std.process.Init.Minimal) !void {
             options.address = value;
         } else if (std.mem.eql(u8, arg, "--port")) {
             options.port = try std.fmt.parseInt(u16, value, 10);
+        } else if (std.mem.eql(u8, arg, "--database")) {
+            options.database = value;
         } else return error.Usage;
     }
     const shards = cpu_count();
@@ -209,6 +257,7 @@ fn run_shard_or_fail(options: Options, shards: u32) !void {
     try runtime.init(gpa, .{ .thread_limit = 0, .log2_ring_entries = 12 });
     defer runtime.deinit();
     const io = runtime.io();
+    if (options.database.len > 0) shard_db = try conduit.Db.open(options.database);
     const address = try std.Io.net.IpAddress.parse(options.address, options.port);
     const listener = try address.listen(io, .{ .reuse_address = true, .kernel_backlog = 4096 });
     var app: App = .{};
