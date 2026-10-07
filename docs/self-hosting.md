@@ -24,6 +24,11 @@ No GitHub runner is held for a race, and GitHub holds no secret.
   droplets (linux x86_64). It publishes them as a release `build-<UTC>`
   with `build.json`: the three commits, the versions, each file's
   SHA-256. Older releases past the newest 20 are deleted.
+- The racer, not a schedule, asks for a build of fourneau's or roux's new
+  commits: a build exactly when a race needs one (owner, 2026-10-07, over
+  a scheduled check, which needed no token but built on a timer and
+  stops after 60 days without commits). Its GitHub token can only
+  dispatch and cancel this repository's builds.
 - **The site deploys itself.** `dragrace host-agent` (a timer, every
   minute) reads `releases/latest/download/build.json` (a CDN download,
   not the rate-limited API). A new site commit: download, check the
