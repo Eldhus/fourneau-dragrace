@@ -1,6 +1,6 @@
-## The races, as the dragrace tool publishes them (data/latest.json, the
-## newest run whole; data/index.json, every run's medians). Only the
-## fields the pages show; the rest of the JSON is ignored.
+## The races as the pages model them: a run whole, and every run's medians.
+## Store.roc reads them from the database; the JSON parsers here read the
+## tests' fixtures (test/: a run, and an index, as the site served them).
 Data :: [].{
 	Round : { rps : F64, p99_ms : F64, cpu_busy_pct : F64, steal_pct : F64, rss_kib : F64, loader_cpu_busy_pct : F64, net_rx_mbps : F64, net_tx_mbps : F64, tcp_retransmits : F64, load_seconds : F64 }
 

@@ -8,10 +8,11 @@ import (
 )
 
 // The site is a roux app (site/): every page a rocstache template, the races
-// read from site/data on each request. It runs on what it races, so it is
-// built as the roux competitor is: roux's platform and rocstache-gen from
-// the checkout beside this one, the templates compiled to Roc, the app's
-// expects run, then one static binary.
+// in its SQLite database (site/db: the schema and queries, typed by
+// roux-db). It runs on what it races, so it is built as the roux competitor
+// is: roux's platform, rocstache-gen and roux-db from the checkout beside
+// this one, the templates and queries compiled to Roc, the app's expects
+// run, then one static binary.
 
 // siteBinary is the built site: out/bin/dragrace-site.
 func siteBinary(root string) string { return filepath.Join(binDir(root), "dragrace-site") }
@@ -26,7 +27,7 @@ func siteBuildCommand(ctx context.Context, root string, args []string) error {
 	if err := siteBuild(ctx, root, tools); err != nil {
 		return err
 	}
-	fmt.Printf("built %s; run it from site/ (ROUX_PORT=8090 for a local look)\n", siteBinary(root))
+	fmt.Printf("built %s; run it from site/ (ROUX_PORT=8090 for a local look; it makes site.db there)\n", siteBinary(root))
 	return nil
 }
 
@@ -43,6 +44,10 @@ func siteBuild(ctx context.Context, root string, tools Toolchain) error {
 	}
 	if len(templates) == 0 {
 		return fmt.Errorf("no templates in %s", dir)
+	}
+	queries := filepath.Join(tools.Roux, "zig-out", "bin", "roux-db")
+	if err := run(ctx, dir, nil, queries, "gen", "db"); err != nil {
+		return err
 	}
 	generate := filepath.Join(tools.Roux, "zig-out", "bin", "rocstache-gen")
 	for _, template := range templates {

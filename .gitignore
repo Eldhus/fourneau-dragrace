@@ -5,3 +5,6 @@ competitors/fourneau-zig/.zig-cache/
 .zig-cache/
 site/data/
 tools/dragrace
+site/site.db*
+site/backups/
+site/secrets/
