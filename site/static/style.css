@@ -140,11 +140,14 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .strip figcaption b { font-family: var(--pixel); font-size: 11px; color: var(--text); font-weight: normal; margin-right: 8px; }
 
 /* The drag strip: a name, then a bar from one baseline, its value at the tip. */
+/* The longest bar (the fastest round) takes this share of its track; the
+   rest is room for the whisker's end and the number on a phone. */
+.drag { --bar-max: 66%; }
 .drag { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; }
 .drag .row { display: contents; }
 .drag .name { text-align: right; color: var(--text-2); font-size: 14px; }
 .drag .track { display: flex; align-items: center; gap: 8px; min-width: 0; border-left: 1px solid var(--text-3); padding: 2px 0; }
-.drag .bar { height: 20px; width: calc(var(--share) * 72%); min-width: 2px; border-radius: 0 4px 4px 0;
+.drag .bar { height: 20px; width: calc(var(--share) * var(--bar-max)); min-width: 2px; border-radius: 0 2px 2px 0;
   transform-origin: left; animation: launch .9s cubic-bezier(.2,.9,.2,1); }
 .drag .value { font-weight: 700; font-size: 14px; min-width: 0; }
 /* The bar keeps its width: it is the number. A tag that does not fit wraps
@@ -225,10 +228,10 @@ nav.tabs a + a { border-left: 0; }
    the median, the whisker how much the rounds agreed. `reach` keeps the
    value clear of a whisker that runs past the bar. */
 .drag .track { position: relative; }
-.drag .reach { flex: none; width: calc(var(--reach) * 72%); margin-left: -4px; }
+.drag .reach { flex: none; width: calc(var(--reach) * var(--bar-max)); margin-left: -4px; }
 .drag .whisker {
   position: absolute; top: calc(50% - 5px); height: 10px;
-  left: calc(var(--low) * 72%); width: calc((var(--high) - var(--low)) * 72%);
+  left: calc(var(--low) * var(--bar-max)); width: calc((var(--high) - var(--low)) * var(--bar-max));
   border-left: 1px solid var(--text); border-right: 1px solid var(--text);
   background: linear-gradient(to bottom, transparent 4.5px, var(--text) 4.5px, var(--text) 5.5px, transparent 5.5px);
   opacity: .55; pointer-events: none;

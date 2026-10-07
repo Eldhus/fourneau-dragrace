@@ -513,3 +513,9 @@ The owner: the whiskers looked like blots on the bars' tips. Two 2px
 caps a few pixels apart made a solid block where the rounds agreed. Now
 1px, at 55% opacity, and none at all when the rounds were within 2% of
 the strip's top bar (`whisker_share_min`): the table keeps the spread.
+
+The owner's phone showed the top whisker looking adrift: it was right
+(fourneau-zig's rounds 125,005, 126,159, 129,918: from just inside the
+bar to past it), but the 4px rounded tip hid where the bar ends. Tips are
+2px now, and the longest bar takes 66% of its track, not 72%, so the
+fastest round's whisker and a six-digit number fit at 375 px.
