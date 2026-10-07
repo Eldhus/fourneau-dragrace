@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -331,5 +332,18 @@ func TestDropletImagePinsAgree(t *testing.T) {
 	if race.Cloud.Image == "" || race.Cloud.Image != versions.DropletImage {
 		t.Fatalf("race.json image %q, versions.json droplet_image %q",
 			race.Cloud.Image, versions.DropletImage)
+	}
+}
+
+// Only DigitalOcean's refusal of a not-yet-registered key is retried;
+// any other refusal (a bad size, a quota) fails at once.
+func TestKeyNotYetKnown(t *testing.T) {
+	refused := fmt.Errorf(`DigitalOcean POST /v2/droplets: 422 Unprocessable Entity: {"id":"unprocessable_entity","message":"59891906 are invalid key identifiers for Droplet creation."}`)
+	if !keyNotYetKnown(refused) {
+		t.Fatalf("a new key's refusal must be retried")
+	}
+	quota := fmt.Errorf(`DigitalOcean POST /v2/droplets: 422 Unprocessable Entity: {"message":"creating this/these droplet(s) will exceed your droplet limit"}`)
+	if keyNotYetKnown(quota) {
+		t.Fatalf("a quota refusal must not be retried")
 	}
 }
