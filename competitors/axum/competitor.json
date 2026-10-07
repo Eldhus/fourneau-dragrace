@@ -7,5 +7,5 @@
     { "cwd": "competitors/axum", "argv": ["cargo", "build", "--release", "--locked"] },
     { "cwd": ".", "argv": ["cp", "competitors/axum/target/release/dragrace-axum", "{out}/axum"] }
   ],
-  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}"] }
+  "run": { "argv": ["{bin}", "--address", "{address}", "--port", "{port}", "--database", "{db}"] }
 }

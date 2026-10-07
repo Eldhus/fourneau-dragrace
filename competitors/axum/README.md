@@ -12,3 +12,9 @@ hyper options. Say why.
 
 `GET /sse`: `Query` and `serde_json` for the signals, then axum's `Sse`
 over a stream of the ten events; hyper writes ready events together.
+
+`/api/...` (conduit): sqlx's SQLite (bundled), as an axum team runs it:
+WAL and `synchronous=NORMAL`, a pool of readers (twice the cores) and a
+pool of one writer (SQLite writes one at a time; the pool queues them
+rather than retrying on SQLITE_BUSY); serde for JSON, chrono for the
+timestamps.

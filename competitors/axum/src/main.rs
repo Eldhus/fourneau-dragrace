@@ -3,6 +3,8 @@
 //! (`ListenerExt::tap_io`); without it, pipelined responses wait 40 ms on
 //! delayed ACKs. See README.md for what you may tune.
 
+mod conduit;
+
 use askama::Template;
 use std::convert::Infallible;
 
@@ -109,12 +111,17 @@ fn argument(name: &str, default: &str) -> String {
 async fn main() {
     let address = argument("--address", "127.0.0.1");
     let port: u16 = argument("--port", "8080").parse().expect("--port");
-    let app = Router::new()
+    let database = argument("--database", "");
+    let mut app = Router::new()
         .route("/plaintext", get(plaintext))
         .route("/echo", post(echo))
         .route("/menu", get(menu))
         .route("/sse", get(datastar))
         .layer(axum::extract::DefaultBodyLimit::max(1 << 20));
+    if !database.is_empty() {
+        let conduit = conduit::open(&database).await.expect("--database");
+        app = app.merge(conduit::routes(conduit));
+    }
     let listener = tokio::net::TcpListener::bind((address.as_str(), port)).await.unwrap();
     println!("axum on http://{address}:{port}");
     let listener = listener.tap_io(|tcp| {

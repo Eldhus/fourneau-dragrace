@@ -15,6 +15,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 futures-util = { version = "0.3", default-features = false }
+# The conduit workload: sqlx's SQLite (bundled), its timestamps with chrono.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [profile.release]
 codegen-units = 1
