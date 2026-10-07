@@ -164,8 +164,10 @@ Store :: [].{
 				_ => []
 			}
 		new = racer.heads.keep_if(|head| !racer.raced.any(|c| c.repository == head.repository and c.commit_sha == head.commit_sha))
+		# While a run races, the heads it races are the news; tonight's
+		# check is said again once it is over (seen live, 2026-10-07).
 		tonight =
-			if racer.heads.is_empty() {
+			if racer.heads.is_empty() or !racing.is_empty() {
 				[]
 			} else if new.is_empty() {
 				["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
@@ -244,5 +246,6 @@ expect {
 	racing = { recent: [run("racing", "")], classes: [{ class: "smallest", status: "done", reason: "", seconds: 1.0 }], results: 12, waiting: [], heads: [], raced: [] }
 	skipped = { ..racing, recent: [run("skipped", "nothing new")], classes: [] }
 	Store.status(racing) == ["Racing now: r1, 12 results in (smallest done)."]
+	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == ["Racing now: r1, 12 results in (smallest done)."]
 	and Store.status(skipped) == ["The last run, r1, was skipped: nothing new."]
 }
