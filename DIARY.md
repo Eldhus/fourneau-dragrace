@@ -708,3 +708,45 @@ then CI's `race local -quick` with everything: all valid. On the laptop
 (two server CPUs) the ladder topped out around 2,000 to 4,000 a second
 (fourneau-zig 4,000, roux, axum and Go 2,000 to 4,000, basic-webserver
 1,000, its CPU at 100%): not results, the laptop.
+
+## 2026-10-07: deployed; the first race from the racer; the audit
+
+The owner pushed nothing by hand: with their leave, every repository was
+pushed, the old runner's environment, secrets and `results` branch
+deleted (the branch kept as a local bundle), the site host set up anew
+(`site install-server`: the site from releases, its tokens, the host
+agent), DigitalOcean's backups turned on (daily, seven kept: the plan
+the API reports, not the weekly one documented), and the racer
+provisioned and installed (lon1; the guard's cap $25). Setup found
+`putFiles` losing one of two files named `config.json`; fixed.
+
+The first race, asked with `site race-now`, stalled: having dispatched
+a build, the racer waited for a release "created" after the dispatch,
+and a release's `created_at` is its commit's date (published_at is when
+it was made): the build of its own heads was never taken. Fixed: the
+build of exactly the heads at every poll, else the newest published
+since asking, and no dispatch while a build already runs. The stuck
+racer was stopped before it recorded anything, the fixed binary
+installed from its release, and the race ran: 52 minutes, $0.29 (the
+guard's ledger agrees), 60 results all valid. Five minutes went to
+dedicated-2's CPU: six c-2s, 8358s and 8280s, never the 8168 it asks
+for. Mid-race a push deployed a new site (serving again in a second)
+and the site host rebooted for its kernel (22 s): nothing lost, though
+no post fell in either gap, so the retries ran only on the laptop.
+
+The audit read each repository against the running hosts and wrote
+the system up for the owner (the doc "The fourneau drag race: how it
+works, end to end"). Fixed besides: the status line's promises (a
+build's wait; no "tonight" while racing), heads posted when a request is
+taken, a stopped racer recording a failed run, the raw-data link's
+words, About and RACING, SECURITY on the credential key and on reading
+the live database (roux locks it: read a copy), TODO's stale items,
+roux's TODO and the skill's map. The hosts: root's login refused,
+reboots for updates at 05:30 UTC (site) and 15:30 UTC (racer), a swap
+file, update-notifier off; both rebooted onto new kernels and came back
+by themselves. The racer's second boot ran DigitalOcean's per-instance
+script that its starved first boot had skipped, replacing the machine
+id: that boot's journal is in the old id's directory (a one-off). The
+builds cache their dependencies now (7.5 of 8 minutes were compiling).
+Open, in TODO: the site host on 24.04, the site's unreproducible build,
+conduit's history and axis, the CPU pin, docs-only commits racing.

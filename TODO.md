@@ -25,23 +25,16 @@
      the site host and the racer pull them.
    - Decided (owner, 2026-10-07): the read-write workload is a slice of
      RealWorld's Conduit API (`conduit`), not a todo list.
-   - Where it stands (2026-10-07): built and tested locally, committed,
-     not pushed or deployed. roux: `synchronous` per database,
-     `Sqlite.backup!`, file reads in `init!`, and a fix (rows mixed between
-     a shard's statements). Here: the site on SQLite with its API and the
-     racer's status line; the guard (checked against real DigitalOcean),
-     the racer, the worker, the host agent, `bundle`, `build.yml`; conduit
-     in all five competitors and on the race page; the runner workflows,
-     `publish` and the deploy key gone; SECURITY.md and
-     docs/self-hosting.md. End to end on the laptop, the site restarted
-     mid-race included.
-   - Next, with the owner: (1) push roux, then this repository (CI's
-     quick race needs roux's fix); make the GitHub token (SECURITY.md);
-     (2) `site install-server`, `site backups`, `racer provision`,
-     `racer install`; (3) `site race-now`: the first cloud race, checking
-     what the laptop could not (a worker on a loader, the guard on the
-     racer); (4) a commit to see the 03:00 check race; (5) delete the
-     `results` branch (`git push origin --delete results`, the owner's).
+   - Where it stands (2026-10-07): deployed and racing. The site host runs
+     the new site and deploys itself; the racer (lon1) with its guard
+     ($25 a month) raced the first cloud race from a request: 52 min,
+     $0.29, 60 results, a deploy and a reboot of the site mid-race lost
+     nothing. The racer's build matching was wrong (GitHub's
+     `created_at`) and is fixed. The audit, the system written up end to
+     end, its findings (the owner's doc, "The fourneau drag race: how it
+     works, end to end"): open ones below in Todo.
+   - Next: the 03:00 check tonight (it races: new commits) proves the
+     timer path; then this item goes.
 
 ## Chores
 
@@ -179,6 +172,16 @@
 - [ ] The class's data link (`/data/classes/ID/CLASS.json`) is the page's
   model: a subset of each round's measures. Every measure is in the
   database: an export of it whole. (2026-10-07)
+- [ ] dedicated-2 asks for a Xeon 8168, and the first racer's race got
+  six c-2s in lon1, 8358s and 8280s, none an 8168: five minutes and five
+  droplets for nothing. Pin what lon1's c-2s are now (the machines
+  table's attempts over a few races), or stop pinning. (2026-10-07)
+- [ ] Every commit is new to the nightly check, docs and TODO too: a
+  night races again ($0.29) for commits that change nothing raced.
+  Owner's call: skip commits touching only docs? (2026-10-07)
+- [ ] Conduit's chart: rates double each step, and the linear axis kept
+  for likeness bunches the low ones; a log axis would read them.
+  (2026-10-07)
 - [ ] A domain name for the site (owner, 2026-10-06: wants one). Then
   ACME for the name, HSTS takes effect. (2026-10-05)
 

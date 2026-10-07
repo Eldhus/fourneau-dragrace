@@ -190,9 +190,11 @@ s-8vcpu-16gb (c-4 was the limit for the fastest server, 98%
 busy at 152k plaintext requests/s, 2026-10-06, and lon1 offers no
 dedicated size above it: eight shared vCPUs give the loader headroom, its
 CPU recorded every round); about $0.27 an hour together,
-billed per second (a minute at least). With five competitors, five
-workloads and the open-loop ladder a class races for about 40 minutes:
-roughly $0.30 a race. `premium-4` (Basic Premium AMD) is out until
+billed per second (a minute at least). With five competitors, six
+workloads and the two ladders a class races for about 43 minutes: the
+first cloud race from the racer (2026-10-07) took 52 minutes from
+request to result, five of them finding dedicated-2's CPU, and cost
+$0.29. `premium-4` (Basic Premium AMD) is out until
 dedicated Premium Intel is offered: its shared vCPUs varied by 15% round
 to round, its "up to 10 Gbit/s" stopped near 1 Gbit/s with retransmits,
 and its slower network left 256 connections unable to saturate anything,
