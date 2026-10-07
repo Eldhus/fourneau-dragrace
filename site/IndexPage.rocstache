@@ -1,5 +1,5 @@
 {{> Top}}<section id="latest" class="results" aria-live="polite">
-{{#racer}}<p class="racer"><span class="news">{{ text }}</span><span class="items">{{#items}}<span class="item">{{ . }}</span>{{/items}}</span></p>
+{{#racer}}<p class="racer"><span class="news">{{ text }}</span><span class="items"><span class="row">{{#items}}<span class="item">{{ . }}</span>{{/items}}</span></span></p>
 {{/racer}}{{?ready}}<p class="run-meta"><span>Race <b>{{ id }}</b></span> <span>{{ started }}</span>{{?timed}} <span>{{ took }}</span>{{/timed}}</p>
 <p class="run-meta">{{#commits}}<span>{{ name }} <a href="{{ url }}">{{ short }}</a></span> {{/commits}}</p>
 <ul class="legend" aria-label="Competitors">{{#competitors}}<li><span class="swatch s-{{ . }}"></span><a href="/competitors">{{ . }}</a></li>{{/competitors}}<li><span class="swatch hollow-bar"></span>server not saturated</li></ul>
