@@ -129,7 +129,7 @@
         "label": "4GB/2vCPU",
         "title": "Dedicated cores, no neighbours",
         "size": "c-2",
-        "loader_size": "s-8vcpu-16gb"
+        "loader_size": "c-4"
       }
     ],
     "tag": "fourneau-dragrace-race",
