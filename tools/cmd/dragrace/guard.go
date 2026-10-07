@@ -356,7 +356,7 @@ func commandGuard(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	guard := &Guard{config: config, provider: do, now: time.Now}
+	guard := &Guard{config: config, provider: do, now: func() time.Time { return time.Now().UTC() }}
 	if err := guard.load(); err != nil {
 		return fmt.Errorf("the ledger: %w", err)
 	}
