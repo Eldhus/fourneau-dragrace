@@ -947,3 +947,21 @@ broken template: the type error in the browser, the old site still 200.
 Go tests for the pure parts (change detection, the digest ignoring
 static files and templates, which files count, the injection and what it
 leaves alone). Under a second is not reached: TODO says what would.
+
+## 2026-10-07: the open-loop charts switch between latencies
+
+The owner: switch the open-loop lines between p50, p99, p99.9, whatever
+there is; p99 first. Every step already keeps p50, p90, p99, p99.9 and the
+mean (open_steps); the site read only p99, p99.9 and the mean, and now
+reads all five. A chart offers the measures its steps have: the ladder
+p50, p90, p99, p99.9; Conduit (no p90; its percentiles are the slowest
+part's, its caption says so) p50, p99, p99.9 and the mean, which it drew
+alone until now. Each measure is drawn on its own log axis, all on the
+page, and radio buttons with CSS `:has()` hide the others: no request, no
+script, and it works through the class tabs' fragments. A point's tooltip
+gives every measure.
+
+Checked: 113 expects (the new one: which measures each kind offers, p99
+shown); on the live data's race the controls read p50 p90 p99 p99.9 and p50
+p99 p99.9 mean, p99 checked, 8 charts on the page. Built and reloaded by
+`site dev` (3.4 s; the CSS 7 ms). Not looked at in a browser.
