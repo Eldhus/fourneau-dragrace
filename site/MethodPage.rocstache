@@ -3,7 +3,7 @@
 <ul>
 <li><b>Machines.</b> Each server class gets a fresh server droplet and a loader droplet with more vCPUs, running <a href="https://github.com/hatoo/oha">oha</a>, in one region, over the private network. The classes race at the same time; every droplet is deleted afterwards.</li>
 <li><b>Checks.</b> Before racing, <code>/plaintext</code> must answer exactly <code>Hello, World!</code>, <code>/echo</code> the body it was sent, <code>/menu</code> the reference page, <code>/sse</code> the reference stream with one chunk per event (and 400 without signals), and an unknown path 404. A server that fails is a DNF.</li>
-<li><b>Measurement.</b> 5 seconds of warmup (discarded), 20 seconds measured, three rounds in a seeded random order. The median counts, and only 2xx responses count.</li>
+<li><b>Measurement.</b> A warmup (discarded), then a measured run, in rounds of a seeded random order (the lengths: <a href="/workloads">Workloads</a>). The median counts, and only 2xx responses count.</li>
 <li><b>Noise.</b> Shared-vCPU classes record CPU steal, so a noisy night shows up in the results.</li>
 <li><b>Builds.</b> Each server is built and configured the way its users ship it. Every version is pinned and recorded with the results.</li>
 </ul>

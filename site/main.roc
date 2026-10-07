@@ -64,7 +64,7 @@ respond! = |request, { db, tokens }| {
 			"/history" => history!(db, request, wanted)
 			"/race-classes" => race_classes!(db, request, wanted)
 			"/history-classes" => history_classes!(db, request, wanted)
-			"/workloads" => Ok(page(WorkloadsPage.render(frame("Workloads", "/workloads"))))
+			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
 			"/method" => Ok(page(MethodPage.render(frame("Method", "/method"))))
 			"/contribute" => Ok(page(ContributePage.render(frame("Contribute", "/contribute"))))
@@ -144,6 +144,31 @@ competitors! = |db, request| {
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	Ok(page(CompetitorsPage.render({ title: base.title, home: base.home, nav: base.nav, pins })))
+}
+
+## The workloads as the newest race asked them.
+workloads! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+workloads! = |db, request| {
+	base = frame("Workloads", "/workloads")
+	view =
+		match Store.workloads!(db, request) {
+			Ok({ specs, settings }) => View.workloads(specs, settings)
+			Err(NotFound) => { ready: Bool.False, cards: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
+			Err(DbErr(err)) => return Err(DbErr(err))
+		}
+	Ok(page(WorkloadsPage.render({
+		title: base.title,
+		home: base.home,
+		nav: base.nav,
+		ready: view.ready,
+		cards: view.cards,
+		rounds: view.rounds,
+		warmup: view.warmup,
+		measure: view.measure,
+		shares: view.shares,
+		ladder: view.ladder,
+		loader_limit: view.loader_limit,
+	})))
 }
 
 history_view! : Sqlite.Db, Server.Request => Try(View.History, [DbErr(Sqlite.Err)])
