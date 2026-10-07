@@ -120,7 +120,7 @@
       {
         "name": "smallest",
         "label": "512MB/1vCPU",
-        "title": "What a $4 droplet can do",
+        "title": "What a $4/month droplet can do",
         "size": "s-1vcpu-512mb-10gb",
         "loader_size": "c-4"
       },
