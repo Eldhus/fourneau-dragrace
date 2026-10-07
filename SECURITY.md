@@ -99,8 +99,8 @@ With `DIGITALOCEAN_TOKEN` exported from the keyring, from this checkout
 1. The site host, once: `out/dragrace site provision` (it prints the
    address), then `out/dragrace site install-server -host ADDRESS` (it
    makes the racer and manual tokens in your keyring if missing) and
-   `out/dragrace site backups` (DigitalOcean's weekly copies, 20% of the
-   droplet).
+   `out/dragrace site backups` (DigitalOcean's daily copies, seven kept,
+   30% of the droplet: about $1.20 a month).
 2. The racer, once: `out/dragrace racer provision`, then
    `out/dragrace racer install -host RACER -site ADDRESS [-cap 25]`.
 3. Push to main: `build.yml` builds and releases; the site host deploys it

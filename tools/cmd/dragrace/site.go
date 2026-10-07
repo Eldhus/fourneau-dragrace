@@ -308,7 +308,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo install -d -m 700 -o site -g site " + siteState + " " + siteState + "/secrets " +
 			siteState + "/backups",
 		"sudo ln -sfn " + siteHome + "/current/static " + siteState + "/static",
-		"sudo apt-get install -y -q sqlite3 >/dev/null",
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q sqlite3 >/dev/null 2>&1",
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
@@ -348,12 +348,17 @@ func putFiles(ctx context.Context, machine SSHMachine, files map[string]string, 
 	}
 	defer os.RemoveAll(dir)
 	var script []string
+	// Numbered: two files of one name (the guard's and the racer's
+	// config.json) would take each other's place (found 2026-10-07).
+	index := 0
 	for path, content := range files {
-		local := filepath.Join(dir, filepath.Base(path))
+		index++
+		name := fmt.Sprintf("dragrace-%d-%s", index, filepath.Base(path))
+		local := filepath.Join(dir, name)
 		if err := os.WriteFile(local, []byte(content), 0o600); err != nil {
 			return err
 		}
-		remote := "/tmp/" + filepath.Base(path)
+		remote := "/tmp/" + name
 		if err := machine.Put(ctx, local, remote); err != nil {
 			return err
 		}
@@ -392,9 +397,10 @@ func siteRaceNow(ctx context.Context, args []string) error {
 	return nil
 }
 
-// siteBackups turns on DigitalOcean's weekly backups of the site host (20%
-// of its price), with the owner's token: the copy of the whole disk beside
-// the site's own nightly copies.
+// siteBackups turns on DigitalOcean's backups of the site host, with the
+// owner's token: the copy of the whole disk beside the site's own nightly
+// copies. DigitalOcean's default plan is daily, seven kept, 30% of the
+// droplet's price (checked 2026-10-07: its backup policy endpoint).
 func siteBackups(ctx context.Context, args []string) error {
 	flags := newFlags("site backups")
 	flags.Parse(args)

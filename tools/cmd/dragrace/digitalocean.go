@@ -159,7 +159,7 @@ func (do *DigitalOcean) deleteDroplet(ctx context.Context, id int) error {
 	return do.call(ctx, http.MethodDelete, fmt.Sprintf("/v2/droplets/%d", id), nil, nil)
 }
 
-// enableBackups turns on a droplet's weekly backups.
+// enableBackups turns on a droplet's backups (DigitalOcean's default plan: daily).
 func (do *DigitalOcean) enableBackups(ctx context.Context, id int) error {
 	return do.call(ctx, http.MethodPost, fmt.Sprintf("/v2/droplets/%d/actions", id),
 		map[string]string{"type": "enable_backups"}, nil)
