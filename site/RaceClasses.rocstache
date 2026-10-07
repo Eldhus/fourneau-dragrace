@@ -3,7 +3,6 @@
 {{#classes}}<h2 class="class">{{ title }}</h2>
 <dl class="machines">{{#machines}}<dt>{{ role }}</dt><dd>{{ text }}</dd>{{/machines}}</dl>
 <p class="raw"><a href="/data/classes/{{ ../id }}/{{ name }}.json">raw data</a> for this class, every round</p>
-<p class="key"><span class="swatch hollow-bar"></span>an outlined bar: something besides the server's CPU set it (the table says what)</p>
 <div class="strips">
 {{#strips}}<figure class="strip"><figcaption><b>{{ title }}</b>{{ summary }}</figcaption>
 <div class="drag" role="list">
