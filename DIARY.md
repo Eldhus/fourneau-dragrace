@@ -1000,3 +1000,22 @@ only if it can be replayed); an app that dies on its own shows its output
 over the page. Measured the same way: 779 of 779 answered 200 across four
 restarts. Go tests: a refusal retried, a dead app given up on, an
 unreplayable body not resent.
+
+## 2026-10-07: the memory migration, live
+
+Pushed (the owner asked: 21 commits, 4affaa2..5daf2d8), then on the site
+host as cook, with the racer idle: schema.sql and the migration copied up
+(sha256 equal to the checkout's), the agent's timer and the site stopped,
+the old database's WAL checkpointed first (the header's steps delete
+`site.db-wal` after moving `site.db`, which would have cut its last writes
+from the copy kept), then the header's steps, the old database kept as
+`site-pre-memory.db` (a `site-old.db` from the earlier migration was
+there). The new one: integrity ok, foreign keys ok, every count equal
+(runs 1, results 60, rounds 150, machines 4, open_steps 92, requests 1).
+
+The agent then started nothing: `current` was already a build with
+`memory_mib` (it had been made current at 18:19), and the agent deploys
+only a newer build. The site was down 20:37 to 20:39 UTC, until started
+by hand; then `/`, `/history`, `/competitors`, `/workloads` 200 and the
+HSTS header there. SECURITY.md now says both (start the site when current
+is already the new build; checkpoint before deleting a WAL).

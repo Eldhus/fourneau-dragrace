@@ -38,23 +38,6 @@
      fewer); both hosts reboot for updates at 02:30 New York time.
    - Next: the 03:00 check tonight (it races: new commits) proves the
      timer path and the new site; then this item goes.
-1. **Tabs by size, smallest first; machines' memory; the bar under the
-   fire.** (owner, 2026-10-07)
-   - Where it stands (2026-10-07): done and tested on localhost; pushed in
-     08ce01c (another session's commit took the uncommitted files with
-     it). The bar under the fire was redone (owner): one masthead on
-     every page, the fire raised behind the menu; the owner checks it on
-     localhost. The build adds `machines.memory_mib`, so it fails the live
-     schema check and the host agent keeps the old site (live at 18:03
-     UTC: no HSTS header, the old style.css), which holds back 08ce01c's
-     HSTS too. Tonight's race is safe meanwhile: the new workers post
-     `memory_mib` and the old site ignores it (Roc's `Json.parse` skips
-     unknown fields, tested; a missing field is still refused); that
-     run's memory is lost.
-   - Next (owner): push 360e5cb (the migration and DIARY), then on the
-     site host run `docs/migrations/2026-10-07-machine-memory.sql` as its
-     header says, `sudo rm /opt/dragrace-site/failed/*`, and start the
-     host agent's timer. Check the HSTS header and the tabs.
 2. **`dragrace site dev`: edit a template, see it in under a second.**
    (owner, 2026-10-07) A watcher over the templates, queries, Roc and
    static files; regeneration and a dev-backend build (`--opt=dev`); the

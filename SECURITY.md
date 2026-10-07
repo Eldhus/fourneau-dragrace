@@ -188,6 +188,14 @@ sudo rm /opt/dragrace-site/failed/*            # let the agent try the build aga
 sudo systemctl start dragrace-host-agent.timer  # it deploys within a minute
 ```
 
+The agent deploys only a build newer than `current`: when `current` is
+already the build of the new schema, it starts nothing, so start the
+site too (`sudo systemctl start dragrace-site`; found 2026-10-07, two
+minutes down). Before deleting a `site.db-wal` with the site stopped,
+checkpoint it into the database (`sudo -u site sqlite3 site.db 'PRAGMA
+wal_checkpoint(TRUNCATE)'`), or the copy kept beside it misses its last
+writes.
+
 The site's copies are in `/var/lib/dragrace-site/backups/` (one after each
 night's check, thirty kept); a copy is a whole SQLite database, opened as
 is. The live `site.db` cannot be opened while the site runs (roux holds a
