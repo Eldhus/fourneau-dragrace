@@ -183,11 +183,17 @@ func siteProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site provision")
 	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
 		"the owner's public key, for the cook user (sudo)")
-	region := flags.String("region", "nyc3", "region")
 	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
 	flags.Parse(args)
+	race, err := loadRace(root)
+	if err != nil {
+		return err
+	}
+	// In the races' region, beside the racer and the workers that post to
+	// it (the first site host was in nyc3, from when GitHub's US runner
+	// raced; moved 2026-10-07).
 	host, err := provisionHost(ctx, root, hostRequest{name: "fourneau-dragrace-site",
-		tag: "fourneau-dragrace-site", region: *region, size: *size, adminKey: *adminKey,
+		tag: "fourneau-dragrace-site", region: race.Cloud.Region, size: *size, adminKey: *adminKey,
 		userData: siteUserData, knownHosts: "site-known-hosts"})
 	if err != nil {
 		return err
