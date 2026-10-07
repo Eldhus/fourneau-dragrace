@@ -12,7 +12,7 @@
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site provision|install-server   the 24/7 site droplet, set up
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
-//	dragrace site backups           DigitalOcean's weekly backups of the site
+//	dragrace site backups           DigitalOcean's daily backups of the site
 //	dragrace racer provision|install   the racer droplet, set up
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
