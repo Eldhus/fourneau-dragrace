@@ -218,7 +218,6 @@ nav.tabs a + a { border-left: 0; }
 .point.hollow { fill: var(--surface); stroke: var(--series, #8a8a8a); stroke-width: 2; }
 .open { margin-top: 22px; }
 .axis-note { margin: 2px 0 0; font-size: 11px; color: var(--text-3); text-align: right; }
-.drag .tag { font-weight: 400; white-space: nowrap; display: inline-block; font-size: 11px; color: var(--gold); border: 1px solid var(--grid); padding: 0 5px; margin-left: 6px; }
 .legend a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-3); }
 .legend a:hover { color: var(--gold); }
 
@@ -238,3 +237,14 @@ nav.tabs a + a { border-left: 0; }
 /* The tables: one line a row, scrolled sideways when wide, never tall. */
 .table th, .table td { white-space: nowrap; padding: 4px 8px; }
 .table td[colspan] { white-space: normal; min-width: 18em; }
+
+/* Something besides the server's CPU set a result (the loader, the
+   network, too few connections): its bar is drawn as an outline in the
+   competitor's own colour, as the open loop's hollow points are, and the
+   table says what (2026-10-06: the owner found text tags beside the bars
+   noise, and they squeezed the bars on a phone). */
+.drag .bar.hollow { background: transparent; box-shadow: inset 0 0 0 2px var(--series); }
+.swatch.hollow-bar, .swatch.hollow-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--text-2); }
+.swatch.hollow-dot { border-radius: 50%; }
+.key { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); margin: 4px 0 12px; }
+.open .legend { margin: 8px 0 0; font-size: 13px; }

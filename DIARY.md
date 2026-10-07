@@ -494,3 +494,15 @@ untouched.
   whiskers off their bars: the bar, a flex item, shrank when value and
   tag did not fit, while the whisker, placed absolutely, did not. The
   bar no longer shrinks; a tag wraps under its value (checked at 412 px).
+
+## 2026-10-06: outlined bars, the open loop's legend
+
+The owner: the "loader" tags beside the bars squeezed them too. A
+result something besides the server's CPU set (loader, network, too few
+connections) is now an outlined bar in the competitor's own colour, the
+bar chart's equivalent of the open loop's hollow points, with a one-line
+key per class; the table says which limit. The open-loop chart hides its
+line labels on a phone, so it has a legend (with the hollow point's key),
+and its axis says "100ms": at 20px on a phone "100 ms" ran off the left
+edge. Checked at 412 px (headless Brave, reduced motion: the bars' launch
+animation otherwise leaves them short of their whiskers in a screenshot).

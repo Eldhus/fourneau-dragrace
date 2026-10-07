@@ -6,10 +6,12 @@ import Format
 ## place text. (This was race.js, drawing in the browser.)
 View :: [].{
 	Commit : { name : Str, short : Str, url : Str }
-	## `tag`: what limited the result, when it was not the server's CPU.
+	## `hollow`: something besides the server's CPU limited the result (the
+	## tip and the table say what), drawn as an outline, as the open loop's
+	## hollow points are.
 	## `low`, `high`: the slowest and fastest rounds as shares, the whisker's
 	## ends; `reach`, how far the whisker runs past the bar (median).
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, reach : Str, value : Str, tag : Str, tagged : Bool, tip : Str }
+	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, reach : Str, value : Str, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -196,7 +198,7 @@ strip = |run, class, workload| {
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", reach: "0", value: "DNF", tag: "", tagged: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", reach: "0", value: "DNF", hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
 		value = Format.thousands(result.median_rps)
 		rounds = List.len(result.rounds).to_str()
@@ -211,8 +213,7 @@ row = |result, most, local|
 			high: Format.two_decimals(fastest / most),
 			reach: Format.two_decimals((fastest - result.median_rps) / most),
 			value,
-			tag,
-			tagged: !tag.is_empty(),
+			hollow: !tag.is_empty(),
 			tip: "${result.competitor}: ${value} req/s, median of ${rounds} rounds (${Format.thousands(slowest)} to ${Format.thousands(fastest)}, ${Format.thousands(spread)}% apart), limited by ${limited_by(result, local)}; p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
 		}
 	}
@@ -565,11 +566,13 @@ log10 = |value| {
 }
 
 ms_label : F64 -> Str
-ms_label = |ms| if ms < 1.0 "0.1 ms" else if ms >= 1000.0 "${Format.thousands(ms / 1000.0)} s" else "${Format.thousands(ms)} ms"
+## No space before the unit: on a phone the axis text is 20px and "100 ms"
+## ran past the chart's left edge (2026-10-06); five characters fit.
+ms_label = |ms| if ms < 1.0 "0.1ms" else if ms >= 1000.0 "${Format.thousands(ms / 1000.0)}s" else "${Format.thousands(ms)}ms"
 
 expect decades_between(2.2, 1903.0) == [1.0, 10.0, 100.0, 1000.0, 10000.0]
 expect decades_between(1.5, 1.6) == [1.0, 10.0]
-expect ms_label(0.1) == "0.1 ms" and ms_label(100.0) == "100 ms" and ms_label(1000.0) == "1 s"
+expect ms_label(0.1) == "0.1ms" and ms_label(100.0) == "100ms" and ms_label(1000.0) == "1s" and ms_label(10000.0) == "10s"
 expect took({ seconds: 3180.0, cost_usd: 0.4512 }) == "took 53 min · $0.45"
 expect took({ seconds: 600.0, cost_usd: 0.0 }) == "took 10 min"
 expect F64.abs(log10(1000.0) - 3.0) < 0.000001 and F64.abs(log10(0.1) + 1.0) < 0.000001 and F64.abs(log10(2.0) - 0.30103) < 0.00001
@@ -618,7 +621,7 @@ expect {
 	and limited_by(result([round(64.0, 52.0, 190.0)]), Bool.False) == "connections (nothing saturated)"
 }
 
-## The bar's tag: what limited it besides the server's CPU, or that
+## What limited a result besides the server's CPU, or that
 ## nothing did; empty for a server at its own CPU's limit, the case the
 ## race is for.
 tag_of : Data.Result, Bool -> Str
