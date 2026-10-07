@@ -595,3 +595,33 @@ fleet now speaks to a `Provider`: DigitalOcean directly (the owner's
 
 Checked: six tests on a fake DigitalOcean, one over a real socket. A
 mutation (the budget check off) fails the budget test.
+
+## 2026-10-06: the racer and its workers, end to end on the laptop
+
+`dragrace racer` takes the site's requests (every 30 s), tells the site
+the heads (every 10 minutes), and, idle, replaces its own binary with a
+newer build's. A request: the heads from GitHub against the last
+finished run's commits; a check with nothing new is a `skipped` run;
+otherwise the release built from those heads (or `build.yml`
+dispatched, waited for up to 45 minutes), unpacked, raced, the run's
+results posted again from each worker's file, the run ended with its
+timing and droplets, a backup asked for. Through the guard it launches
+the fleet as before; on each loader it starts `dragrace worker` with
+`systemd-run` (so it outlives the racer's SSH) and waits for it.
+`dragrace worker` races its class from the loader and posts each result
+after every round and open loop through a queue, so the site being down
+never holds the race up; it keeps every result in a file. A racer that
+restarts mid-run deletes the race droplets and keys and ends that run
+`interrupted`. `SiteClient` retries a post for 20 minutes (1 s doubling
+to 30 s), never a 4xx.
+
+Checked: unit tests (the retries, the poster, commits new or not, builds
+read from releases). End to end on the laptop with a shrunk race.json
+(go and roux, plaintext and templates, a round of 2 s, one open-loop
+step; restored after): the site, a race asked with the manual token,
+`racer once -local`: the run, 4 results with their rounds and steps,
+machines, the end, a backup, the race page showing it. Then again with
+the site stopped 20 s mid-race and started again: the race went on, the
+posts retried (connection refused, 1 to 16 s), every result arrived,
+the run finished. Not checked yet: the cloud path (the guard's socket on
+a real racer, a worker on a real loader) and GitHub's side.

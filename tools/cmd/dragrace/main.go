@@ -15,11 +15,16 @@
 //	                                which the site reads on each request
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site provision|install-server|deploy   the 24/7 site droplet
+//	dragrace worker [-config F]     race one class from its loader, posting
+//	                                to the site (the racer starts it)
 //
 // The services of self-hosting (docs/self-hosting.md), which run outside
 // a checkout:
 //
 //	dragrace guard [-config F]      the racer's DigitalOcean token and budget
+//	dragrace racer serve            take the site's requests and race them
+//	dragrace racer check            ask the site for a check (the 03:00 timer)
+//	dragrace racer once -local DIR  take one request, racing on this machine
 //
 // Every other command runs from anywhere inside the repository.
 package main
@@ -70,6 +75,8 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 	switch command {
 	case "guard":
 		return commandGuard(ctx, args)
+	case "racer":
+		return commandRacer(ctx, args)
 	}
 	return errNotService
 }
@@ -108,6 +115,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandPublish(root, args)
 	case "site":
 		return commandSite(ctx, root, args)
+	case "worker":
+		return commandWorker(ctx, root, args)
 	}
 	usage()
 	return nil

@@ -67,6 +67,7 @@ func openLoop(ctx context.Context, race Race, competitors []Competitor, target T
 			return fmt.Errorf("%s open loop: %w", competitor.Name, err)
 		}
 		result.OpenLoop = steps
+		target.report(*result)
 	}
 	return nil
 }
