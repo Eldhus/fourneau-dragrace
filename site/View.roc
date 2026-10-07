@@ -36,8 +36,8 @@ View :: [].{
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
 	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
-	## `caption`: one line; the Workloads page has the rest.
-	OpenChart : { title : Str, caption : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	## `caption`: one sentence on the load; `measure`: the y axis's note.
+	OpenChart : { title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -515,15 +515,15 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok(open_chart({ title: workload.title, results, mixed: workload.kind == "mixed" }))
+			Ok(open_chart({ title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }))
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: a mixed workload's is its
 ## slowest part's. (The owner, 2026-10-07: a switch to p50, p90, p99.9 and
 ## the mean was built and taken out; the charts all looked alike.)
-open_chart : { title : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ title, results, mixed }| {
+open_chart : { title : Str, summary : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
+open_chart = |{ title, summary, results, mixed }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -540,15 +540,16 @@ open_chart = |{ title, results, mixed }| {
 	}
 	lines = spread_open(results.map(|r| open_line(r, x, y, mixed)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
-	# One short line; the Workloads page explains the ladders (the owner,
-	# 2026-10-07: "way more concise").
-	caption =
+	# The caption is one sentence on the load, as every strip's is: a mixed
+	# workload's own summary (it races only open loop), else the ladder; what
+	# is plotted is the axis's note (the owner, 2026-10-07).
+	{ caption, measure } =
 		if mixed {
-			"p99 latency as the rate climbs, the slowest request type's."
+			{ caption: summary, measure: "p99 latency, the slowest request type's" }
 		} else {
-			"p99 latency as the rate climbs, to 120% of each server's max."
+			{ caption: "The same requests at fixed rates, 50% to 120% of each server's own max.", measure: "p99 latency" }
 		}
-	{ title, caption, lines, ticks_x, ticks_y }
+	{ title, caption, measure, lines, ticks_x, ticks_y }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.OpenLine
