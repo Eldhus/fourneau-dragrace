@@ -294,10 +294,13 @@ nav.tabs { position: sticky; top: 0; z-index: 5; margin: 0 -16px 0; padding: 10p
    breaks only between items, never inside one. */
 .racer .news { display: block; }
 /* Each item wraps as a whole, on its own, to the next line (a phone
-   holds one or two a line). */
-.racer .items { display: flex; flex-wrap: wrap; gap: 0 14px; }
-.racer .items:empty { display: none; }
+   holds one or two a line). The separator goes before each item, and the
+   row is pulled left by one separator inside a box that clips: the one
+   that starts a line falls outside it, so no line starts or ends with a
+   dot (the owner, 2026-10-07). */
+.racer .items { display: block; overflow: hidden; }
+.racer .row { display: flex; flex-wrap: wrap; margin-left: -2.4em; }
 .racer .item { white-space: nowrap; color: #fff3d6; }
-.racer .item:not(:last-child)::after { content: " \00b7"; color: var(--text-3); }
+.racer .item::before { content: "\00b7"; display: inline-block; width: 2.4em; text-align: center; color: var(--text-3); }
 @media (prefers-reduced-motion: reduce) { .racer::before { animation: none; } }
 @media (max-width: 560px) { .racer { font-size: 9px; } }
