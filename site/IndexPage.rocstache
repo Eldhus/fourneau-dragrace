@@ -9,7 +9,8 @@
 <ul>
 <li>A race runs at 03:00 New York time when fourneau, roux or this repository has a new commit. Each result names the commits it raced.</li>
 <li>Each server class gets fresh DigitalOcean droplets: the server on one, the load generator (<a href="https://github.com/hatoo/oha">oha</a>) on a bigger one, over the private network.</li>
-<li>Five workloads: plaintext, a 4 KiB echo, a templated HTML page, a Datastar event stream, and a new connection per request. Three rounds in random order; the median counts, of throughput and of each latency percentile.</li>
+<li>Five workloads raced flat out: plaintext, a 4 KiB echo, a templated HTML page, a Datastar event stream, and a new connection per request. Three rounds in random order; the median counts, of throughput and of each latency percentile.</li>
+<li>And one with a database: a slice of RealWorld&rsquo;s Conduit API on SQLite, reads and writes at once, offered at the same rising rates to every server.</li>
 </ul>
 <p>Details: <a href="/workloads">Workloads</a>, <a href="/method">Method</a>. To make a server faster or add one: <a href="/contribute">Contribute</a>.</p>
 </article>

@@ -43,6 +43,9 @@ jobs:
         with:
           path: ~/.cache/fourneau-dragrace
           key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
+      # The conduit workload's seeded database is made with the sqlite3 shell.
+      - name: The sqlite3 shell
+        run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
       - name: Build the tool
         working-directory: fourneau-dragrace
         env:

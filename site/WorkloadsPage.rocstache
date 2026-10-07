@@ -1,6 +1,6 @@
 {{> Top}}<article class="prose">
 <h1>Workloads</h1>
-<p>Five workloads, each one part of an HTTP server&rsquo;s job, with nothing else in the way. Every server answers the same requests with the same bytes.</p>
+<p>Six workloads, each one part of an HTTP server&rsquo;s job. Every server answers the same requests with the same bytes.</p>
 <dl>
 <dt>Plaintext <code>GET /plaintext</code></dt>
 <dd>Answers <code>Hello, World!</code> (13 bytes) over kept-alive connections: the cost of HTTP itself.<span class="spec">256 connections, kept alive.</span></dd>
@@ -12,8 +12,10 @@
 <dd>A 12-row HTML table rendered from a template per request, every value escaped: Go&rsquo;s <code>html/template</code>, askama on axum, rocstache on roux, the platform&rsquo;s <code>Html</code> on basic-webserver, a comptime template in Zig. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/menu.html">the reference page</a>.<span class="spec">256 connections, kept alive.</span></dd>
 <dt>SSE (Datastar) <code>GET /sse</code></dt>
 <dd>A Datastar action: the page&rsquo;s signals as JSON in the query, answered with a stream of ten Datastar events (the new count as a signal, the count&rsquo;s element, eight log lines appended), each event a chunk of its own: Go flushing each, axum&rsquo;s <code>Sse</code>, basic-webserver&rsquo;s <code>Sse.unfold!</code>, roux&rsquo;s <code>Sse</code> effects, fourneau&rsquo;s streams. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/sse.txt">the reference stream</a>, chunk by chunk.<span class="spec">256 connections, kept alive.</span></dd>
+<dt>RealWorld (Conduit) <code>/api/articles</code></dt>
+<dd>A slice of <a href="https://realworld-docs.netlify.app/">RealWorld</a>&rsquo;s Conduit API on SQLite, the database in the loop: the article list (tags, favorites and authors joined, newest first), one article, a comment and a favorite, at once. Every server gets a fresh copy of the same seeded database (100 users, 1,000 articles) and opens it in WAL mode with <code>synchronous=NORMAL</code>; its answers are checked against the seed, field by field. Go with <code>database/sql</code> and modernc&rsquo;s SQLite, axum with sqlx, roux with its typed statements, basic-webserver with its <code>Sqlite</code>, Zig with the SQLite library on fourneau.<span class="spec">Open loop only: the list 50%, an article 30%, a comment 15%, a favorite 5%; 250 to 32,000 requests a second in all, the same rates for every server, each climbing until it answers under 90% of the rate. The chart is the mean over every request.</span></dd>
 </dl>
-<p>Each: 5 seconds of warmup (discarded), 20 seconds measured, three rounds. A database workload (SQLite, then Postgres) is planned. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
+<p>Each of the first five: 5 seconds of warmup (discarded), 20 seconds measured, three rounds. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
 
 <h2>How the load is made: a closed loop</h2>
 <p>The load generator, <a href="https://github.com/hatoo/oha">oha</a>, holds a fixed number of connections (256; 64 for churn), and each connection sends its next request only when the answer to the last one has arrived. That is a <b>closed loop</b>: the server&rsquo;s own speed sets the pace. A faster server gets more requests, and the numbers are what each server does flat out.</p>

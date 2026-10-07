@@ -14,6 +14,10 @@ which.
 | Go | 1.27.1 | `toolchain` line in `competitors/go/go.mod` and `tools/go.mod` | `go mod edit -toolchain=goX.Y.Z` in both; `versions.json` note |
 | Rust | 1.94.1 | `competitors/axum/rust-toolchain.toml` | edit `channel`; `versions.json` note |
 | axum, tokio | 0.8.9, 1.53.2 | `competitors/axum/Cargo.lock` | `cargo update -p axum` (or tokio); commit the lock |
+| SQLite for Go (conduit) | modernc.org/sqlite 1.60.1 | `competitors/go/go.mod`, `go.sum` | `go get modernc.org/sqlite@vX`; `go mod tidy` |
+| SQLite for axum (conduit) | sqlx 0.8.6 (libsqlite3-sys 0.30.1, bundled), chrono 0.4.45 | `competitors/axum/Cargo.lock` | `cargo update -p sqlx`; commit the lock |
+| SQLite for fourneau-zig (conduit) | 3.53.4, roux's vendored amalgamation | `../roux/vendor/sqlite/` (roux's pin) | follows roux |
+| the conduit seed's sqlite3 shell | the runner's or the laptop's | `ci.yml`, `build.yml` (installed if missing) | nothing: it only makes the seed file, which every competitor then reads |
 | basic-webserver | 0.17.0 | the platform URL in `competitors/basic-webserver/main.roc` (the file name is the bundle's hash) | a release that targets the pinned Roc nightly: its `.tar.zst` URL from the release page; the `roc:` line in the app header to match |
 | Datastar (the site's tabs) | 1.0.2 | `site/static/datastar-v1.0.2.js`, sha256 2837d87acf6ee0ba8e4e63765926c25a98d63883b02f88be194a86b81d3fd24a | from roc-lang/basic-webserver's `examples/datastar/` at 0.17.0 (`git show 0.17.0:examples/datastar/datastar-v1.0.2.js`); a new release: its bundle from the Datastar release, sha256 noted here, the `<script>` in `site/Top.rocstache` renamed |
 | droplet image | ubuntu-26-04-x64 | `race.json` (`cloud.image`), `versions.json` (a test holds them equal; `site provision` reads it) | a new LTS slug; the runner image too (axum links glibc) |

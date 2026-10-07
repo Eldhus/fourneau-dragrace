@@ -660,3 +660,51 @@ against real DigitalOcean, from the laptop, with a cap of $2: a size not
 allowed and another droplet refused (403); a $4 droplet made, read,
 listed, deleted, its life in the ledger (seven seconds). Its clock is
 UTC now, as the month's boundary is.
+
+## 2026-10-07: conduit, a RealWorld slice on SQLite, in every competitor
+
+The owner chose RealWorld over a todo list for the read-write workload.
+`conduit`: the article list (tags, favorites, authors joined, newest
+first, no body as the spec says since 2024-08), one article, a comment
+and a favorite (both with `Authorization: Token`: a session row where the
+spec has a JWT; no follows). One seed, modelled in `conduit.go`, makes the
+database every competitor gets a fresh copy of (sqlite3 shell, WAL, the
+WAL folded in) and the answers the race checks each competitor against,
+field by field (`validateConduit`); a test holds the database to the
+model. Open loop only: a ladder of total rates the same for every server
+(250 to 32,000 a second), each step the four parts at once, one oha each
+with `--rand-regex-url` (a random article or page per request), stopping
+when a server answers under 90% of the rate or errs. A step keeps the
+mean over every request (each part's mean weighted by its answers: the
+chart) and each part's own rate, mean and percentiles, in the site's
+`open_step_parts`. The race page draws it as the open-loop chart is
+drawn, the mean on the log axis; the bars and the history leave it out.
+
+The five: Go (modernc's pure-Go SQLite, a reader pool and one writer),
+axum (sqlx, the same split), roux (roux-db's statements, `synchronous:
+Normal`), basic-webserver (its `Sqlite` pool, BEGIN IMMEDIATE), Zig on
+fourneau (roux's vendored amalgamation, a connection per shard). Each
+WAL and `synchronous=NORMAL`, as the owner asked.
+
+The contract's checks earned their keep at once:
+- roux crashed on two shards: its host shared one row buffer a shard,
+  and a statement yielding mid-step let another request's rows into it.
+  Fixed in roux (a buffer a connection; roux's DIARY).
+- fourneau-zig answered a favorite 500 under load, "database is locked"
+  past a 5 s busy timeout: a read statement left on its row kept a
+  snapshot, and the connection's BEGIN IMMEDIATE could not write past
+  another shard's commit (SQLITE_BUSY_SNAPSHOT, which the busy handler
+  does not wait out). Every statement is reset once read now.
+- roux's Roc segfaulted the compiler checked through the app; the module
+  checked alone named the type error (one-field `{ slug }` is a block):
+  the gotcha is in eldhus-skill.
+
+Checked: unit tests (the model against its database, the steps' sums,
+the difference finder naming the place, the oha command); each
+competitor raced locally on plaintext and conduit; then all five through
+the site and the racer (`racer once -local`, a shrunk race.json): every
+one valid, the chart on the race page (seen in a headless screenshot);
+then CI's `race local -quick` with everything: all valid. On the laptop
+(two server CPUs) the ladder topped out around 2,000 to 4,000 a second
+(fourneau-zig 4,000, roux, axum and Go 2,000 to 4,000, basic-webserver
+1,000, its CPU at 100%): not results, the laptop.
