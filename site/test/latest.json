@@ -159,7 +159,8 @@
       "size": "c-4",
       "cpu": "Intel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz",
       "cpus": 4,
-      "kernel": "6.8.0-142-generic"
+      "kernel": "6.8.0-142-generic",
+      "memory_mib": 0
     },
     {
       "role": "server",
@@ -167,7 +168,8 @@
       "size": "s-1vcpu-512mb-10gb",
       "cpu": "DO-Regular",
       "cpus": 1,
-      "kernel": "6.8.0-142-generic"
+      "kernel": "6.8.0-142-generic",
+      "memory_mib": 0
     },
     {
       "role": "server",
@@ -175,7 +177,8 @@
       "size": "c-2",
       "cpu": "Intel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz",
       "cpus": 2,
-      "kernel": "6.8.0-142-generic"
+      "kernel": "6.8.0-142-generic",
+      "memory_mib": 0
     }
   ],
   "results": [

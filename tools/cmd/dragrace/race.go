@@ -522,6 +522,8 @@ func machineInfo(ctx context.Context, machine Machine, role, class, size string)
 	info.CPUs, _ = strconv.Atoi(strings.TrimSpace(cpus))
 	info.Kernel, _ = machine.Shell(ctx, "uname -r")
 	info.CPUID = cpuID(ctx, machine)
+	memory, _ := machine.Shell(ctx, "awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo")
+	info.MemoryMiB, _ = strconv.Atoi(strings.TrimSpace(memory))
 	return info
 }
 

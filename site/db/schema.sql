@@ -142,6 +142,9 @@ CREATE TABLE machines (
   cpus INTEGER NOT NULL,
   kernel TEXT NOT NULL,
   cpu_id TEXT NOT NULL,
+  -- MemTotal from /proc/meminfo: what the kernel has, a little under
+  -- the size's nominal memory. 0 before 2026-10-07.
+  memory_mib INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (run_id, class, role)
 ) STRICT, WITHOUT ROWID;
 

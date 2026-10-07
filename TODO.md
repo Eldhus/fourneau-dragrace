@@ -172,8 +172,5 @@
 - [ ] Conduit's chart: rates double each step, and the linear axis kept
   for likeness bunches the low ones; a log axis would read them.
   (2026-10-07)
-- [ ] The site has a name now (fourneau.y2kbugger.com, 2026-10-07): it
-  should send `Strict-Transport-Security` (roux sends none;
-  fourneau-static does). (2026-10-05)
 
 ## Tickler

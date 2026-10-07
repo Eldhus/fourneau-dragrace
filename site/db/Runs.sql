@@ -154,7 +154,9 @@ ON CONFLICT (run_id, class) DO UPDATE SET status = excluded.status,
 -- @param cpus : I64
 -- @param kernel : Str
 -- @param cpu_id : Str
-INSERT INTO machines (run_id, class, role, size, cpu, cpus, kernel, cpu_id)
-VALUES (:run_id, :class, :role, :size, :cpu, :cpus, :kernel, :cpu_id)
+-- @param memory_mib : I64
+INSERT INTO machines (run_id, class, role, size, cpu, cpus, kernel, cpu_id, memory_mib)
+VALUES (:run_id, :class, :role, :size, :cpu, :cpus, :kernel, :cpu_id, :memory_mib)
 ON CONFLICT (run_id, class, role) DO UPDATE SET size = excluded.size, cpu = excluded.cpu,
-  cpus = excluded.cpus, kernel = excluded.kernel, cpu_id = excluded.cpu_id;
+  cpus = excluded.cpus, kernel = excluded.kernel, cpu_id = excluded.cpu_id,
+  memory_mib = excluded.memory_mib;

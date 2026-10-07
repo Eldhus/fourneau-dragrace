@@ -154,16 +154,21 @@ commits = |run| {
 commit : Str, Str, Str -> View.Commit
 commit = |name, repository, sha| { name, short: Format.short(sha), url: "${repository}/commit/${sha}" }
 
-## The server classes a race ran, in the order its results name them.
+## The server classes a race ran, in race.json's order (smallest first),
+## then any its results name that race.json does not (a local race). Not
+## the results' order: the database sorts those by name, which put
+## dedicated-2 before smallest (2026-10-07).
 classes_of : Data.Run -> List(Data.ServerClass)
 classes_of = |run| {
-	var $names = []
+	var $named = []
 	for result in run.results {
-		if !$names.contains(result.class) {
-			$names = $names.append(result.class)
+		if !$named.contains(result.class) {
+			$named = $named.append(result.class)
 		}
 	}
-	$names.map(|name|
+	listed = run.race.cloud.servers.map(|server| server.name).keep_if(|name| $named.contains(name))
+	others = $named.keep_if(|name| !listed.contains(name))
+	listed.concat(others).map(|name|
 		match run.race.cloud.servers.find_first(|server| server.name == name) {
 			Ok(server) => server
 			Err(_) => { name, label: "local", title: "This computer (a local race)" }
@@ -177,7 +182,7 @@ class_view = |run, class| {
 	described = run.machines.keep_if(|machine| machine.class == class.name or machine.class == "loader")
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
-	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)} · ${m.cpu} · Linux ${m.kernel}" })
+	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)}${memory(m.memory_mib)} · ${m.cpu} · Linux ${m.kernel}" })
 	strips = closed(run.race.workloads).map(|workload| strip(run, class.name, workload))
 	{ name: class.name, label: class.label, title: class.title, machines, strips, open: open_charts(run, class.name) }
 }
@@ -698,3 +703,17 @@ expect {
 	and saturated(result([at(1322.0, 47363.0)]), Bool.False)
 	and limited_by(result([at(1322.0, 100.0)]), Bool.False) == "server CPU"
 }
+
+## A machine's memory as the kernel has it, " · 457 MiB" or " · 3.8 GiB";
+## nothing for a run from before it was recorded (0).
+memory : U32 -> Str
+memory = |mib|
+	if mib == 0 {
+		""
+	} else if mib < 1024 {
+		" · ${mib.to_str()} MiB"
+	} else {
+		" · ${Format.one_decimal(mib.to_f64() / 1024.0)} GiB"
+	}
+
+expect memory(0) == "" and memory(457) == " · 457 MiB" and memory(3916) == " · 3.8 GiB"

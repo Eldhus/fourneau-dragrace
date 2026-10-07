@@ -160,9 +160,11 @@ A domain name, when there is one:
    (`accept-new`): it is the same key as the address's.
 5. `racer install -host RACER -site NAME`.
 
-From then on a new host needs only the record changed. The site sends
-no `Strict-Transport-Security` yet (browsers ignore it for an address):
-with a name it should (TODO).
+From then on a new host needs only the record changed. Done
+2026-10-07: fourneau.y2kbugger.com (an A record at IONOS). Every HTTPS
+response says `Strict-Transport-Security: max-age=31536000` (fourneau
+writes it), so browsers keep to HTTPS for a year: the name must keep
+serving HTTPS.
 
 ## Rotating a token
 

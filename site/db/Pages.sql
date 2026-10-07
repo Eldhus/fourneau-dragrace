@@ -32,7 +32,7 @@ SELECT name, label, title FROM run_classes WHERE run_id = :run_id ORDER BY posit
 
 -- name: machines :many(64)
 -- @param run_id : Str
-SELECT role, class, size, cpu, cpus, kernel
+SELECT role, class, size, cpu, cpus, kernel, memory_mib
 FROM machines WHERE run_id = :run_id ORDER BY class, role;
 
 -- name: results :many(2000)

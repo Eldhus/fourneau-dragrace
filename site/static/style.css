@@ -67,7 +67,7 @@ code { font-family: var(--mono); background: var(--surface-3); padding: 0 .35em;
 }
 .home .masthead { padding-top: 84px; min-height: 360px; }
 #fire {
-  position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; height: 34%; z-index: 0;
+  position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; height: 40%; z-index: 0;
   image-rendering: pixelated; opacity: .6;
   mask-image: linear-gradient(to top, black 40%, transparent);
 }
@@ -101,6 +101,10 @@ nav a:hover, nav a[aria-current="page"] {
   animation: copper 6s linear infinite;
 }
 @keyframes copper { to { background-position: 200% 0; } }
+/* On the front page the bar closes the header under the fire, as it does on
+   every other page, rather than following the menu across the fire's top
+   (2026-10-07). */
+.home .copper { position: absolute; left: 16px; right: 16px; bottom: 0; }
 
 main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 /* Prose keeps a readable measure, left-aligned with the results below it

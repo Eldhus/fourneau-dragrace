@@ -36,7 +36,7 @@ Data :: [].{
 	## several requests at once, a line).
 	Workload : { name : Str, kind : Str, title : Str, summary : Str }
 	ServerClass : { name : Str, label : Str, title : Str }
-	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str }
+	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str, memory_mib : U32 }
 	Fingerprint : { dragrace : Str, fourneau : Str, roux : Str }
 	Pinned : { version : Str }
 

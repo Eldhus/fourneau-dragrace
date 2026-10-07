@@ -841,3 +841,11 @@ health check by name. Every page answers at https://fourneau.y2kbugger.com/;
 port 80 redirects there; the address alone no longer verifies (the
 certificate names only the name). `racer install -site` the name: the
 racer posts its heads there.
+
+## 2026-10-07: HSTS and kTLS, fixed in fourneau
+
+The site now sends `Strict-Transport-Security` on every HTTPS response
+(fourneau 2b5008c: the server writes it, as it writes `Date`), and a
+client that hangs up right after the handshake is `PeerClosed`, no
+longer a warning that blames the tls module; whether the kernel has kTLS
+is checked once at startup. This push builds the site with both.

@@ -92,6 +92,7 @@ Api :: [].{
 		cpus : I64,
 		kernel : Str,
 		cpu_id : Str,
+		memory_mib : I64,
 	}
 
 	## A result, as results.go's Result: the rounds and open-loop steps whole.
@@ -669,6 +670,7 @@ Api :: [].{
 						cpus: m.cpus,
 						kernel: m.kernel,
 						cpu_id: m.cpu_id,
+						memory_mib: m.memory_mib,
 					})
 					match written {
 						Ok({}) => {}

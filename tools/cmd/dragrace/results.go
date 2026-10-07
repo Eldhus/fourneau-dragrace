@@ -37,6 +37,9 @@ type MachineInfo struct {
 	// family:model:stepping, from /proc/cpuinfo: the CPU's generation
 	// even where the model name is hidden ("DO-Regular").
 	CPUID string `json:"cpu_id"`
+	// MemTotal from /proc/meminfo, MiB: what the kernel has, a little under
+	// the size's nominal memory.
+	MemoryMiB int `json:"memory_mib"`
 }
 
 // Result is one competitor on one workload on one server class.
