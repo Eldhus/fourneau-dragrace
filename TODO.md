@@ -163,6 +163,22 @@
   measurement was SSH round trips from GitHub's US runner to lon1. The
   worker now runs on the loader in lon1: compare the first cloud race's
   racing time, then close this or cut the calls further. (2026-10-06)
+- [ ] The site host runs Ubuntu 24.04 (kernel 6.8): it was provisioned
+  before the 26.04 pin, which the racer and the race droplets follow. A
+  new site host on 26.04 means a new IP address, so a new certificate and
+  link (owner's call; with a domain name, only the name's record moves).
+  Moving the data is one file: the newest copy in `backups/`. (2026-10-07)
+- [ ] The site's build is not reproducible: two builds of the same source
+  differ only in symbol names (`__anon_<n>`), so every push restarts the
+  site for nothing (a second; clients retry). Strip the symbols in
+  `dragrace bundle` (also some 10 MB of debug information), or find where
+  the numbering comes from (Roc or Zig). (2026-10-07)
+- [ ] Conduit has no history line: its runs keep steps, not a median.
+  Plot, say, the highest rate a server held under 90%, night by night.
+  (2026-10-07)
+- [ ] The class's data link (`/data/classes/ID/CLASS.json`) is the page's
+  model: a subset of each round's measures. Every measure is in the
+  database: an export of it whole. (2026-10-07)
 - [ ] A domain name for the site (owner, 2026-10-06: wants one). Then
   ACME for the name, HSTS takes effect. (2026-10-05)
 
