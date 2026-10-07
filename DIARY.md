@@ -625,3 +625,38 @@ the site stopped 20 s mid-race and started again: the race went on, the
 posts retried (connection refused, 1 to 16 s), every result arrived,
 the run finished. Not checked yet: the cloud path (the guard's socket on
 a real racer, a worker on a real loader) and GitHub's side.
+
+## 2026-10-07: builds as releases, the hosts' setup, the old pieces gone
+
+`build.yml` (every push to main, and when the racer dispatches it) builds
+everything at the three heads and releases `race.tar.gz` (a checkout as
+a race needs it, with this dragrace binary), `site.tar.gz` and
+`build.json` (the commits and the files' SHA-256, also the release's
+body), keeping the newest 20; `dragrace bundle` packs them (32 MB and
+6 MB). `dragrace host-agent`, every minute on the site host, deploys the
+newest build's site from `releases/latest/download/` (a CDN download, no
+API limit), checks the hash, switches `current`, restarts, and rolls back
+a site that does not answer `/api/health` in 30 s, never trying that
+build again (a schema change: the migration is the owner's, over SSH).
+`site install-server` and `racer install` set the hosts up from the
+owner's keyring, secrets on SSH's standard input, the racer's as
+systemd credentials encrypted with the machine's key; the guard and the
+host agent are pinned copies only the owner replaces. Gone: nightly.yml,
+reaper.yml, `publish`, `changed`, `site deploy` and its rrsync user, the
+retired class and the relabelling (each run keeps its classes as
+raced), committed generated query modules. SECURITY.md is rewritten for
+the new pieces: what each secret opens, setup, rotation, migrations,
+restoring a copy.
+
+Checked: the host agent's tests (deploy, the same build again does
+nothing, a site that does not answer rolled back and marked, the next
+build deployed, a tampered tarball refused). Against a local site,
+hostile input: traversal in raw data paths (400), results for a run
+that does not exist (400, the foreign key), no or a malformed bearer
+(401), 2 MB (413), 200,000 nested brackets (400, the site answering
+after), bytes not UTF-8 (400); 200 concurrent writes: 187 answered, 13
+503 (the writer's queue full: the clients retry), no error. The guard
+against real DigitalOcean, from the laptop, with a cap of $2: a size not
+allowed and another droplet refused (403); a $4 droplet made, read,
+listed, deleted, its life in the ledger (seven seconds). Its clock is
+UTC now, as the month's boundary is.
