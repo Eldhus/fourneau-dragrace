@@ -93,9 +93,8 @@ ON CONFLICT DO NOTHING;
 -- @param title : Str
 -- @param size : Str
 -- @param loader_size : Str
--- @param server_cpu : Str
-INSERT INTO run_classes (run_id, name, position, label, title, size, loader_size, server_cpu)
-VALUES (:run_id, :name, :position, :label, :title, :size, :loader_size, :server_cpu)
+INSERT INTO run_classes (run_id, name, position, label, title, size, loader_size)
+VALUES (:run_id, :name, :position, :label, :title, :size, :loader_size)
 ON CONFLICT DO NOTHING;
 
 -- A run over: its status, its timing, and no more results taken.
@@ -155,14 +154,7 @@ ON CONFLICT (run_id, class) DO UPDATE SET status = excluded.status,
 -- @param cpus : I64
 -- @param kernel : Str
 -- @param cpu_id : Str
--- @param cpu_wanted : Str
--- @param cpu_matched : Bool
--- @param attempts : I64
-INSERT INTO machines (run_id, class, role, size, cpu, cpus, kernel, cpu_id, cpu_wanted,
-  cpu_matched, attempts)
-VALUES (:run_id, :class, :role, :size, :cpu, :cpus, :kernel, :cpu_id, :cpu_wanted,
-  :cpu_matched, :attempts)
+INSERT INTO machines (run_id, class, role, size, cpu, cpus, kernel, cpu_id)
+VALUES (:run_id, :class, :role, :size, :cpu, :cpus, :kernel, :cpu_id)
 ON CONFLICT (run_id, class, role) DO UPDATE SET size = excluded.size, cpu = excluded.cpu,
-  cpus = excluded.cpus, kernel = excluded.kernel, cpu_id = excluded.cpu_id,
-  cpu_wanted = excluded.cpu_wanted, cpu_matched = excluded.cpu_matched,
-  attempts = excluded.attempts;
+  cpus = excluded.cpus, kernel = excluded.kernel, cpu_id = excluded.cpu_id;

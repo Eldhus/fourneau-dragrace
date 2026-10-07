@@ -122,16 +122,14 @@
         "label": "small",
         "title": "What a $4 droplet can do",
         "size": "s-1vcpu-512mb-10gb",
-        "loader_size": "c-4",
-        "server_cpu": ""
+        "loader_size": "c-4"
       },
       {
         "name": "dedicated-2",
         "label": "medium",
         "title": "Dedicated cores, no neighbours",
         "size": "c-2",
-        "loader_size": "s-8vcpu-16gb",
-        "server_cpu": "Platinum 8168"
+        "loader_size": "s-8vcpu-16gb"
       }
     ],
     "tag": "fourneau-dragrace-race",

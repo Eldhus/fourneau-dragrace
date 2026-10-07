@@ -111,11 +111,9 @@ type Fleet struct {
 	machines map[int]SSHMachine
 	// Each droplet's life, for the race's timing and cost; guarded, as
 	// classes release their pairs from their own goroutines.
-	// Droplets each class's server took to get its CPU (pinServerCPU).
-	serverAttempts map[string]int
-	lives          map[int]*dropletLife
-	mutex          sync.Mutex
-	destroyed      bool
+	lives     map[int]*dropletLife
+	mutex     sync.Mutex
+	destroyed bool
 }
 
 type dropletLife struct {
@@ -187,8 +185,7 @@ func (fleet *Fleet) costs(prices map[string]float64) []DropletCost {
 
 func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet, error) {
 	fleet := &Fleet{loaders: map[string]Droplet{}, servers: map[string]Droplet{},
-		machines: map[int]SSHMachine{}, lives: map[int]*dropletLife{},
-		serverAttempts: map[string]int{}}
+		machines: map[int]SSHMachine{}, lives: map[int]*dropletLife{}}
 	var err error
 	fleet.dir, err = os.MkdirTemp("", "dragrace-cloud-")
 	if err != nil {
@@ -260,56 +257,8 @@ func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet
 			return fleet, err
 		}
 	}
-	for _, class := range race.Cloud.Servers {
-		if err := pinServerCPU(ctx, do, fleet, class, create, ready); err != nil {
-			return fleet, err
-		}
-	}
 	_ = id
 	return fleet, nil
-}
-
-// serverCPUAttemptsMax bounds the droplets tried for one server's CPU:
-// past it the race goes on, on the CPU it has, and the run says so.
-const serverCPUAttemptsMax = 6
-
-// pinServerCPU replaces a class's server until it has the CPU the class
-// asks for (ServerCPU), at most serverCPUAttemptsMax droplets in all.
-func pinServerCPU(ctx context.Context, do Provider, fleet *Fleet, class ServerClass,
-	create func(role, class, size string) (Droplet, error), ready func(id int) error) error {
-	fleet.serverAttempts[class.Name] = 1
-	if class.ServerCPU == "" {
-		return nil
-	}
-	for attempt := 1; attempt <= serverCPUAttemptsMax; attempt++ {
-		fleet.serverAttempts[class.Name] = attempt
-		droplet := fleet.servers[class.Name]
-		machine := fleet.machines[droplet.ID]
-		model, _ := machine.Shell(ctx, "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'")
-		id := cpuID(ctx, machine)
-		if cpuMatches(class.ServerCPU, model, id) {
-			log.Printf("[%s] server on %s (%s), as asked, droplet %d of %d", class.Name, model, id,
-				attempt, serverCPUAttemptsMax)
-			return nil
-		}
-		if attempt == serverCPUAttemptsMax {
-			log.Printf("[%s] server on %s (%s), not %s, after %d droplets: racing on it",
-				class.Name, model, id, class.ServerCPU, attempt)
-			return nil
-		}
-		log.Printf("[%s] server on %s (%s), not %s: another droplet", class.Name, model, id,
-			class.ServerCPU)
-		fleet.delete(do, droplet.ID)
-		next, err := create("server", class.Name, class.Size)
-		if err != nil {
-			return err
-		}
-		fleet.servers[class.Name] = next
-		if err := ready(next.ID); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // destroy deletes the droplets and the key, retrying, even after an
@@ -398,9 +347,6 @@ func raceClass(ctx context.Context, root string, tools Toolchain, race Race,
 		}
 	}
 	serverInfo := machineInfo(ctx, server, "server", class.Name, class.Size)
-	serverInfo.CPUWanted = class.ServerCPU
-	serverInfo.CPUMatched = cpuMatches(class.ServerCPU, serverInfo.CPU, serverInfo.CPUID)
-	serverInfo.Attempts = fleet.serverAttempts[class.Name]
 	run.Machines = append(run.Machines, serverInfo)
 	target := Target{
 		Class:         class,

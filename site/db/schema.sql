@@ -118,7 +118,6 @@ CREATE TABLE run_classes (
   title TEXT NOT NULL,
   size TEXT NOT NULL,
   loader_size TEXT NOT NULL,
-  server_cpu TEXT NOT NULL,
   PRIMARY KEY (run_id, name)
 ) STRICT, WITHOUT ROWID;
 
@@ -143,9 +142,6 @@ CREATE TABLE machines (
   cpus INTEGER NOT NULL,
   kernel TEXT NOT NULL,
   cpu_id TEXT NOT NULL,
-  cpu_wanted TEXT NOT NULL,
-  cpu_matched INTEGER NOT NULL CHECK (cpu_matched IN (0, 1)),
-  attempts INTEGER NOT NULL,
   PRIMARY KEY (run_id, class, role)
 ) STRICT, WITHOUT ROWID;
 
