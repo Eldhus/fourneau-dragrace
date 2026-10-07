@@ -1,72 +1,7 @@
 # todo
 
 ## WIP
-0. **A benchmarking tune-up, adversarially; an open-loop test.** (owner,
-   2026-10-06) Read a ChatGPT thread on the race's method (with a grain
-   of salt), find what the data does not fit and where the blind spots
-   are, everywhere; an open-loop test for tail latency and saturation
-   (research: ramp or fixed rates); timing on the site; keep only what
-   is useful (drop `premium-4` if it adds nothing until dedicated Intel
-   exists). Commit, do not push.
-   - Where it stands (2026-10-06): done and committed, not pushed (the
-     owner pushes after reviewing): open-loop ladder on templates; oha
-     without compression and with explicit threads; packets recorded;
-     rates over oha's own duration (the window bias found in run
-     37532162780, mended on publish); a "limited by" verdict per result
-     on the site; timing on the site; fourneau-zig built for baseline
-     x86-64 (its native build died of an illegal instruction on every
-     droplet); `premium-4` dropped, dedicated-2's loader s-8vcpu-16gb (lon1 has no c-8); Go's echo
-     tuned (+28%). Next: the owner pushes, then a forced race (the first
-     with all of it); the blind spots not fixed are Todo items.
-
-1. **A Premium 10 Gbit/s class, a loader per class, tabs.** (owner,
-   2026-10-06) A third server class on Premium CPU-optimized droplets
-   (10 Gbit/s, which echo-4k needs: 2 Gbit/s capped it), each class with
-   its own loader one size bigger, the three pairs racing at once; the
-   site shows one class at a time, a tab each (`?class=`). Then a forced
-   run at once.
-   - Where it stands (2026-10-06): loaders per class and tabs stay;
-     `premium-4` is dropped (WIP 0: shared vCPUs varying 15% a round,
-     ~1 Gbit/s with retransmits where 10 was documented, and a network
-     slow enough that 256 connections saturated nothing). Dedicated
-     Premium Intel when offered (Todo); then this item goes.
-
-2. **basic-webserver as a competitor.** (owner, 2026-10-06) Roc's own
-   platform, roc-lang/basic-webserver (Rust host on hyper and tokio), as
-   released: 0.17.0 targets the nightly the race pins.
-   - Where it stands (2026-10-06): done locally
-     (`competitors/basic-webserver/`): every check passes, every workload
-     races (quick local race). Started with SIGPIPE ignored (Todo: report
-     upstream). Waits on the owner: push; then its first cloud race.
-
-3. **An SSE workload: Datastar responses.** (owner, 2026-10-06) A
-   request with Datastar's signals in the query, answered with a short
-   stream of Datastar events (`text/event-stream`, chunked, no
-   Content-Length), as a Datastar action is. Go, axum and basic-webserver
-   stream today; fourneau and roux do not, so fourneau gets streamed
-   responses and roux an `Sse` module, TigerStyle.
-   - Where it stands (2026-10-06): done locally in all five competitors:
-     fourneau's streamed responses (fourneau 45a028c, c2d9236: simulator
-     streams and cut-short streams, six injected bugs caught), roux's
-     `Sse` and `Url` (roux 9787890, `examples/sse`), the check (a chunk
-     per event, 400 without signals), `race.json`, RACING.md's contract,
-     the Workloads page; a quick local race runs every competitor on it.
-     Waits on the owner: push fourneau, roux and this repository (in that
-     order: the nightly builds main of each); then the first cloud race.
-
-4. **Ubuntu 26.04, the pronunciation, a resquash, push and install.**
-   (owner, 2026-10-06) Droplets and runners on Ubuntu 26.04 LTS (kernel
-   7.0), checked working; "say inferno, drop the in" back on About only;
-   then fold the commits since the squash into the archived history
-   (`~/devel/eldhus-history/fourneau-dragrace.bundle`), squash main again,
-   push, and install the site.
-   - Where it stands (2026-10-06): image bumped and pronunciation added,
-     tested locally (tool tests, every page 200 on the republished live
-     data); archived and squashed, force-pushed, site installed (production
-     certificate). The first forced race died on a new key DigitalOcean
-     did not know yet (now retried); next: its rerun on 26.04.
-
-5. **Self-hosting: the site keeps the races, and runs them.** (owner,
+0. **Self-hosting: the site keeps the races, and runs them.** (owner,
    2026-10-06) Results in the site's SQLite (roux, `synchronous=FULL`),
    every run's metadata first class (a JSON field only where it pays); a
    unique run ID unifying a run; each run says how it started (manual or
@@ -129,8 +64,9 @@
     refused).
 
 - **Rotate the DigitalOcean race token** before it expires (90 days):
-  make a new one with the same scopes, update the keyring and the
-  `dragrace` environment, delete the old one.
+  make a new one with the same scopes (SECURITY.md; scopes cannot be
+  changed later), into the keyring, `dragrace racer install` again (it
+  re-encrypts the guard's credential), delete the old one.
   - Last done: 2026-10-07 (made anew with `droplet:update`, scopes
     cannot be changed; the old one deleted by the owner; checked: droplet,
     ssh_key and tag allowed, domains, databases, billing, volumes,
@@ -138,8 +74,8 @@
 
 ## Todo
 
-- [ ] Templates and database workloads, on roux (the Roc platform), with
-  live demos (2026-10-05)
+- [ ] Live demos on the site: roux's examples, running (the templates and
+  database workloads are done: templates, conduit). (2026-10-05)
 - [ ] `dragrace diff`: differential tests of fourneau against Go and axum,
   moved here from fourneau (owner, 2026-10-06; fourneau's `reference/`
   apps duplicated `competitors/`). (2026-10-06)
@@ -155,11 +91,6 @@
     reason (`DIVERGENCES.md`).
   - Later: `fourneau-static` against Go's `FileServer`, tower-http's
     `ServeDir` and Caddy (fourneau M6 and M11).
-- security review. if comprimised what secrets are on the server??
-    - also if i was to move to a completely self hosted dragrace
-      runner/coordinator on digocean instead of github, could that be done
-      without too many keys? how to limit impact of my api key lost.  i didnt
-      see a hard budget cap on digocean just alerts.
 - [ ] A site check in CI: load each page in a headless browser and fail on
   console errors (2026-10-05)
 - add more bleeding edge kernel option to ubuntu. lets us stay closer to
@@ -169,16 +100,10 @@
 - [ ] Dedicated Premium Intel (c-4-intel, loader c-8-intel) for
   `premium-4` once DigitalOcean offers it again: on 2026-10-06 every
   Premium Intel size listed no region (`dragrace sizes`). (2026-10-06)
-- [ ] Self-hosting (owner, 2026-10-06): once roux has its database, the
-  site receives each race's results at an endpoint and keeps them, with
-  the commit of every repository, the server classes and configurations;
-  the nightly posts there instead of pushing to the `results` branch.
-  (2026-10-06)
-- [ ] The site's Versions table lacks basic-webserver: the pins come from
-  each run's `versions`, and Roc's `Json.parse` rejects a run without the
-  field, so adding it breaks every published run. Give `versions.json` a
-  `basic_webserver` entry once the site reads optional fields (or the
-  published runs are rewritten). (2026-10-06)
+- [ ] The Competitors page's pins lack basic-webserver (0.17.0) and the
+  conduit drivers (modernc.org/sqlite, sqlx, SQLite 3.53.4): versions.json
+  holds none of them, so no run records them. Add them to versions.json
+  (the racer posts every pin it has) and to `View.pins`. (2026-10-07)
 - [ ] Report to basic-webserver (the owner reports): its host leaves SIGPIPE
   at the default, so a client closing during an SSE stream kills the
   server (exit 141; `competitors/basic-webserver/README.md`). Then drop
@@ -188,20 +113,10 @@
   ~28k on premium-4 for every fast competitor, so it measures the
   droplet's link there, not the server (forced run 37518540726). A
   smaller body, or the link's number beside the result. (2026-10-06)
-- [ ] `site install-server` should deploy freshly published data with the
-  code: a site that reads a new field 500s on data an older tool wrote
-  (2026-10-06: the p95 columns, until the runs were republished and
-  deployed). Either install-server republishes the results branch and
-  deploys it, or the site reads new fields as optional. (2026-10-06)
-- [ ] An open-loop round per workload (the Workloads page promises it):
-  oha at a fixed rate, a share of each server's closed-loop maximum (half
-  and 90%), `--latency-correction`, so coordinated omission no longer
-  hides stalls from p99 and p99.9. (2026-10-06)
-- [ ] Show each race's duration and cost on the site (the run's `timing`,
-  2026-10-06). Only once the live data has `timing` (a race published by
-  a tool that records it, or the runs republished): the site reads fields
-  strictly, and reading it earlier 500s, as the p95 columns did. (2026-10-06)
-- [ ] Blind spots the 2026-10-06 review found and did not fix (WIP 0):
+- [ ] An open-loop ladder on more workloads than templates (and
+  conduit's own): plaintext and SSE would show stalls the closed loop
+  hides. (2026-10-06)
+- [ ] Blind spots the 2026-10-06 review found and did not fix:
   - No TLS workload: production servers terminate TLS, and fourneau's
     kTLS against rustls (axum) and crypto/tls (Go) is a real difference
     the race cannot see.
@@ -244,11 +159,10 @@
   s-8vcpu-16gb). Pinning the CPU is not enough: compare a few races
   before trusting a trend under ~20%; consider pinning the loader too.
   (2026-10-06)
-- [ ] A race takes 63 minutes of racing for ~40 of load: every
-  measurement is several SSH round trips from GitHub's US runner to
-  lon1 (snapshots, warmups, RSS). Fewer calls (one script per
-  measurement on the loader), or the race in a region near the runner.
-  (2026-10-06)
+- [ ] A race took 63 minutes of racing for ~40 of load when every
+  measurement was SSH round trips from GitHub's US runner to lon1. The
+  worker now runs on the loader in lon1: compare the first cloud race's
+  racing time, then close this or cut the calls further. (2026-10-06)
 - [ ] A domain name for the site (owner, 2026-10-06: wants one). Then
   ACME for the name, HSTS takes effect. (2026-10-05)
 
