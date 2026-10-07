@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -164,66 +163,8 @@ func saveRun(dir string, run Run) (string, error) {
 	return path, nil
 }
 
-// loadRuns reads every run in a directory, oldest first (latest.json, a
-// copy of the newest, is skipped).
-func loadRuns(dir string) ([]Run, error) {
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var runs []Run
-	for _, entry := range entries {
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".json") || name == "latest.json" {
-			continue
-		}
-		var run Run
-		if err := readJSON(filepath.Join(dir, name), &run); err != nil {
-			return nil, err
-		}
-		runs = append(runs, run)
-	}
-	sort.Slice(runs, func(i, j int) bool { return runs[i].StartedAt.Before(runs[j].StartedAt) })
-	return runs, nil
-}
-
 func runID(where string, started time.Time) string {
 	return fmt.Sprintf("%s-%s", started.UTC().Format("2006-01-02T150405Z"), where)
-}
-
-// forClass is the run with only one server class's results and machines:
-// what the site's "raw data" link for that class serves. A loader of class
-// "loader" (one loader for every class, before 2026-10-06) is every
-// class's.
-func (run Run) forClass(class string) Run {
-	part := run
-	part.Machines = nil
-	for _, machine := range run.Machines {
-		if machine.Class == class || machine.Class == "loader" {
-			part.Machines = append(part.Machines, machine)
-		}
-	}
-	part.Results = []Result{}
-	for _, result := range run.Results {
-		if result.Class == class {
-			part.Results = append(part.Results, result)
-		}
-	}
-	return part
-}
-
-// classes are the server classes a run has results for, in order.
-func (run Run) classes() []string {
-	var names []string
-	for _, result := range run.Results {
-		if !slices.Contains(names, result.Class) {
-			names = append(names, result.Class)
-		}
-	}
-	return names
 }
 
 // normalize writes "no rounds" as an empty list, not null: Go marshals a

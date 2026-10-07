@@ -82,16 +82,7 @@
       }
     ],
     "tag": "fourneau-dragrace-race",
-    "max_age_minutes": 180,
-    "retired": [
-      {
-        "name": "premium-4",
-        "label": "large",
-        "title": "Premium AMD, shared cores",
-        "size": "s-4vcpu-8gb-amd",
-        "loader_size": "s-8vcpu-16gb-amd"
-      }
-    ]
+    "max_age_minutes": 180
   },
   "local": {
     "server_cpus": "0-1",

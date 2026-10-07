@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,28 +11,29 @@ import (
 )
 
 // The site host: one small droplet, up all the time, running the site (a
-// roux app, site_build.go). SECURITY.md has the design; in short:
+// roux app, site_build.go) and keeping the races in its database
+// (docs/self-hosting.md; SECURITY.md has the setup). In short:
 //   - cook: the owner's key, sudo. Root login and passwords are off. (Not
 //     "admin": Ubuntu's image has an admin group, so useradd refuses it
 //     and cloud-init carries on without the user; 2026-10-06.)
-//   - deploy: the nightly's key, forced to rrsync, write-only, into
-//     /srv/dragrace/site and nowhere else: the races' data. It cannot run
-//     a command, read a file, or touch the site's code.
-//   - site: no login; runs the site from /opt/dragrace-site (the binary,
-//     its static files, and data, a link to the deploy's), sandboxed by
+//   - site: no login; runs the site from /opt/dragrace-site/current (a
+//     release the host agent unpacked), in /var/lib/dragrace-site: its
+//     database, its copies, its two tokens, its certificate. Sandboxed by
 //     systemd, allowed to bind ports 80 and 443 and nothing more; it
-//     obtains its own certificate (fourneau's ACME, through roux's host)
-//     into /var/lib/dragrace-site.
-// The site reads the data on each request, so a deploy needs no restart;
-// the pages, the templates and the static files change only with
-// install-server, which is the owner's.
+//     obtains its own certificate (fourneau's ACME, through roux's host).
+//   - the host agent (root, a timer, every minute): deploys the newest
+//     build's site, rolling back one that does not answer.
 
-// siteHome is the site's code: root's, read-only to the site.
+// siteHome is the site's code: releases/ID, and current, a link to one.
 const siteHome = "/opt/dragrace-site"
 
-// siteUserData makes the users, the firewall and the directories, once.
-// The services are install-server's (siteUnits), so a host made earlier
-// and one made today run the same ones.
+// siteState is the site's working directory: site.db, backups/, secrets/,
+// and static, a link into the current release.
+const siteState = "/var/lib/dragrace-site"
+
+// siteUserData makes the users and the firewall, once. The services are
+// install-server's (siteUnits), so a host made earlier and one made today
+// run the same ones.
 const siteUserData = `#cloud-config
 disable_root: true
 ssh_pwauth: false
@@ -41,18 +43,13 @@ users:
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys: ["ADMIN_KEY"]
-  - name: deploy
-    shell: /bin/bash
-    ssh_authorized_keys:
-      - 'command="/usr/bin/rrsync -wo /srv/dragrace/site",restrict DEPLOY_KEY'
   - name: site
     system: true
     shell: /usr/sbin/nologin
 package_update: true
 package_upgrade: true
-packages: [rsync, ufw, unattended-upgrades]
+packages: [sqlite3, ufw, unattended-upgrades]
 runcmd:
-  - install -d -o deploy -g deploy -m 755 /srv/dragrace/site /srv/dragrace/site/data
   - ufw default deny incoming
   - ufw allow 22/tcp
   - ufw allow 80/tcp
@@ -71,25 +68,25 @@ var acmeDirectories = map[string]string{
 // the site on 443 with its own certificate (ACME, for the host's IP
 // address, Let's Encrypt's six-day profile) and port 80 redirecting; a
 // daily restart, which renews the certificate when a third of its life is
-// left (fourneau's acme.zig).
+// left (fourneau's acme.zig); the host agent's timer.
 func siteUnits(host, acmeDirectory string) map[string]string {
 	service := `[Unit]
 Description=the dragrace site (roux)
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists={site_home}/dragrace-site
+ConditionPathExists={site_home}/current/dragrace-site
 [Service]
 User=site
 StateDirectory=dragrace-site
 StateDirectoryMode=0700
-WorkingDirectory={site_home}
+WorkingDirectory={site_state}
 Environment=ROUX_ADDRESS=0.0.0.0
 Environment=ROUX_REDIRECT_PORT=80
 Environment=ROUX_ACME_DIRECTORY={acme_directory}
 Environment=ROUX_ACME_IDENTIFIER={host}
-Environment=ROUX_ACME_STATE=/var/lib/dragrace-site
+Environment=ROUX_ACME_STATE={site_state}
 Environment=ROUX_ACME_PROFILE=shortlived
-ExecStart={site_home}/dragrace-site
+ExecStart={site_home}/current/dragrace-site
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=yes
@@ -107,14 +104,14 @@ MemoryDenyWriteExecute=yes
 LimitNOFILE=65536
 MemoryMax=256M
 Restart=always
-RestartSec=60
+RestartSec=5
 [Install]
 WantedBy=multi-user.target
 `
 	// Braced placeholders: a bare ACME_DIRECTORY also matched inside
 	// ROUX_ACME_DIRECTORY, and the site would not start (2026-10-06).
-	service = strings.NewReplacer("{site_home}", siteHome, "{acme_directory}", acmeDirectory,
-		"{host}", host).Replace(service)
+	service = strings.NewReplacer("{site_home}", siteHome, "{site_state}", siteState,
+		"{acme_directory}", acmeDirectory, "{host}", host).Replace(service)
 	return map[string]string{
 		"/etc/systemd/system/dragrace-site.service": service,
 		"/etc/systemd/system/dragrace-site-renew.service": `[Unit]
@@ -133,6 +130,23 @@ Unit=dragrace-site-renew.service
 [Install]
 WantedBy=timers.target
 `,
+		"/etc/systemd/system/dragrace-host-agent.service": `[Unit]
+Description=Deploy the newest build's site (docs/self-hosting.md)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dragrace-host-agent host-agent
+TimeoutStartSec=15min
+`,
+		"/etc/systemd/system/dragrace-host-agent.timer": `[Unit]
+Description=Every minute: deploy the newest build's site
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+[Install]
+WantedBy=timers.target
+`,
 		// kTLS: the kernel loads tls only for a CAP_NET_ADMIN process;
 		// the site has none, so it is loaded at boot.
 		"/etc/modules-load.d/fourneau-tls.conf": "tls\n",
@@ -141,7 +155,7 @@ WantedBy=timers.target
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|provision|install-server|deploy")
+		return fmt.Errorf("usage: dragrace site build|provision|install-server|race-now|backups")
 	}
 	switch args[0] {
 	case "build":
@@ -150,104 +164,103 @@ func commandSite(ctx context.Context, root string, args []string) error {
 		return siteProvision(ctx, root, args[1:])
 	case "install-server":
 		return siteInstallServer(ctx, root, args[1:])
-	case "deploy":
-		return siteDeploy(ctx, root, args[1:])
+	case "race-now":
+		return siteRaceNow(ctx, args[1:])
+	case "backups":
+		return siteBackups(ctx, args[1:])
 	}
 	return fmt.Errorf("unknown: dragrace site %s", args[0])
 }
 
-// secretsDir holds keys made here: out/secrets, never committed.
+// secretsDir holds what a setup made here: out/secrets, never committed
+// (the hosts' pinned keys).
 func secretsDir(root string) string { return filepath.Join(outDir(root), "secrets") }
 
-// siteProvision makes the site droplet, once. It makes the deploy key (for
-// the GitHub secret), registers the owner's admin key with DigitalOcean (so
-// no root password is ever emailed), and waits until SSH answers.
+// siteProvision makes the site droplet, once. It registers the owner's
+// admin key with DigitalOcean (so no root password is ever emailed), and
+// waits until SSH answers.
 func siteProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site provision")
 	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
 		"the owner's public key, for the cook user (sudo)")
 	region := flags.String("region", "nyc3", "region")
 	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
-	// The image defaults to versions.json's pin, so it is never a second
-	// copy of it to keep in step.
-	image := flags.String("image", "", "droplet image (default: versions.json's droplet_image)")
 	flags.Parse(args)
-	if *image == "" {
-		versions, err := loadVersions(root)
-		if err != nil {
-			return err
-		}
-		*image = versions.DropletImage
-	}
-	do, err := newDigitalOcean()
+	host, err := provisionHost(ctx, root, hostRequest{name: "fourneau-dragrace-site",
+		tag: "fourneau-dragrace-site", region: *region, size: *size, adminKey: *adminKey,
+		userData: siteUserData, knownHosts: "site-known-hosts"})
 	if err != nil {
-		return err
-	}
-	admin, err := os.ReadFile(*adminKey)
-	if err != nil {
-		return err
-	}
-	secrets := secretsDir(root)
-	if err := os.MkdirAll(secrets, 0o700); err != nil {
-		return err
-	}
-	deployPrivate := filepath.Join(secrets, "site-deploy-key")
-	if _, err := os.Stat(deployPrivate); os.IsNotExist(err) {
-		if err := run(ctx, secrets, nil, "ssh-keygen", "-q", "-t", "ed25519", "-N", "",
-			"-C", "fourneau-dragrace-deploy", "-f", deployPrivate); err != nil {
-			return err
-		}
-	}
-	deployPublic, err := os.ReadFile(deployPrivate + ".pub")
-	if err != nil {
-		return err
-	}
-	key, err := do.ensureKey(ctx, "fourneau-dragrace-admin", strings.TrimSpace(string(admin)))
-	if err != nil {
-		return err
-	}
-	userData := strings.NewReplacer("ADMIN_KEY", strings.TrimSpace(string(admin)),
-		"DEPLOY_KEY", strings.TrimSpace(string(deployPublic))).Replace(siteUserData)
-	droplet, err := do.createDroplet(ctx, DropletRequest{
-		Name: "fourneau-dragrace-site", Region: *region, Size: *size, Image: *image,
-		SSHKeys: []int{key.ID}, Tags: []string{"fourneau-dragrace-site"}, UserData: userData,
-		Monitoring: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Printf("droplet %d: the site host; waiting for it", droplet.ID)
-	droplet, err = waitActive(ctx, do, droplet.ID)
-	if err != nil {
-		return err
-	}
-	host := droplet.address("public")
-	knownHosts := filepath.Join(secrets, "site-known-hosts")
-	machine := SSHMachine{User: "cook", Host: host, Key: privateFor(*adminKey), KnownHosts: knownHosts}
-	log.Printf("%s: waiting for SSH, then the first boot (package upgrades: a few minutes)", host)
-	if err := waitSSH(ctx, machine); err != nil {
 		return err
 	}
 	fmt.Printf(`
 The site host is up at %s; nothing serves until install-server.
 
 Next, as SECURITY.md says:
-  1. dragrace site install-server -host %s
-  2. GitHub secrets for the nightly (repository settings, environment "dragrace"):
-       SITE_HOST         %s
-       SITE_DEPLOY_KEY   the contents of %s
-       SITE_KNOWN_HOSTS  the contents of %s
-`, host, host, host, deployPrivate, knownHosts)
+  dragrace site install-server -host %s
+`, host, host)
 	return nil
+}
+
+// hostRequest is a 24/7 droplet of the owner's: the site host, the racer.
+type hostRequest struct {
+	name, tag, region, size, adminKey, userData, knownHosts string
+}
+
+func provisionHost(ctx context.Context, root string, request hostRequest) (string, error) {
+	versions, err := loadVersions(root)
+	if err != nil {
+		return "", err
+	}
+	do, err := newDigitalOcean()
+	if err != nil {
+		return "", err
+	}
+	admin, err := os.ReadFile(request.adminKey)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
+		return "", err
+	}
+	key, err := do.ensureKey(ctx, "fourneau-dragrace-admin", strings.TrimSpace(string(admin)))
+	if err != nil {
+		return "", err
+	}
+	userData := strings.ReplaceAll(request.userData, "ADMIN_KEY", strings.TrimSpace(string(admin)))
+	droplet, err := do.createDroplet(ctx, DropletRequest{
+		Name: request.name, Region: request.region, Size: request.size,
+		Image: versions.DropletImage, SSHKeys: []int{key.ID}, Tags: []string{request.tag},
+		UserData: userData, Monitoring: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	log.Printf("droplet %d: %s; waiting for it", droplet.ID, request.name)
+	droplet, err = waitActive(ctx, do, droplet.ID)
+	if err != nil {
+		return "", err
+	}
+	host := droplet.address("public")
+	machine := SSHMachine{User: "cook", Host: host, Key: privateFor(request.adminKey),
+		KnownHosts: filepath.Join(secretsDir(root), request.knownHosts)}
+	log.Printf("%s: waiting for SSH, then the first boot (package upgrades: a few minutes)", host)
+	return host, waitSSH(ctx, machine)
 }
 
 // privateFor turns ~/.ssh/id_rsa.pub into ~/.ssh/id_rsa.
 func privateFor(public string) string { return strings.TrimSuffix(public, ".pub") }
 
-// siteInstallServer builds the site (site_build.go) and installs it on the
-// site host as cook: the binary and static files into siteHome, replaced
-// whole, and the units. Deliberately not done by the nightly: the deploy
-// key can change the data, never code.
+// ownerMachine is a host of the owner's, as cook.
+func ownerMachine(root, host, key, knownHosts string) SSHMachine {
+	return SSHMachine{User: "cook", Host: host, Key: key,
+		KnownHosts: filepath.Join(secretsDir(root), knownHosts)}
+}
+
+// siteInstallServer sets the site host up as docs/self-hosting.md says,
+// as cook: the units, the host agent (this dragrace binary, pinned) and
+// its config, the site's two tokens from the owner's keyring (made there
+// if missing), and a first deploy. Run again after a change to the units
+// or the agent; never needed for a new site: a push deploys that.
 func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site install-server")
 	host := flags.String("host", "", "the site host's address (and the certificate's)")
@@ -263,119 +276,138 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	if !known {
 		return fmt.Errorf("-acme: staging or production, not %q", *acme)
 	}
-	tools, err := loadToolchain(ctx, root)
+	agent, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	if err := siteBuild(ctx, root, tools); err != nil {
+	machine := ownerMachine(root, *host, *key, "site-known-hosts")
+	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
+		Home: siteHome, Service: "dragrace-site.service",
+		Health: "https://" + *host + "/api/health"}, "", "  ")
+	if err != nil {
 		return err
 	}
-	machine := SSHMachine{User: "cook", Host: *host, Key: *key,
-		KnownHosts: filepath.Join(secretsDir(root), "site-known-hosts")}
-	const upload = "/tmp/dragrace-site"
-	if _, err := machine.Shell(ctx, "rm -rf "+upload); err != nil {
+	if err := machine.Put(ctx, agent, "/tmp/dragrace-host-agent"); err != nil {
 		return err
 	}
-	if err := machine.Put(ctx, siteBinary(root), upload+"/dragrace-site"); err != nil {
+	if err := putFiles(ctx, machine, siteUnits(*host, directory), 0o644); err != nil {
 		return err
 	}
-	if err := putTree(ctx, machine, filepath.Join(root, "site", "static"), upload+"/static"); err != nil {
+	if err := putFiles(ctx, machine, map[string]string{
+		"/etc/dragrace-host/config.json": string(config)}, 0o644); err != nil {
 		return err
 	}
-	if err := putUnits(ctx, machine, siteUnits(*host, directory)); err != nil {
-		return err
-	}
-	next := siteHome + ".new"
-	script := strings.Join([]string{
-		"sudo rm -rf " + next,
-		"sudo install -d -m 755 " + next,
-		"sudo install -m 755 " + upload + "/dragrace-site " + next + "/dragrace-site",
-		"sudo cp -r " + upload + "/static " + next + "/static",
-		"sudo chmod -R a+rX " + next,
-		"sudo ln -s /srv/dragrace/site/data " + next + "/data",
-		"sudo rm -rf " + siteHome,
-		"sudo mv " + next + " " + siteHome,
-		"rm -rf " + upload,
+	setup := strings.Join([]string{
+		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
+		"rm /tmp/dragrace-host-agent",
+		// The layout before self-hosting: the rrsync deploy user and its data.
+		"(id deploy >/dev/null 2>&1 && sudo userdel -r deploy || true)",
+		"sudo rm -rf /srv/dragrace",
+		"(test -L " + siteHome + "/current || sudo rm -rf " + siteHome + ")",
+		"sudo install -d -m 755 " + siteHome,
+		"sudo install -d -m 700 -o site -g site " + siteState + " " + siteState + "/secrets " +
+			siteState + "/backups",
+		"sudo ln -sfn " + siteHome + "/current/static " + siteState + "/static",
+		"sudo apt-get install -y -q sqlite3 >/dev/null",
 		"sudo modprobe tls",
-		"sudo ufw allow 443/tcp >/dev/null",
 		"sudo systemctl daemon-reload",
-		"sudo systemctl enable --now dragrace-site-renew.timer",
+		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
 		"sudo systemctl enable dragrace-site.service",
-		"sudo systemctl restart dragrace-site.service",
-		"sleep 3",
-		"systemctl is-active dragrace-site.service",
 	}, " && ")
-	if _, err := machine.Shell(ctx, script); err != nil {
-		log.Printf("the service did not start; its log: ssh cook@%s journalctl -u dragrace-site", *host)
+	if _, err := machine.Shell(ctx, setup); err != nil {
+		return err
+	}
+	for _, name := range []string{"racer-token", "manual-token"} {
+		token, err := keyringToken(ctx, name)
+		if err != nil {
+			return err
+		}
+		path := siteState + "/secrets/" + name
+		if err := machine.ShellInput(ctx, "sudo sh -c 'umask 077; cat > "+path+
+			" && chown site:site "+path+"'", token+"\n"); err != nil {
+			return err
+		}
+	}
+	log.Printf("deploying the newest build's site (the host agent)")
+	if _, err := machine.Shell(ctx, "sudo systemctl start dragrace-host-agent.service; "+
+		"sudo systemctl restart dragrace-site.service; sleep 3; "+
+		"systemctl is-active dragrace-site.service"); err != nil {
+		log.Printf("the site is not up; its log: ssh cook@%s journalctl -u dragrace-site; "+
+			"the agent's: journalctl -u dragrace-host-agent", *host)
 		return err
 	}
 	fmt.Printf("the site is serving https://%s/ (Let's Encrypt %s)\n", *host, *acme)
 	return nil
 }
 
-// putTree copies a small directory's files to the machine, one by one.
-func putTree(ctx context.Context, machine SSHMachine, local, remote string) error {
-	const filesMax = 256
-	count := 0
-	return filepath.WalkDir(local, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		count++
-		if count > filesMax {
-			return fmt.Errorf("%s: more than %d files", local, filesMax)
-		}
-		relative, err := filepath.Rel(local, path)
-		if err != nil {
-			return err
-		}
-		return machine.Put(ctx, path, remote+"/"+filepath.ToSlash(relative))
-	})
-}
-
-// putUnits copies each file to /tmp and installs it in place as root.
-func putUnits(ctx context.Context, machine SSHMachine, units map[string]string) error {
-	dir, err := os.MkdirTemp("", "dragrace-units-")
+// putFiles copies each file to /tmp and installs it in place as root.
+func putFiles(ctx context.Context, machine SSHMachine, files map[string]string, mode os.FileMode) error {
+	dir, err := os.MkdirTemp("", "dragrace-files-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(dir)
 	var script []string
-	for path, content := range units {
+	for path, content := range files {
 		local := filepath.Join(dir, filepath.Base(path))
-		if err := os.WriteFile(local, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(local, []byte(content), 0o600); err != nil {
 			return err
 		}
 		remote := "/tmp/" + filepath.Base(path)
 		if err := machine.Put(ctx, local, remote); err != nil {
 			return err
 		}
-		script = append(script, fmt.Sprintf("sudo install -m 644 %s %s", remote, path))
+		script = append(script, fmt.Sprintf("sudo install -D -m %o %s %s && rm %s", mode, remote,
+			path, remote))
 	}
 	_, err = machine.Shell(ctx, strings.Join(script, " && "))
 	return err
 }
 
-// siteDeploy sends a data directory to the site host with the deploy key.
-// The site reads it on each request: nothing restarts. --delay-updates puts
-// every file in place at the end, so a page sees the old race or the new.
-func siteDeploy(ctx context.Context, root string, args []string) error {
-	flags := newFlags("site deploy")
-	host := flags.String("host", os.Getenv("SITE_HOST"), "the site host's address")
-	key := flags.String("key", filepath.Join(secretsDir(root), "site-deploy-key"), "the deploy key")
-	knownHosts := flags.String("known-hosts", filepath.Join(secretsDir(root), "site-known-hosts"),
-		"the site host's key, pinned")
-	data := flags.String("data", filepath.Join(root, "site", "data"), "the data directory to publish")
+// siteRaceNow asks the site for a race, with the owner's manual token.
+func siteRaceNow(ctx context.Context, args []string) error {
+	flags := newFlags("site race-now")
+	host := flags.String("host", "", "the site host's address")
 	flags.Parse(args)
 	if *host == "" {
-		return fmt.Errorf("-host (or SITE_HOST) is required")
+		return fmt.Errorf("-host is required")
 	}
-	ssh := fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "+
-		"-o UserKnownHostsFile=%s", quote(*key), quote(*knownHosts))
-	if err := run(ctx, root, nil, "rsync", "-rlt", "--delete", "--delay-updates", "-e", ssh,
-		*data+"/", "deploy@"+*host+":data/"); err != nil {
+	token, err := keyringLookup(ctx, "manual-token")
+	if err != nil {
 		return err
 	}
-	fmt.Printf("deployed to https://%s/\n", *host)
+	var answer struct {
+		ID      int64 `json:"id"`
+		Already bool  `json:"already"`
+	}
+	site := newSiteClient("https://"+*host, token)
+	if err := site.post(ctx, "/api/requests?kind=race", nil, &answer); err != nil {
+		return err
+	}
+	if answer.Already {
+		fmt.Printf("a race was asked for already (request %d); the racer takes it soon\n", answer.ID)
+	} else {
+		fmt.Printf("race asked for (request %d); the racer takes it within a minute\n", answer.ID)
+	}
 	return nil
+}
+
+// siteBackups turns on DigitalOcean's weekly backups of the site host (20%
+// of its price), with the owner's token: the copy of the whole disk beside
+// the site's own nightly copies.
+func siteBackups(ctx context.Context, args []string) error {
+	flags := newFlags("site backups")
+	flags.Parse(args)
+	do, err := newDigitalOcean()
+	if err != nil {
+		return err
+	}
+	droplets, err := do.dropletsTagged(ctx, "fourneau-dragrace-site")
+	if err != nil {
+		return err
+	}
+	if len(droplets) != 1 {
+		return fmt.Errorf("%d droplets tagged fourneau-dragrace-site, want 1", len(droplets))
+	}
+	return do.enableBackups(ctx, droplets[0].ID)
 }

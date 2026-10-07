@@ -26,8 +26,9 @@ roux builds against fourneau (its own `build.zig.zon`).
 | `versions.json` | every pin (VERSIONS.md) |
 | `competitors/NAME/` | a competitor: its source, `competitor.json` (build and run), README |
 | `tools/cmd/dragrace/` | the tool: Go, standard library only |
-| `site/` | the site, a roux app: rocstache templates, `site/data/*.json` read per request |
-| `.github/workflows/` | ci (every push), nightly (03:00 New York), reaper (every 6 h) |
+| `site/` | the site, a roux app: rocstache templates, the races in its SQLite (`site/db/`), the API the racer and workers post to |
+| `docs/self-hosting.md` | the machines, a run, the database, the API, the budget |
+| `.github/workflows/` | ci (every push), build (every push to main, and when the racer asks: the releases) |
 | `out/` | builds, results, secrets (ignored) |
 
 ## The contract
@@ -76,9 +77,7 @@ Each round keeps (the raw data, `results.go`'s `Round`):
 Rates and shares are taken over oha's own duration (`load_seconds`), not
 the snapshots' window, which also holds the shell calls around the load
 (about six seconds of 26 from GitHub's runner: every CPU figure read 23%
-low until 2026-10-06; `publish` mends those rounds once). Fields added on
-2026-10-06 are 0 in older runs; the site shows a percentile a run did not
-record as "–".
+low until 2026-10-06).
 
 oha runs with `--disable-compression` (it asks for gzip and brotli
 otherwise, which a server that compresses honours and the checks never
@@ -108,8 +107,7 @@ dedicated-2 asks for the Platinum 8168; the smallest droplet will once its
 usual family:model:stepping is known.
 
 Each class has a `label` (its tab: small, medium) and a `title` (its
-heading: what it is for); `publish` gives every stored run the current
-ones, by name, and `retired` holds those of classes no longer raced.
+heading: what it is for); each run keeps its classes as raced.
 
 ## Under load: the open loop
 
@@ -132,10 +130,15 @@ the site draws it hollow.
 | `dragrace race cloud [-quick]` | race on fresh droplets; deletes them however it ends |
 | `dragrace sizes [-prefix c]` | droplet sizes with prices and the regions offering them |
 | `dragrace reap [-all]` | delete race droplets and keys older than `race.json` allows |
-| `dragrace fingerprint` / `changed DIR` | the commits a race would race; whether they changed (the nightly's gate) |
-| `dragrace publish RUN.json...` | file runs into `site/data` (or `-into DIR`) |
+| `dragrace fingerprint` | the commits a race would race |
 | `dragrace site build` | build the site into `out/bin/dragrace-site` |
-| `dragrace site provision \| install-server \| deploy` | the 24/7 site host (SECURITY.md) |
+| `dragrace bundle` | pack a build for a release (`build.yml`) |
+| `dragrace site provision \| install-server \| backups` | the 24/7 site host (SECURITY.md) |
+| `dragrace site race-now -host H` | ask the site for a race now (the manual token) |
+| `dragrace racer provision \| install` | the racer (SECURITY.md) |
+| `dragrace racer serve \| check` | on the racer: take the site's requests; ask for the nightly check |
+| `dragrace racer once -local DIR` | take one request and race it here, this checkout as the build (a test) |
+| `dragrace guard`, `host-agent`, `worker` | on the racer, the site host and a loader (docs/self-hosting.md) |
 
 `-competitors a,b` and `-workloads x,y` narrow any race.
 
@@ -154,8 +157,9 @@ roughly $0.30 a race. `premium-4` (Basic Premium AMD) is out until
 dedicated Premium Intel is offered: its shared vCPUs varied by 15% round
 to round, its "up to 10 Gbit/s" stopped near 1 Gbit/s with retransmits,
 and its slower network left 256 connections unable to saturate anything,
-so its numbers measured round trips, not servers. The site host is $4 a
-month. The nightly does not run when nothing changed.
+so its numbers measured round trips, not servers. The site host and the
+racer are $4 a month each; the guard holds the races under a monthly
+cap. The nightly check records a skipped run when nothing changed.
 
 Each droplet is created once per race and deleted as soon as its class
 is done (the classes finish at different times; the slowest no longer

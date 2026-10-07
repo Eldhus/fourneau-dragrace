@@ -9,12 +9,11 @@
 //	dragrace sizes [-prefix c]      droplet sizes and prices in race.json's region
 //	dragrace reap                   delete race droplets older than allowed
 //	dragrace fingerprint            the commits a race would race, as JSON
-//	dragrace changed DIR            exit 0 if they differ from DIR's latest
-//	                                run, 1 if not (the nightly's gate)
-//	dragrace publish RUN.json...    file runs into site/data (or -into DIR),
-//	                                which the site reads on each request
 //	dragrace site build             build the site (a roux app) into out/bin
-//	dragrace site provision|install-server|deploy   the 24/7 site droplet
+//	dragrace site provision|install-server   the 24/7 site droplet, set up
+//	dragrace site race-now -host H  ask the site for a race (the manual token)
+//	dragrace site backups           DigitalOcean's weekly backups of the site
+//	dragrace racer provision|install   the racer droplet, set up
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
 //	dragrace bundle [-out DIR]      pack a build for a release (build.yml)
@@ -78,6 +77,9 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 	case "guard":
 		return commandGuard(ctx, args)
 	case "racer":
+		if len(args) > 0 && (args[0] == "provision" || args[0] == "install") {
+			return errNotService // these set the racer up, from a checkout
+		}
 		return commandRacer(ctx, args)
 	case "host-agent":
 		return commandHostAgent(ctx, args)
@@ -113,16 +115,19 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandReap(ctx, root, args)
 	case "fingerprint":
 		return commandFingerprint(root)
-	case "changed":
-		return commandChanged(root, args)
-	case "publish":
-		return commandPublish(root, args)
 	case "site":
 		return commandSite(ctx, root, args)
 	case "worker":
 		return commandWorker(ctx, root, args)
 	case "bundle":
 		return commandBundle(ctx, root, args)
+	case "racer":
+		switch args[0] {
+		case "provision":
+			return racerProvision(ctx, root, args[1:])
+		case "install":
+			return racerInstall(ctx, root, args[1:])
+		}
 	}
 	usage()
 	return nil
@@ -131,8 +136,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | race cloud | sizes | reap | fingerprint |
-  changed DIR | publish RUN.json... | site build | site provision |
-  site install-server | site deploy | guard
+  bundle | worker | site build|provision|install-server|race-now|backups |
+  guard | racer serve|check|once|provision|install | host-agent
 See README.md, RACING.md and docs/self-hosting.md.`)
 	os.Exit(2)
 }

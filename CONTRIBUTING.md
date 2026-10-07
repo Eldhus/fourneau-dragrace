@@ -35,7 +35,8 @@ maintainers will pick one.
 
 A roux app in `site/`: each page a rocstache template (`*.rocstache`;
 `Top` and `Bottom` frame them), `View.roc` turning a race into what the
-pages show, `Data.roc` reading `site/data/` (`dragrace publish` puts runs
-there) on each request. `dragrace site build` compiles the templates,
+pages show, `Store.roc` reading the races from its SQLite database
+(`site/db/`: the schema and the queries, typed by roux's roux-db), `Api.roc`
+taking them from the racer. `dragrace site build` compiles the templates,
 runs the expects and builds it; run it from `site/` with `ROUX_PORT=8090`.
 The `.roc` files beside the templates are generated, not committed.

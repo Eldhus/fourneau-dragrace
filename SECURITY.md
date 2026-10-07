@@ -1,5 +1,9 @@
 # Security, and first-time setup
 
+What each secret opens, where it lives, and how the hosts are set up. The
+design behind it, and why the token lives where it does:
+[docs/self-hosting.md](docs/self-hosting.md).
+
 ## Reporting
 
 A security problem in this repository: open a private security advisory on
@@ -7,25 +11,28 @@ GitHub, not an issue.
 
 ## The pieces
 
-| piece | lives | can do |
+| piece | lives | taken, it can |
 |---|---|---|
-| DigitalOcean **race token** | your keyring; the `dragrace` GitHub environment | create, read and delete droplets and SSH keys, create tags. Nothing else: no domains, databases, billing, or other products |
-| race droplets | DigitalOcean, about an hour a night | nothing: made per race, deleted after; servers listen only on the private network |
-| per-race SSH key | the runner, for one race | reach that night's droplets, then deleted |
-| **site host** | one $4 droplet, 24/7 | run the site (a roux app, from `/opt/dragrace-site`): HTTPS on 443 with its own Let's Encrypt certificate (kept in `/var/lib/dragrace-site`, renewed by a daily restart), port 80 redirecting |
-| your **admin key** | `~/.ssh/id_rsa` | the `cook` user on the site host, with sudo (root login and passwords are off) |
-| **deploy key** | `out/secrets/` and the `dragrace` environment | rsync the races' data into `/srv/dragrace/site` only (rrsync, write-only, `restrict`): no shell, no reads, no code |
-| `GITHUB_TOKEN` | Actions, per run | push to this repository's `results` branch (the publish job only) |
+| DigitalOcean **race token** | your keyring; the racer, as the guard's encrypted credential | the account's droplets and keys (rotate it); through the racer, only what the guard allows |
+| the **guard** | the racer: `/usr/local/bin/dragrace-guard`, its own user, installed by you only | spend up to the monthly cap, on the sizes in its config (`/etc/dragrace-guard/config.json`, yours) |
+| **GitHub token** (fine-grained) | your keyring; the racer | dispatch and cancel this repository's builds (Actions read and write; nothing else) |
+| **racer token** | your keyring; the racer; the site host (`secrets/racer-token`) | ask checks, post runs and results, ask for backups |
+| **manual token** | your keyring; the site host | ask for races (the budget still holds) |
+| a run's **worker token** | that run's loaders; the site's database | post that run's results while it races |
+| a run's **SSH key** | the racer; that run's loaders | that run's droplets, while they live |
+| your **admin key** | `~/.ssh/id_rsa` | the `cook` user (sudo) on the site host and the racer; root login and passwords are off |
+| GitHub's `build.yml` | Actions, its own token | make releases of builds; no secret of ours |
 
-The site's binary, templates and static files are installed only by you
-(`dragrace site install-server`), never by CI: a leaked deploy key can
-write false results, not run code. The site parses the data into typed
-records and escapes everything it puts in a page. It runs as an
+The site host holds no DigitalOcean or GitHub token: a site taken over can
+write false results and read the races, nothing more. It runs as an
 unprivileged user under systemd's sandbox, allowed to bind ports 80 and
-443 and nothing more.
+443. The racer has no port open but SSH; the racer user reaches
+DigitalOcean only through the guard's socket, and cannot read the token.
+A build, which GitHub makes, runs on the racer (it updates itself) and on
+the site host: GitHub's account is in the trust, as it was when the
+nightly ran there.
 
-Fork pull requests run `ci.yml` only, which has no secrets. The secrets
-live in an environment that only `main` can deploy from.
+Fork pull requests run `ci.yml` only, which has no secrets.
 
 ## The DigitalOcean token
 
@@ -35,7 +42,7 @@ panel: **API → Tokens → Generate New Token**.
 - Name: `fourneau-dragrace`
 - Expiration: 90 days (a reminder is in TODO.md)
 - Scopes: **Custom Scopes**, then exactly:
-  - `droplet`: create, read, delete
+  - `droplet`: create, read, delete (and `update`, once, for `site backups`)
   - `ssh_key`: create, read, delete
   - `tag`: create, read
 
@@ -50,33 +57,65 @@ secret-tool store --label fourneau-dragrace-digitalocean service digitalocean na
 export DIGITALOCEAN_TOKEN=$(secret-tool lookup service digitalocean name fourneau-dragrace)
 ```
 
-Then **delete the full-access token**: control panel, API → Tokens, its
-"…" menu → Delete; and its keyring entry (Passwords and Keys, or
-`secret-tool clear` with its attributes). Nothing here ever used it.
+Known limit: a droplet token cannot be limited to some droplets, so the
+token could delete the site host too. That is why it sits behind the
+guard on the racer, and the site host keeps the nightly copies and
+DigitalOcean's backups.
 
-Known limit: a droplet token cannot be limited to some droplets, so the race
-token could delete the site host too. It is rebuilt in minutes from these
-steps, and the token lives only in your keyring and the protected
-environment.
+## The GitHub token
+
+GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
+resource owner Eldhus, repository `fourneau-dragrace` only, permissions
+**Actions: read and write**, nothing else; a year. Into the keyring:
+
+```
+secret-tool store --label fourneau-dragrace-github-token service fourneau-dragrace name github-token
+```
 
 ## First-time setup
 
-1. Push the repositories to GitHub, public (CI clones fourneau and roux
-   anonymously).
-2. With `DIGITALOCEAN_TOKEN` set: `out/dragrace site provision`. It makes the
-   deploy key in `out/secrets/`, the droplet, and prints its address.
-3. `out/dragrace site install-server -host ADDRESS -acme staging`, check
-   the site, then again with `-acme production`.
-4. GitHub, this repository: Settings → Environments → New environment
-   `dragrace`; deployment branches: `main` only; secrets:
+With `DIGITALOCEAN_TOKEN` exported from the keyring, from this checkout
+(`go build -C tools -o ../out/dragrace ./cmd/dragrace`):
 
-   ```
-   secret-tool lookup service digitalocean name fourneau-dragrace | gh secret set DIGITALOCEAN_TOKEN --env dragrace
-   gh secret set SITE_HOST          --env dragrace --body ADDRESS
-   gh secret set SITE_DEPLOY_KEY    --env dragrace < out/secrets/site-deploy-key
-   gh secret set SITE_KNOWN_HOSTS   --env dragrace < out/secrets/site-known-hosts
-   ```
+1. The site host, once: `out/dragrace site provision` (it prints the
+   address), then `out/dragrace site install-server -host ADDRESS` (it
+   makes the racer and manual tokens in your keyring if missing) and
+   `out/dragrace site backups` (DigitalOcean's weekly copies, 20% of the
+   droplet).
+2. The racer, once: `out/dragrace racer provision`, then
+   `out/dragrace racer install -host RACER -site ADDRESS [-cap 25]`.
+3. Push to main: `build.yml` builds and releases; the site host deploys it
+   within a minute; the racer updates itself.
+4. A first race by hand: `out/dragrace site race-now -host ADDRESS`.
 
-5. First race, by hand: `gh workflow run nightly -f force=true`.
+From then on the racer asks for a check at 03:00 New York time, and races
+when a repository has a new commit. `install-server` and `racer install`
+are run again only to change a unit, a config, a token or the pinned
+guard and host agent.
 
-From then on it races at 03:00 New York time when there is a new commit.
+## Rotating a token
+
+- DigitalOcean: make the new one, store it in the keyring, run `racer
+  install` again (it re-encrypts the credential), delete the old one.
+- Racer or manual: `secret-tool clear service fourneau-dragrace name
+  racer-token`, then `site install-server` and `racer install` (a new one
+  is made and sent to both).
+
+## Migrations and copies
+
+roux opens only a database that holds exactly the schema the site was
+built with (no migrations yet), so a schema change does not deploy itself:
+the new site does not answer, the host agent puts the old one back and
+marks that build failed. Then, as cook on the site host:
+
+```
+sudo systemctl stop dragrace-host-agent.timer dragrace-site
+sudo -u site sqlite3 /var/lib/dragrace-site/site.db < migration.sql
+sudo rm /opt/dragrace-site/failed/*            # let the agent try the build again
+sudo systemctl start dragrace-host-agent.timer  # it deploys within a minute
+```
+
+The site's copies are in `/var/lib/dragrace-site/backups/` (one after each
+night's check, thirty kept); a copy is a whole SQLite database, opened as
+is. To restore one, stop the site, copy it over `site.db` (removing
+`site.db-wal` and `site.db-shm`), start it.

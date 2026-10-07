@@ -22,4 +22,4 @@ which.
 | fourneau | main, recorded per race | `versions.json` (`fourneau`) | nothing: it moves |
 | roux | main, recorded per race | `versions.json` (`roux`) | nothing: it moves |
 
-Any pin change is a commit, so the nightly races it the night after.
+Any pin change is a commit, so the nightly check races it the night after.

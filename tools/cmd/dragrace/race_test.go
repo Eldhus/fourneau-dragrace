@@ -46,8 +46,9 @@ func TestSiteUnitEnvironment(t *testing.T) {
 	for _, want := range []string{
 		"Environment=ROUX_ACME_DIRECTORY=" + directory + "\n",
 		"Environment=ROUX_ACME_IDENTIFIER=192.0.2.1\n",
-		"WorkingDirectory=" + siteHome + "\n",
-		"ExecStart=" + siteHome + "/dragrace-site\n",
+		"WorkingDirectory=" + siteState + "\n",
+		"ExecStart=" + siteHome + "/current/dragrace-site\n",
+		"ConditionPathExists=" + siteHome + "/current/dragrace-site\n",
 	} {
 		if !strings.Contains(service, want) {
 			t.Fatalf("no %q in:\n%s", want, service)
@@ -55,29 +56,6 @@ func TestSiteUnitEnvironment(t *testing.T) {
 	}
 	if strings.Contains(service, "{") {
 		t.Fatalf("a placeholder left in:\n%s", service)
-	}
-}
-
-// A class's raw data holds its own results and machines only, and the old
-// shared loader with them.
-func TestRunForClass(t *testing.T) {
-	run := Run{
-		Machines: []MachineInfo{{Role: "loader", Class: "loader"}, {Role: "server", Class: "a"},
-			{Role: "server", Class: "b"}, {Role: "loader", Class: "b"}},
-		Results: []Result{{Class: "a", Competitor: "x"}, {Class: "b", Competitor: "x"}},
-	}
-	if got := run.classes(); !slices.Equal(got, []string{"a", "b"}) {
-		t.Fatalf("classes: %v", got)
-	}
-	part := run.forClass("b")
-	if len(part.Results) != 1 || part.Results[0].Class != "b" {
-		t.Fatalf("results: %+v", part.Results)
-	}
-	if len(part.Machines) != 3 {
-		t.Fatalf("machines (the shared loader, b's server and loader): %+v", part.Machines)
-	}
-	if len(run.Results) != 2 {
-		t.Fatalf("forClass changed the run")
 	}
 }
 
@@ -302,23 +280,6 @@ func TestCPUMatches(t *testing.T) {
 	}
 }
 
-func TestRelabel(t *testing.T) {
-	current := Race{Cloud: Cloud{Servers: []ServerClass{{Name: "smallest", Label: "small", Title: "What a $4 droplet can do"}}}}
-	run := Run{Race: Race{Cloud: Cloud{Servers: []ServerClass{
-		{Name: "smallest", Title: "Smallest droplet (1 shared vCPU, 512 MiB)"},
-		{Name: "premium-4", Title: "Premium AMD"},
-	}}}}
-	run.relabel(current)
-	got := run.Race.Cloud.Servers
-	if got[0].Label != "small" || got[0].Title != "What a $4 droplet can do" ||
-		got[1].Label != "premium-4" || got[1].Title != "Premium AMD" {
-		t.Fatalf("relabelled: %+v", got)
-	}
-}
-
-// The droplet image is pinned in race.json (what a race asks for) and in
-// versions.json (what a run records and the site shows): they must agree,
-// or the site states an image the race did not use.
 func TestDropletImagePinsAgree(t *testing.T) {
 	root := "../../.."
 	race, err := loadRace(root)

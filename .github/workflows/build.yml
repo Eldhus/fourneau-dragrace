@@ -1,0 +1,71 @@
+# The build the racer races and the site host deploys
+# (docs/self-hosting.md, "Builds and deploys"): on every push to main, and
+# when the racer dispatches it for new commits in fourneau or roux. It
+# builds every competitor, oha's pin, the site and the dragrace tool at the
+# heads of this repository, fourneau and roux, and releases them as
+# build-<UTC>: race.tar.gz, site.tar.gz and build.json (the commits and
+# the files' SHA-256, also the release's body). The newest 20 builds are
+# kept. No secrets: the release is made with this run's own token.
+name: build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: build
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.repository == 'Eldhus/fourneau-dragrace'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fourneau-dragrace
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/fourneau
+          ref: main
+          path: fourneau
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/roux
+          ref: main
+          path: roux
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: fourneau-dragrace/tools/go.mod
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/fourneau-dragrace
+          key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
+      - name: Build the tool
+        working-directory: fourneau-dragrace
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build -C tools -ldflags "-X main.buildCommit=${GITHUB_SHA}" -o ../out/dragrace ./cmd/dragrace
+      - name: Build the competitors and the site
+        working-directory: fourneau-dragrace
+        run: |
+          out/dragrace build
+          out/dragrace site build
+      - name: Bundle
+        working-directory: fourneau-dragrace
+        run: out/dragrace bundle -out out/bundle
+      - name: Release, and keep the newest 20
+        working-directory: fourneau-dragrace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-$(date -u +%Y%m%dT%H%M%SZ)"
+          gh release create "$tag" --title "$tag" --notes-file out/bundle/build.json --latest \
+            out/bundle/race.tar.gz out/bundle/site.tar.gz out/bundle/build.json
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^build-' |
+            sort -r | tail -n +21 | while read -r old; do
+              gh release delete "$old" --cleanup-tag --yes
+            done

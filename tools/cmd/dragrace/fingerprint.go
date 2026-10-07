@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 )
 
 // Fingerprint is what a race raced: the commits of this repository, of
@@ -60,34 +58,5 @@ func commandFingerprint(root string) error {
 		return err
 	}
 	fmt.Println(string(bytes))
-	return nil
-}
-
-// commandChanged exits 0 when the commits differ from the latest run in
-// the history directory (or there is none), 1 when they are the same.
-func commandChanged(root string, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: dragrace changed HISTORY_DIR")
-	}
-	now, err := fingerprintOf(root)
-	if err != nil {
-		return err
-	}
-	var latest Run
-	err = readJSON(filepath.Join(args[0], "latest.json"), &latest)
-	if os.IsNotExist(err) {
-		fmt.Println("changed: no earlier run")
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	before := latest.Fingerprint
-	if before.Dragrace == now.Dragrace && before.Fourneau == now.Fourneau && before.Roux == now.Roux {
-		fmt.Printf("unchanged since run %s\n", latest.ID)
-		return exitCode(1)
-	}
-	fmt.Printf("changed since run %s: dragrace %.7s -> %.7s, fourneau %.7s -> %.7s, roux %.7s -> %.7s\n",
-		latest.ID, before.Dragrace, now.Dragrace, before.Fourneau, now.Fourneau, before.Roux, now.Roux)
 	return nil
 }
