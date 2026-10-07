@@ -147,6 +147,46 @@ Store :: [].{
 		raced : List(Pages.Commits),
 	}
 
+	## What the race page says of the racer, a sentence each: what races
+	## now, what tonight's check will do, what was asked, what the last run
+	## that did not finish said.
+	status : Racer -> List(Str)
+	status = |racer| {
+		newest = racer.recent.first()
+		racing =
+			match newest {
+				Ok(run) if run.status == "racing" => {
+					classes = racer.classes.map(|c| "${c.class} ${c.status}")
+					about = if classes.is_empty() "" else " (${Str.join_with(classes, ", ")})"
+					["Racing now: ${run.id}, ${racer.results.to_str()} results in${about}."]
+				}
+				_ => []
+			}
+		new = racer.heads.keep_if(|head| !racer.raced.any(|c| c.repository == head.repository and c.commit_sha == head.commit_sha))
+		tonight =
+			if racer.heads.is_empty() {
+				[]
+			} else if new.is_empty() {
+				["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
+			} else {
+				names = Str.join_with(new.map(|head| "${head.repository} ${short(head.commit_sha)}"), ", ")
+				["New commits, ${names}: they race tonight at 03:00 New York time."]
+			}
+		asked = if racer.waiting.any(|w| w.kind == "race") ["A race is asked for; it starts within a minute or two."] else []
+		last =
+			match newest {
+				Ok(run) if run.status != "racing" and run.status != "finished" => {
+					why = if run.reason.is_empty() "" else ": ${run.reason}"
+					["The last run, ${run.id}, was ${run.status}${why}."]
+				}
+				_ => []
+			}
+		racing.concat(asked).concat(tonight).concat(last)
+	}
+
+	short : Str -> Str
+	short = |sha| Str.from_utf8(Str.to_utf8(sha).take_first(7)) ?? sha
+
 	racer! : Sqlite.Db, Server.Request => Try(Racer, [DbErr(Sqlite.Err)])
 	racer! = |db, request| {
 		reads = Sqlite.read(db, request)
@@ -188,3 +228,20 @@ expect {
 }
 
 expect Store.entries_of([]).is_empty()
+
+expect {
+	head = |repository, commit_sha| { repository, commit_sha, seen_at: "" }
+	raced = |repository, commit_sha| { repository, commit_sha, new: Bool.False }
+	quiet = { recent: [], classes: [], results: 0, waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
+	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
+	Store.status(quiet) == ["Nothing new since the last race: tonight's check (03:00 New York time) will skip it."]
+	and Store.status(busy) == ["New commits, roux def1234: they race tonight at 03:00 New York time."]
+}
+
+expect {
+	run = |status, reason| { id: "r1", trigger: "timer", status, reason, started_at: "", finished_at: Null }
+	racing = { recent: [run("racing", "")], classes: [{ class: "smallest", status: "done", reason: "", seconds: 1.0 }], results: 12, waiting: [], heads: [], raced: [] }
+	skipped = { ..racing, recent: [run("skipped", "nothing new")], classes: [] }
+	Store.status(racing) == ["Racing now: r1, 12 results in (smallest done)."]
+	and Store.status(skipped) == ["The last run, r1, was skipped: nothing new."]
+}

@@ -567,3 +567,12 @@ a result after the run ended: 409, a CHECK broken: 400 with SQLite's
 words, bad JSON: 400), the repeats (a run, a result, a request asked
 twice), 32 results, machines, classes, the end, heads, a backup; then
 every page and raw data file from the database (200), a missing run 404.
+
+## 2026-10-06: the race page says what the racer will do
+
+Above the newest race, a sentence each (`Store.status`, pure, four
+expects): what races now (its classes, results so far), a race asked
+for, whether tonight's 03:00 check will race (the heads the racer last
+saw against the last finished run's commits: "New commits, roux
+def1234: they race tonight") or skip, and the last run that did not
+finish, with why. Seen live on the local site.

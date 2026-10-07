@@ -258,3 +258,4 @@ nav.tabs a + a { border-left: 0; }
 nav.tabs { position: sticky; top: 0; z-index: 5; margin: 0 -16px 0; padding: 10px 16px;
   background: rgba(23, 11, 38, .9); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--grid); }
+.racer { margin: 0 0 8px; color: var(--text-2); }
