@@ -477,3 +477,20 @@ had changed beyond it (2b43318), every tree identical; the bundle now
 holds all of it, signed, 56 commits with this entry. `main` is a single
 commit again, force-pushed; the `results` branch, its own history, is
 untouched.
+
+## 2026-10-06: the forced race on 26.04 refused; certificate; tags
+
+- The forced race (37555348802) died before any droplet existed:
+  DigitalOcean answered 422 "invalid key identifiers" for the SSH key it
+  had registered seconds before. A probe with a fresh key created 26.04
+  and 24.04 droplets at once (both deleted), so it was the key not yet
+  known everywhere, not the image. `createDroplet` retries that refusal
+  alone, six times five seconds apart.
+- `site install-server` without `-acme` put a Let's Encrypt staging
+  certificate on the live site (untrusted); reinstalled with production,
+  which reused the stored certificate. Production is the default now.
+- The owner: the whiskers are fine, the "rounds N% apart" text is noise:
+  gone (the table keeps the spread). The owner's phone also showed the
+  whiskers off their bars: the bar, a flex item, shrank when value and
+  tag did not fit, while the whisker, placed absolutely, did not. The
+  bar no longer shrinks; a tag wraps under its value (checked at 412 px).

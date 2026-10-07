@@ -146,7 +146,10 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .drag .track { display: flex; align-items: center; gap: 8px; min-width: 0; border-left: 1px solid var(--text-3); padding: 2px 0; }
 .drag .bar { height: 20px; width: calc(var(--share) * 72%); min-width: 2px; border-radius: 0 4px 4px 0;
   transform-origin: left; animation: launch .9s cubic-bezier(.2,.9,.2,1); }
-.drag .value { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.drag .value { font-weight: 700; font-size: 14px; min-width: 0; }
+/* The bar keeps its width: it is the number. A tag that does not fit wraps
+   under the value instead of squeezing the bar off its whisker. */
+.drag .bar { flex: none; }
 .drag .dnf { color: var(--gold); }
 @keyframes launch { from { transform: scaleX(0); } }
 
@@ -215,7 +218,7 @@ nav.tabs a + a { border-left: 0; }
 .point.hollow { fill: var(--surface); stroke: var(--series, #8a8a8a); stroke-width: 2; }
 .open { margin-top: 22px; }
 .axis-note { margin: 2px 0 0; font-size: 11px; color: var(--text-3); text-align: right; }
-.drag .tag { font-weight: 400; font-size: 11px; color: var(--gold); border: 1px solid var(--grid); padding: 0 5px; margin-left: 6px; }
+.drag .tag { font-weight: 400; white-space: nowrap; display: inline-block; font-size: 11px; color: var(--gold); border: 1px solid var(--grid); padding: 0 5px; margin-left: 6px; }
 .legend a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-3); }
 .legend a:hover { color: var(--gold); }
 

@@ -62,8 +62,9 @@
    push, and install the site.
    - Where it stands (2026-10-06): image bumped and pronunciation added,
      tested locally (tool tests, every page 200 on the republished live
-     data); archived and squashed, force-pushed. Next: a forced race on
-     26.04, then install-server with republished data.
+     data); archived and squashed, force-pushed, site installed (production
+     certificate). The first forced race died on a new key DigitalOcean
+     did not know yet (now retried); next: its rerun on 26.04.
 
 ## Chores
 

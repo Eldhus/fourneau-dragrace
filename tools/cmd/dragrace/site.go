@@ -252,7 +252,9 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site install-server")
 	host := flags.String("host", "", "the site host's address (and the certificate's)")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
-	acme := flags.String("acme", "staging", "Let's Encrypt: staging or production")
+	// Production by default: the site is live, and an install without the
+	// flag put an untrusted staging certificate on it (2026-10-06).
+	acme := flags.String("acme", "production", "Let's Encrypt: production, or staging to try")
 	flags.Parse(args)
 	if *host == "" {
 		return fmt.Errorf("-host is required")

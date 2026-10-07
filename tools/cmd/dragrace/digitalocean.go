@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"slices"
@@ -104,12 +105,38 @@ type DropletRequest struct {
 	IPv6       bool     `json:"ipv6"`
 }
 
+// createDroplet asks for a droplet. A key registered a moment before can
+// be refused as an "invalid key identifier" until DigitalOcean has it
+// everywhere (the forced race of 2026-10-06 died on it; the same request
+// with a fresh key passed seconds later), so that refusal alone is
+// retried, a bounded number of times.
 func (do *DigitalOcean) createDroplet(ctx context.Context, request DropletRequest) (Droplet, error) {
 	var response struct {
 		Droplet Droplet `json:"droplet"`
 	}
-	err := do.call(ctx, http.MethodPost, "/v2/droplets", request, &response)
+	var err error
+	for attempt := range keyPropagationAttemptsMax {
+		err = do.call(ctx, http.MethodPost, "/v2/droplets", request, &response)
+		if err == nil || !keyNotYetKnown(err) {
+			return response.Droplet, err
+		}
+		log.Printf("droplet refused (attempt %d of %d): its new key is not known yet; waiting",
+			attempt+1, keyPropagationAttemptsMax)
+		select {
+		case <-ctx.Done():
+			return response.Droplet, ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
 	return response.Droplet, err
+}
+
+const keyPropagationAttemptsMax = 6
+
+// keyNotYetKnown is DigitalOcean's refusal of a key it has not finished
+// registering.
+func keyNotYetKnown(err error) bool {
+	return strings.Contains(err.Error(), "invalid key identifiers")
 }
 
 func (do *DigitalOcean) droplet(ctx context.Context, id int) (Droplet, error) {

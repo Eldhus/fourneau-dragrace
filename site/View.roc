@@ -626,9 +626,7 @@ tag_of = |result, local| {
 	found = limits(result, local)
 	others = found.keep_if(|limit| limit != "server CPU")
 	limit = if found.is_empty() ["under-driven"] else others
-	spread = spread_pct(result)
-	noisy = if spread > spread_flag_pct ["rounds ${Format.thousands(spread)}% apart"] else []
-	Str.join_with(List.concat(limit, noisy), ", ")
+	Str.join_with(limit, ", ")
 }
 
 ## A server not on the CPU its class asks for says so: its numbers are not
@@ -658,11 +656,6 @@ spread_pct = |result| {
 	{ slowest, fastest } = round_range(result)
 	if result.median_rps <= 0.0 0.0 else 100.0 * (fastest - slowest) / result.median_rps
 }
-
-## Rounds further apart than this say something besides the server moved:
-## a neighbour, the network, the host.
-spread_flag_pct : F64
-spread_flag_pct = 10.0
 
 expect {
 	at = |net, retransmits| { rps: 35000.0, p99_ms: 200.0, cpu_busy_pct: 93.0, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: 26.0, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: retransmits, load_seconds: 20.0 }
