@@ -5,20 +5,28 @@ app [Context, program] { pf: platform "../../../roux/platform/main.roc" }
 # fiber; the host listens on ROUX_ADDRESS, the app says the port.
 
 import pf.Server
+import pf.Sqlite
 import pf.Sse
 import pf.Url
+import db/Database
+import Conduit
 import Menu
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
 ## (compiled by rocstache-gen at build time) renders them per request.
-Context : { dishes : List({ name : Str, price : U32 }) }
+## The conduit workload's database: ROUX_DATABASE says where (the race's
+## `{db}`), in WAL mode with synchronous=NORMAL (the contract).
+Context : { dishes : List({ name : Str, price : U32 }), db : Sqlite.Db }
 
 program = { init!, respond! }
 
-init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64)])
-init! = || Ok({
+init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64), DbErr(Sqlite.Err)])
+init! = || {
+	db = Sqlite.open!(Database.at("conduit.db"), { synchronous: Normal })?
+	Ok({
 	config: { port: 8080, static_dir: "" },
 	context: {
+		db,
 		dishes: [
 			{ name: "Roux", price: 120 },
 			{ name: "Fish & chips", price: 290 },
@@ -34,9 +42,10 @@ init! = || Ok({
 			{ name: "1 < 2 > 0 pie", price: 160 },
 		],
 	},
-})
+	})
+}
 
-respond! : Server.Request, Context => Try(Server.Response, [NotFound, BadRequest(Str), SseErr(Sse.SseErr)])
+respond! : Server.Request, Context => Try(Server.Response, [NotFound, BadRequest(Str), SseErr(Sse.SseErr), DbErr(Sqlite.Err)])
 respond! = |request, context| {
 	path =
 		match request.target.split_first("?") {
@@ -63,7 +72,12 @@ respond! = |request, context| {
 				Ok({ count }) => datastar!(request, count.to_u64() + 1)
 				Err(BadSignals) => Err(BadRequest("bad signals"))
 			}
-		_ => Err(NotFound)
+		_ =>
+			if path.starts_with("/api/") {
+				Conduit.respond!(request, context.db, path)
+			} else {
+				Err(NotFound)
+			}
 	}
 }
 

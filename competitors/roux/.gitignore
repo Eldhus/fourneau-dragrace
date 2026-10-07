@@ -1,1 +1,4 @@
 Menu.roc
+# Made by the build: roux-db from db/*.sql, and the workload's schema copied.
+db/*.roc
+db/schema.sql
