@@ -11,6 +11,6 @@
   ],
   "run": {
     "argv": ["sh", "-c", "trap '' PIPE; exec \"$0\"", "{bin}"],
-    "env": { "DRAGRACE_ADDRESS": "{address}", "DRAGRACE_PORT": "{port}" }
+    "env": { "DRAGRACE_ADDRESS": "{address}", "DRAGRACE_PORT": "{port}", "DRAGRACE_DATABASE": "{db}" }
   }
 }

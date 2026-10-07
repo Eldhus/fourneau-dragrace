@@ -14,13 +14,18 @@ import pf.Env
 import pf.Html
 import pf.MultipartFormData
 import pf.Server
+import pf.Sqlite
+import pf.Path
 import pf.Sse
 import http.Response
+import Conduit
 
 Dish : { name : Str, price : U32 }
 
-## The templates workload's dishes, made once by `init!`.
-Context : { dishes : List(Dish) }
+## The templates workload's dishes, made once by `init!`; the conduit
+## workload's database (DRAGRACE_DATABASE: the race's `{db}`), a pool in
+## WAL mode with synchronous=NORMAL, as the contract says.
+Context : { dishes : List(Dish), db : Sqlite.Db }
 
 program = { init!, respond!, shutdown! }
 
@@ -44,7 +49,9 @@ init! = || {
 			.with_request_body_limit(echo_bytes_max)
 			# Every connection may hold an SSE stream (default 256).
 			.with_sse_limits({ max_streams: 1024, max_event_bytes: 64 * 1024 })
-	Ok({ config, context: { dishes: menu_dishes } })
+	database = Env.var_str!("DRAGRACE_DATABASE") ? |_| Exit(2)
+	db = Sqlite.open!({ ..Sqlite.default_config(Path.utf8(database)), max_connections: 32, busy_timeout_ms: 5_000, synchronous: Normal }) ? |_| Exit(3)
+	Ok({ config, context: { dishes: menu_dishes, db } })
 }
 
 respond! : Server.Request, Context => Try(Server.Outcome, [ServerErr(Str)])
@@ -82,7 +89,28 @@ respond! = |request, context| {
 				Ok({ count }) => Ok(Server.stream(Sse.unfold!({ step: 0, count: count.to_u64() + 1 }, datastar!)))
 				Err(_) => Ok(Server.respond(plain(400, "bad signals")))
 			}
-		_ => Ok(Server.respond(plain(404, "not found")))
+		_ =>
+			if path.starts_with("/api/") {
+				conduit!(request, context.db, path, query)
+			} else {
+				Ok(Server.respond(plain(404, "not found")))
+			}
+	}
+}
+
+## A conduit request: its body read first (a comment's), then Conduit.roc.
+conduit! : Server.Request, Sqlite.Db, Str, Str => Try(Server.Outcome, [ServerErr(Str)])
+conduit! = |request, db, path, query| {
+	{ method, body } =
+		match request.method() {
+			POST => { method: "POST", body: request.body().with_limit(65_536).read_all!() ?? [] }
+			GET => { method: "GET", body: [] }
+			_ => { method: "OTHER", body: [] }
+		}
+	match Conduit.respond!(db, method, path, query, request.headers(), body) {
+		Ok(response) => Ok(Server.respond(response))
+		Err(NotFound) => Ok(Server.respond(plain(404, "not found")))
+		Err(DbErr(why)) => Err(ServerErr(why))
 	}
 }
 

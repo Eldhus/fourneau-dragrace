@@ -34,3 +34,11 @@ closes a connection while an SSE stream is being written kills the
 server (exit 141): oha does that to every stream in flight at the end of
 each run, and the third 5-second run killed it (2026-10-06). To report
 upstream; then this wrapper goes.
+
+`/api/...` (conduit): the platform's `Sqlite`, its pool raised to 32
+connections (the handler pool's size) and a 5 s busy timeout, WAL and
+`synchronous=NORMAL`; writes in `BEGIN IMMEDIATE` transactions. Its rows
+have no nullable fields yet, so the SQL turns a missing image or tag list
+into '' and says which (`has_image`). The JSON is written by hand
+(`Conduit.roc`), each string through `Json.to_str`; comments are stamped
+by SQLite's clock.
