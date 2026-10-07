@@ -99,10 +99,12 @@ index! = |db, request, wanted| {
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
+	racer = Store.status(Store.racer!(db, request)?)
 	Ok(page(IndexPage.render({
 		title: base.title,
 		home: Bool.True,
 		nav: base.nav,
+		racer,
 		ready,
 		id: latest.id,
 		started: latest.started,
