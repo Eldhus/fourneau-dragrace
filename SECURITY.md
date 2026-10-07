@@ -64,13 +64,28 @@ DigitalOcean's backups.
 
 ## The GitHub token
 
-GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
-resource owner Eldhus, repository `fourneau-dragrace` only, permissions
-**Actions: read and write**, nothing else; a year. Into the keyring:
+GitHub has no API for making tokens: GitHub → Settings → Developer
+settings → Fine-grained tokens → Generate new token
+(https://github.com/settings/personal-access-tokens/new), exactly:
+
+- Token name: `fourneau-dragrace-racer`
+- Description: `The racer droplet dispatches build.yml for new fourneau or
+  roux commits. Actions read/write on fourneau-dragrace only. Lives in the
+  keyring and the racer's encrypted credential.`
+- Resource owner: `Eldhus`
+- Expiration: 1 year (a reminder is in TODO.md)
+- Repository access: Only select repositories → `Eldhus/fourneau-dragrace`
+- Permissions → Repository permissions: **Actions: Read and write**.
+  GitHub adds **Metadata: Read-only** itself. Nothing else.
+
+Into the keyring (it asks for the value: never on a command line):
 
 ```
 secret-tool store --label fourneau-dragrace-github-token service fourneau-dragrace name github-token
 ```
+
+To cross-check later: the token's page lists exactly these, and the
+racer's log shows `dispatching build.yml` when it used it.
 
 ## First-time setup
 

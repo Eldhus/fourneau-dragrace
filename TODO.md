@@ -121,6 +121,11 @@
     the four workflow jobs, VERSIONS.md; `site provision` now reads the
     pin; no page or doc typed the version).
 
+- **Rotate the GitHub token `fourneau-dragrace-racer`** before it
+  expires (a year): a new one with the same settings (SECURITY.md), into
+  the keyring, `dragrace racer install` again, delete the old one.
+  - Last done: never (to be made 2026-10-07; due by 2027-10-01).
+
 - **Rotate the DigitalOcean race token** before it expires (90 days):
   make a new one with the same scopes, update the keyring and the
   `dragrace` environment, delete the old one.
