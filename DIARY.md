@@ -823,3 +823,14 @@ off, resizes); a new droplet gets a new one, as this move did. With a
 domain name, a move is the A record changed; a DigitalOcean reserved IP
 (free while assigned) would also survive one, but the name makes it
 unneeded.
+
+## 2026-10-07: the site's name
+
+The owner made fourneau.y2kbugger.com at IONOS. Its "create subdomain"
+filled in IONOS's web hosting (A and AAAA to their server) and mail; the
+AAAA had to go (the site listens on IPv4 only, and Let's Encrypt tries
+IPv6 first), as did www. Then `install-server -host` the name: the
+redirect went to the name at once, but the certificate stayed the
+address's, since fourneau's ACME reused any fresh certificate from the
+same CA. Fixed in fourneau (ebdffc5): the state keeps what a
+certificate is for. This push builds the site with it.

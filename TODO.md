@@ -172,10 +172,8 @@
 - [ ] Conduit's chart: rates double each step, and the linear axis kept
   for likeness bunches the low ones; a log axis would read them.
   (2026-10-07)
-- [ ] A domain name for the site (owner, 2026-10-06: wants one). The
-  steps: SECURITY.md, "Moving the site host, or giving it a name"; the
-  owner buys it and sets the record. Then the site should send
-  `Strict-Transport-Security` (roux sends none; fourneau-static does).
-  (2026-10-05)
+- [ ] The site has a name now (fourneau.y2kbugger.com, 2026-10-07): it
+  should send `Strict-Transport-Security` (roux sends none;
+  fourneau-static does). (2026-10-05)
 
 ## Tickler
