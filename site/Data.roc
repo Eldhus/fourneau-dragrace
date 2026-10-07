@@ -24,6 +24,10 @@ Data :: [].{
 		share : F64,
 		offered_rps : F64,
 		achieved_rps : F64,
+		## A mixed workload's percentiles are its slowest part's (it has no
+		## p90: 0).
+		p50_ms : F64,
+		p90_ms : F64,
 		p99_ms : F64,
 		p999_ms : F64,
 		cpu_busy_pct : F64,

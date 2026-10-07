@@ -92,6 +92,8 @@ Store :: [].{
 						share: x.share,
 						offered_rps: x.offered_rps,
 						achieved_rps: x.achieved_rps,
+						p50_ms: x.p50_ms,
+						p90_ms: x.p90_ms,
 						p99_ms: x.p99_ms,
 						p999_ms: x.p999_ms,
 						cpu_busy_pct: x.cpu_busy_pct,
