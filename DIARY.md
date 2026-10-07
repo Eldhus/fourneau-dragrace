@@ -974,3 +974,11 @@ change now restarts the app, without a build (about 60 ms). The caption
 is one per chart, the measure only on the axis. The control is
 phosphor-green radio buttons (the owner's ask): a ring that lights up
 with a glowing dot.
+
+Then the owner, having seen them: the latencies' charts all look alike,
+p99 alone is enough. The switch is gone (the radios, their CSS, p50 and
+p90 read from the database); every open-loop chart is p99, Conduit's too
+(its slowest part's; it drew the mean before the switch). The captions
+stay one short line with a link to Workloads, whose Conduit line now says
+p99. Against before the switch: the Metric type gone, one open_chart.
+112 expects; two charts on the page, no radios.

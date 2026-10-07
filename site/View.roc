@@ -32,17 +32,12 @@ View :: [].{
 	Strip : { title : Str, summary : Str, rows : List(Row), table : List(TableRow) }
 	Machine : { role : Str, text : Str }
 	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart) }
-	## The open-loop ladder: a latency against the offered rate, a line per
+	## The open-loop ladder: p99 against the offered rate, a line per
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
 	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
-	## One measure's drawing, chosen with a radio button (`key`, its
-	## value; `checked`, the one shown first). `measure`: what the y axis
-	## is.
-	OpenMetric : { key : Str, label : Str, checked : Bool, measure : Str, lines : List(OpenLine), ticks_y : List(Tick) }
-	## `id`: the radio buttons' name, one per chart on the page;
-	## `caption`, how the ladder was climbed.
-	OpenChart : { id : Str, title : Str, caption : Str, ticks_x : List(Mark), competitors : List(Str), metrics : List(OpenMetric) }
+	## `caption`: one line; the Workloads page has the rest.
+	OpenChart : { title : Str, caption : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -520,84 +515,22 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok(open_chart({ id: "${class}-${workload.name}", title: workload.title, results, mixed: workload.kind == "mixed" }))
+			Ok(open_chart({ title: workload.title, results, mixed: workload.kind == "mixed" }))
 		}
 	})
 
-## What an open chart can draw against the rate; a chart offers those its
-## steps have (a mixed workload has no p90), p99 first (the owner,
-## 2026-10-07).
-Metric : [P50, P90, P99, P999, Mean]
-
-all_metrics : List(Metric)
-all_metrics = [P50, P90, P99, P999, Mean]
-
-metric_of : Metric, Data.OpenStep -> F64
-metric_of = |metric, s|
-	match metric {
-		P50 => s.p50_ms
-		P90 => s.p90_ms
-		P99 => s.p99_ms
-		P999 => s.p999_ms
-		Mean => s.mean_ms
-	}
-
-## The control's value (and the CSS's) and the reader's name.
-metric_key : Metric -> { key : Str, label : Str }
-metric_key = |metric|
-	match metric {
-		P50 => { key: "p50", label: "p50" }
-		P90 => { key: "p90", label: "p90" }
-		P99 => { key: "p99", label: "p99" }
-		P999 => { key: "p999", label: "p99.9" }
-		Mean => { key: "mean", label: "mean" }
-	}
-
-## The metrics the steps have, and the one shown first: p99, else the
-## first there is.
-chart_metrics : List(Data.OpenStep) -> { available : List(Metric), shown : Metric }
-chart_metrics = |steps| {
-	available = all_metrics.keep_if(|m| steps.any(|s| metric_of(m, s) > 0.0))
-	shown = if available.any(|m| m == P99) P99 else List.first(available) ?? P99
-	{ available, shown }
-}
-
-expect {
-	step = |p90, mean| { share: 0.5, offered_rps: 100.0, achieved_rps: 100.0, p50_ms: 1.0, p90_ms: p90, p99_ms: 2.0, p999_ms: 3.0, cpu_busy_pct: 0.0, loader_cpu_busy_pct: 0.0, mean_ms: mean }
-	ladder = chart_metrics([step(1.5, 0.0)])
-	conduit = chart_metrics([step(0.0, 1.2)])
-	ladder.available == [P50, P90, P99, P999] and ladder.shown == P99 and conduit.available == [P50, P99, P999, Mean] and conduit.shown == P99
-}
-
-open_chart : { id : Str, title : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ id, title, results, mixed }| {
+## p99 against the offered rate, on a log axis: a mixed workload's is its
+## slowest part's. (The owner, 2026-10-07: a switch to p50, p90, p99.9 and
+## the mean was built and taken out; the charts all looked alike.)
+open_chart : { title : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
+open_chart = |{ title, results, mixed }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
 	x = |rate| left + rate / x_ceiling * (width - left - right)
 	ticks_x = [0.0, 0.25, 0.5, 0.75, 1.0].map(|t| { x: Format.one_decimal(x(t * x_ceiling)), label: Format.compact(t * x_ceiling) })
-	{ available, shown } = chart_metrics(steps)
-	metrics = available.map(|metric| {
-		{ key, label } = metric_key(metric)
-		drawn = open_metric(results, steps, x, metric, mixed)
-		{ key, label, checked: metric == shown, measure: drawn.measure, lines: drawn.lines, ticks_y: drawn.ticks_y }
-	})
-	# One short caption, whichever latency is drawn; the Workloads page
-	# explains the ladders (the owner, 2026-10-07: "way more concise").
-	caption =
-		if mixed {
-			"Latency as the rate climbs; a percentile is the slowest request type's."
-		} else {
-			"Latency as the rate climbs, to 120% of each server's max."
-		}
-	{ id, title, caption, ticks_x, competitors: results.map(|r| r.competitor), metrics }
-}
-
-## One metric's lines on a log axis of its own.
-open_metric : List(Data.Result), List(Data.OpenStep), (F64 -> F64), Metric, Bool -> { measure : Str, lines : List(View.OpenLine), ticks_y : List(View.Tick) }
-open_metric = |results, steps, x, metric, mixed| {
-	slowest = steps.fold(0.0, |worst, s| if metric_of(metric, s) > worst metric_of(metric, s) else worst)
-	fastest = steps.fold(slowest, |best, s| if metric_of(metric, s) > 0.0 and metric_of(metric, s) < best metric_of(metric, s) else best)
+	slowest = steps.fold(0.0, |worst, s| if s.p99_ms > worst s.p99_ms else worst)
+	fastest = steps.fold(slowest, |best, s| if s.p99_ms > 0.0 and s.p99_ms < best s.p99_ms else best)
 	decades = decades_between(fastest, slowest)
 	low = List.first(decades) ?? 0.1
 	high = List.last(decades) ?? 1000.0
@@ -605,14 +538,22 @@ open_metric = |results, steps, x, metric, mixed| {
 		clamped = if ms < low low else ms
 		top + (1.0 - (log10(clamped) - log10(low)) / (log10(high) - log10(low))) * (height - top - bottom)
 	}
-	lines = spread_open(results.map(|r| open_line(r, x, y, metric, mixed)))
+	lines = spread_open(results.map(|r| open_line(r, x, y, mixed)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
-	{ measure: "${metric_key(metric).label} latency", lines, ticks_y }
+	# One short line; the Workloads page explains the ladders (the owner,
+	# 2026-10-07: "way more concise").
+	caption =
+		if mixed {
+			"p99 latency as the rate climbs, the slowest request type's."
+		} else {
+			"p99 latency as the rate climbs, to 120% of each server's max."
+		}
+	{ title, caption, lines, ticks_x, ticks_y }
 }
 
-open_line : Data.Result, (F64 -> F64), (F64 -> F64), Metric, Bool -> View.OpenLine
-open_line = |result, x, y, metric, mixed| {
-	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(metric_of(metric, s)) })
+open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.OpenLine
+open_line = |result, x, y, mixed| {
+	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(s.p99_ms) })
 	path = Str.join_with(points.map_with_index(|p, i| "${if i == 0 "M" else "L"}${Format.one_decimal(p.px)} ${Format.one_decimal(p.py)}"), " ")
 	dots = points.map(|p| {
 		cx: Format.one_decimal(p.px),
@@ -628,17 +569,16 @@ open_line = |result, x, y, metric, mixed| {
 	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last_x + 10.0), label_y: Format.one_decimal(last_y + 4.0), end_x: last_x, end_y: last_y }
 }
 
-## A point's tooltip: every measure the step has, whichever is drawn.
 step_title : Str, Data.OpenStep, Bool -> Str
 step_title = |competitor, s, mixed| {
 	limit = if s.loader_cpu_busy_pct >= loader_limit_pct " (the loader was the limit)" else ""
 	rates = "${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered"
 	cpu = "server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"
 	if mixed {
-		"${competitor}: ${rates}; mean ${Format.latency(s.mean_ms)} ms; the slowest part's p50 ${Format.latency(s.p50_ms)}, p99 ${Format.latency(s.p99_ms)}, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
+		"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, mean ${Format.latency(s.mean_ms)} ms; ${cpu}"
 	} else {
 		share = Format.thousands(s.share * 100.0)
-		"${competitor} at ${share}% of its max: ${rates}; p50 ${Format.latency(s.p50_ms)}, p90 ${Format.latency(s.p90_ms)}, p99 ${Format.latency(s.p99_ms)}, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
+		"${competitor} at ${share}% of its max: ${rates}; p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
 	}
 }
 
