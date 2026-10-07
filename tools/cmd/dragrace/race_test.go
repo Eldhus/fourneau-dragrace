@@ -310,15 +310,31 @@ func TestKeyNotYetKnown(t *testing.T) {
 }
 
 // Every host of the owner's refuses root's login and reboots for its
-// updates at its own time, never the race's (07:00 UTC).
+// updates at 02:30 New York time, before the race, never during one.
 func TestHostFiles(t *testing.T) {
-	files := hostFiles("05:30")
+	files := hostFiles("/var/lib/dragrace-racer/racing")
 	if files["/etc/ssh/sshd_config.d/10-dragrace.conf"] != "PermitRootLogin no\nPasswordAuthentication no\n" {
 		t.Fatalf("sshd: %q", files["/etc/ssh/sshd_config.d/10-dragrace.conf"])
 	}
-	reboot := files["/etc/apt/apt.conf.d/52dragrace-reboot"]
-	if !strings.Contains(reboot, `Automatic-Reboot "true";`) ||
-		!strings.Contains(reboot, `Automatic-Reboot-Time "05:30";`) {
-		t.Fatalf("reboot: %q", reboot)
+	if !strings.Contains(files["/etc/apt/apt.conf.d/52dragrace-reboot"], `Automatic-Reboot "false";`) {
+		t.Fatalf("unattended-upgrades must not reboot on UTC's clock")
+	}
+	if !strings.Contains(files["/etc/systemd/system/dragrace-reboot.timer"],
+		"OnCalendar=*-*-* 02:30:00 America/New_York") {
+		t.Fatalf("timer: %q", files["/etc/systemd/system/dragrace-reboot.timer"])
+	}
+	upgrade := files["/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf"]
+	if !strings.Contains(upgrade, "OnCalendar=\n") || !strings.Contains(upgrade, "01:30:00 America/New_York") {
+		t.Fatalf("updates must come before the reboot: %q", upgrade)
+	}
+	service := files["/etc/systemd/system/dragrace-reboot.service"]
+	for _, part := range []string{"test -e /run/reboot-required || exit 0",
+		"test -e /var/lib/dragrace-racer/racing && {", "systemctl reboot"} {
+		if !strings.Contains(service, part) {
+			t.Fatalf("reboot service lacks %q: %q", part, service)
+		}
+	}
+	if strings.Contains(hostFiles("")["/etc/systemd/system/dragrace-reboot.service"], "racing") {
+		t.Fatalf("the site host has no racing mark")
 	}
 }
