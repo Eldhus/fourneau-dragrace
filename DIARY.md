@@ -849,3 +849,24 @@ The site now sends `Strict-Transport-Security` on every HTTPS response
 client that hangs up right after the handshake is `PeerClosed`, no
 longer a warning that blames the tls module; whether the kernel has kTLS
 is checked once at startup. This push builds the site with both.
+
+## 2026-10-07: tabs by size, smallest first; memory; the front page's bar
+
+The owner: the tabs read "medium small" (the database returns results
+sorted by class name, and the tabs followed the results), "small" and
+"medium" say nothing, and the machines' lines should say their memory.
+The tabs follow race.json's order now and are named by size
+(`512MB/1vCPU`, `4GB/2vCPU`). Each machine records MemTotal
+(`memory_mib`, from /proc/meminfo: the kernel's figure, a little under
+the nominal size), shown as "458 MiB" or "3.8 GiB"; a run from before
+shows none. That is a schema change: `docs/migrations/2026-10-07-machine-memory.sql`
+(a new database from the new schema, every row copied, older runs'
+labels renamed), tested on a database in the old schema seeded with the
+two 2026-10-06 cloud runs: every count equal, integrity and foreign keys
+ok, every page 200 from the new site. The front page's copper bar closed
+the menu, across the top of the fire; it closes the header under the
+fire now, as on every other page.
+
+Checked on localhost (a scratch site.db seeded from the 2026-10-06 runs,
+memory placeholders): 112 expects; tabs, memory and the bar at 390 and
+1280 px.
