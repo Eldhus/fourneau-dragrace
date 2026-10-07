@@ -143,5 +143,8 @@ sudo systemctl start dragrace-host-agent.timer  # it deploys within a minute
 
 The site's copies are in `/var/lib/dragrace-site/backups/` (one after each
 night's check, thirty kept); a copy is a whole SQLite database, opened as
-is. To restore one, stop the site, copy it over `site.db` (removing
+is. The live `site.db` cannot be opened while the site runs (roux holds a
+lock on it against other processes): to look at the data, read the
+newest copy (`sudo sqlite3 -readonly /var/lib/dragrace-site/backups/<newest>`)
+or the site's `/data/*.json`. To restore one, stop the site, copy it over `site.db` (removing
 `site.db-wal` and `site.db-shm`), start it.

@@ -323,8 +323,12 @@ func (racer *Racer) handle(ctx context.Context, request Request, raced map[strin
 }
 
 // notRaced records a run that did not race: skipped, refused, or failed
-// before its droplets.
+// before its droplets. A racer being stopped records nothing: the request
+// stays, and the racer started again takes it.
 func (racer *Racer) notRaced(ctx context.Context, run RunPost, status, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	run.Status, run.Reason = status, reason
 	if err := racer.site.post(ctx, "/api/runs", run, nil); err != nil {
 		return err
