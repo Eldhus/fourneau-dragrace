@@ -28,9 +28,13 @@ Data :: [].{
 		p999_ms : F64,
 		cpu_busy_pct : F64,
 		loader_cpu_busy_pct : F64,
+		## A mixed workload's step: the mean over every request.
+		mean_ms : F64,
 	}
 
-	Workload : { name : Str, title : Str, summary : Str }
+	## `kind`: "closed" (rounds, bars) or "mixed" (an open-loop ladder of
+	## several requests at once, a line).
+	Workload : { name : Str, kind : Str, title : Str, summary : Str }
 	ServerClass : { name : Str, label : Str, title : Str }
 	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str, cpu_wanted : Str, cpu_matched : Bool, attempts : U32 }
 	Fingerprint : { dragrace : Str, fourneau : Str, roux : Str }

@@ -101,8 +101,22 @@ type RacePost struct {
 	VersionsJSON string            `json:"versions_json"`
 	Versions     []NameVersion     `json:"versions"`
 	Competitors  []CompetitorPost  `json:"competitors"`
-	Workloads    []Workload        `json:"workloads"`
+	Workloads    []WorkloadPost    `json:"workloads"`
 	Classes      []ServerClassPost `json:"classes"`
+}
+
+// WorkloadPost is a Workload as the site keeps it: its kind, not its mix.
+type WorkloadPost struct {
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary"`
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	BodyBytes   int    `json:"body_bytes"`
+	ContentType string `json:"content_type"`
+	Connections int    `json:"connections"`
+	Keepalive   bool   `json:"keepalive"`
 }
 
 type NameVersion struct {
@@ -433,7 +447,14 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 	post := &RacePost{Seed: seed, Region: race.Cloud.Region, Image: race.Cloud.Image,
 		Port: race.Port, Rounds: race.Rounds, WarmupSeconds: race.WarmupSeconds,
 		MeasureSeconds: race.MeasureSeconds, RaceJSON: string(raceJSON),
-		VersionsJSON: string(versionsJSON), Workloads: race.Workloads}
+		VersionsJSON: string(versionsJSON)}
+	for _, workload := range race.Workloads {
+		post.Workloads = append(post.Workloads, WorkloadPost{Name: workload.Name,
+			Kind: workload.kind(), Title: workload.Title, Summary: workload.Summary,
+			Method: workload.Method, Path: workload.Path, BodyBytes: workload.BodyBytes,
+			ContentType: workload.ContentType, Connections: workload.Connections,
+			Keepalive: workload.Keepalive})
+	}
 	post.OpenLoop.Workload, post.OpenLoop.Shares = race.OpenLoop.Workload, race.OpenLoop.Shares
 	post.OpenLoop.WarmupSeconds = race.OpenLoop.WarmupSeconds
 	post.OpenLoop.MeasureSeconds = race.OpenLoop.MeasureSeconds

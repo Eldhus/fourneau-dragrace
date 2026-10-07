@@ -24,7 +24,7 @@ SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;
 
 -- name: workloads :many(64)
 -- @param run_id : Str
-SELECT name, title, summary FROM run_workloads WHERE run_id = :run_id ORDER BY position;
+SELECT name, kind, title, summary FROM run_workloads WHERE run_id = :run_id ORDER BY position;
 
 -- name: classes :many(32)
 -- @param run_id : Str
@@ -55,7 +55,7 @@ FROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;
 -- name: steps :many(5000)
 -- @param run_id : Str
 SELECT class, workload, competitor, share, offered_rps, achieved_rps, p99_ms, p999_ms,
-  cpu_busy_pct, loader_cpu_busy_pct
+  cpu_busy_pct, loader_cpu_busy_pct, mean_ms
 FROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;
 
 -- Every finished run's medians, oldest first: the history's lines (the

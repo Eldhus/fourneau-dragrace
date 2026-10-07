@@ -86,7 +86,8 @@
         "body_bytes": 0,
         "content_type": "",
         "connections": 256,
-        "keepalive": true
+        "keepalive": true,
+        "kind": "closed"
       },
       {
         "name": "echo-4k",
@@ -97,7 +98,8 @@
         "body_bytes": 4096,
         "content_type": "application/octet-stream",
         "connections": 256,
-        "keepalive": true
+        "keepalive": true,
+        "kind": "closed"
       },
       {
         "name": "templates",
@@ -108,7 +110,8 @@
         "body_bytes": 0,
         "content_type": "",
         "connections": 256,
-        "keepalive": true
+        "keepalive": true,
+        "kind": "closed"
       },
       {
         "name": "churn",
@@ -119,7 +122,8 @@
         "body_bytes": 0,
         "content_type": "",
         "connections": 64,
-        "keepalive": false
+        "keepalive": false,
+        "kind": "closed"
       }
     ],
     "cloud": {
