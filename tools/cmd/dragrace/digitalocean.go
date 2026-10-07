@@ -159,26 +159,6 @@ func (do *DigitalOcean) deleteDroplet(ctx context.Context, id int) error {
 	return do.call(ctx, http.MethodDelete, fmt.Sprintf("/v2/droplets/%d", id), nil, nil)
 }
 
-// waitActive polls until the droplet is active with both addresses.
-func (do *DigitalOcean) waitActive(ctx context.Context, id int) (Droplet, error) {
-	for range 120 {
-		droplet, err := do.droplet(ctx, id)
-		if err != nil {
-			return droplet, err
-		}
-		if droplet.Status == "active" && droplet.address("public") != "" &&
-			droplet.address("private") != "" {
-			return droplet, nil
-		}
-		select {
-		case <-ctx.Done():
-			return droplet, ctx.Err()
-		case <-time.After(5 * time.Second):
-		}
-	}
-	return Droplet{}, fmt.Errorf("droplet %d not active after 10 minutes", id)
-}
-
 type SSHKey struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
@@ -245,7 +225,7 @@ func (do *DigitalOcean) sizes(ctx context.Context) ([]Size, error) {
 // checkSizes fails, naming every problem at once, when a size the race
 // needs does not exist, is not available, or is not offered in its region,
 // or when a class's loader has no more vCPUs than its server.
-func checkSizes(ctx context.Context, do *DigitalOcean, cloud Cloud) (map[string]float64, error) {
+func checkSizes(ctx context.Context, do Provider, cloud Cloud) (map[string]float64, error) {
 	sizes, err := do.sizes(ctx)
 	if err != nil {
 		return nil, err

@@ -217,7 +217,7 @@ func siteProvision(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	log.Printf("droplet %d: the site host; waiting for it", droplet.ID)
-	droplet, err = do.waitActive(ctx, droplet.ID)
+	droplet, err = waitActive(ctx, do, droplet.ID)
 	if err != nil {
 		return err
 	}
