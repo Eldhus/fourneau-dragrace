@@ -1,5 +1,5 @@
 {
-  "title": "axum on tokio",
+  "title": "axum",
   "language": "Rust",
   "framework": "axum 0.8 on tokio's multi-threaded runtime",
   "links": { "axum": "https://github.com/tokio-rs/axum", "tokio": "https://tokio.rs" },

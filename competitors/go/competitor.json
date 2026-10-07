@@ -1,5 +1,5 @@
 {
-  "title": "Go net/http",
+  "title": "go",
   "language": "Go",
   "framework": "net/http, the standard library",
   "links": { "Go": "https://go.dev", "net/http": "https://pkg.go.dev/net/http" },

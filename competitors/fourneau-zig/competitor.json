@@ -1,5 +1,5 @@
 {
-  "title": "fourneau (Zig)",
+  "title": "fourneau-zig",
   "language": "Zig",
   "framework": "fourneau: io_uring, a fiber per connection, one shard per core",
   "links": { "fourneau": "https://github.com/Eldhus/fourneau", "Zig": "https://ziglang.org" },
