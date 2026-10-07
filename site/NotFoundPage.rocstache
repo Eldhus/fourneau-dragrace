@@ -1,0 +1,5 @@
+{{> Top}}<article class="prose">
+<h1>Not found</h1>
+<p>No page here. Back to <a href="/">the race</a>.</p>
+</article>
+{{> Bottom}}

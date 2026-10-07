@@ -1,0 +1,237 @@
+/* FOURNEAU DRAG RACE: a drag strip at sunset, with something cooking.
+ *
+ * Dark only, on purpose: a deep purple evening, warm flames, no menace.
+ * Series colors are fixed per competitor (never by rank) and were
+ * validated together against --surface with the dataviz palette checks
+ * (all pairs: lightness band, chroma, contrast >= 3:1 vs the surface,
+ * normal-vision dE 19.5; colorblind dE 6.4 at worst, axum and roux;
+ * basic-webserver's violet, added 2026-10-06, is 9.9 from every other),
+ * so every bar is also labeled with its competitor's name, and every
+ * chart has a table view).
+ * Re-run the checks before changing or adding one.
+ */
+:root {
+  color-scheme: dark;
+  --surface: #170b26;
+  --surface-2: #211235;
+  --surface-3: #2d1947;
+  --grid: #3b2459;
+  --text: #fbf2ff;
+  --text-2: #cfb8e6;
+  --text-3: #9a82b8;
+  --magenta: #ff5fb4;
+  --flame: #ffa94d;
+  --gold: #ffd76e;
+  --link: #ffd76e;
+  --series-go: #3987e5;
+  --series-axum: #c98500;
+  --series-fourneau-zig: #e64fae;
+  --series-roux: #19a35f;
+  --series-basic-webserver: #8010f8;
+  --pixel: "Press Start 2P", ui-monospace, monospace;
+  --mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--surface); }
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 50% 0%, #4b1f6e 0%, transparent 60%),
+    var(--surface);
+  color: var(--text);
+  font: 16px/1.65 var(--mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--magenta); }
+code { font-family: var(--mono); background: var(--surface-3); padding: 0 .35em; border-radius: 3px; }
+
+/* CRT: scanlines and a soft vignette over everything, ignoring the mouse. */
+.crt {
+  pointer-events: none;
+  position: fixed; inset: 0; z-index: 50;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0,0,0,.16) 3px),
+    radial-gradient(ellipse at center, transparent 62%, rgba(10,0,25,.45) 100%);
+}
+
+/* Masthead: the fire, a sunset logo, the copper bars. */
+.masthead {
+  position: relative;
+  padding: 48px 16px 0;
+  text-align: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--grid);
+}
+.home .masthead { padding-top: 84px; min-height: 360px; }
+#fire {
+  position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; height: 34%; z-index: 0;
+  image-rendering: pixelated; opacity: .6;
+  mask-image: linear-gradient(to top, black 40%, transparent);
+}
+.logo, nav, .copper { position: relative; z-index: 1; }
+.logo { display: inline-block; text-decoration: none; line-height: 1.1; margin-bottom: 22px; }
+.logo span { display: block; font-family: var(--pixel); letter-spacing: .06em; }
+.logo-top {
+  font-size: clamp(22px, 6vw, 52px);
+  background: linear-gradient(#fff7e0 0%, #ffd76e 38%, #ffa94d 55%, #ff5fb4 78%, #9b4dff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255,95,180,.55));
+}
+.logo-bottom {
+  font-size: clamp(16px, 4.6vw, 40px);
+  color: #fff3d6;
+  text-shadow: 0 0 6px rgba(255,169,77,.85), 0 0 22px rgba(255,95,180,.5);
+  font-style: italic;
+}
+nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; padding-bottom: 18px; }
+nav a {
+  font-family: var(--pixel); font-size: 10px; text-decoration: none; color: var(--text);
+  padding: 8px 10px; border: 1px solid var(--grid); background: rgba(33,18,53,.82);
+}
+nav a:hover, nav a[aria-current="page"] {
+  color: var(--surface); background: var(--gold); border-color: var(--gold);
+}
+.copper {
+  height: 6px;
+  background: linear-gradient(90deg, #9b4dff, #ff5fb4, #ffa94d, #ffd76e, #ffa94d, #ff5fb4, #9b4dff);
+  background-size: 200% 100%;
+  animation: copper 6s linear infinite;
+}
+@keyframes copper { to { background-position: 200% 0; } }
+
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
+/* Prose keeps a readable measure, left-aligned with the results below it
+   (centred, it started 140 px right of them on a desktop). */
+.prose { max-width: 760px; margin: 0; }
+.prose ul { padding-left: 1.3em; }
+.prose li + li { margin-top: 6px; }
+.lede { max-width: 760px; margin: 0 0 24px; color: var(--text-2); }
+.prose h1, .prose h2, .class { font-family: var(--pixel); line-height: 1.5; font-weight: normal; }
+.prose h1 { font-size: 20px; color: var(--gold); margin-top: 40px; }
+.prose h2 { font-size: 14px; color: var(--magenta); margin-top: 36px; }
+.class { font-size: 13px; color: var(--magenta); margin: 28px 0 8px; }
+.prose h3 { color: var(--flame); }
+.prose table, .table table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.prose th, .prose td, .table th, .table td { border-bottom: 1px solid var(--grid); padding: 6px 8px; text-align: left; }
+.prose th, .table th { color: var(--text-2); font-weight: 400; }
+.prose dt { color: var(--flame); margin-top: 14px; }
+.prose dd { margin: 4px 0 0; color: var(--text-2); }
+.spec { color: var(--text-3); font-size: 13px; display: block; }
+
+/* Results. */
+.run-meta { color: var(--text-2); font-size: 13px; }
+/* Breaks fall between items, never inside a commit or a date. */
+.run-meta span { white-space: nowrap; }
+.run-meta span:not(:last-child)::after { content: " \00b7"; color: var(--text-3); }
+.machines { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 12px; color: var(--text-3); }
+.machines dt { color: var(--text-2); }
+.machines dd { margin: 0; }
+.raw { font-size: 12px; color: var(--text-3); margin: 6px 0 16px; }
+.pending { font-family: var(--pixel); font-size: 12px; color: var(--gold); text-align: center; padding: 40px 0; line-height: 2; }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0; margin: 16px 0; font-size: 14px; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; flex: none; }
+.strips { display: grid; gap: 22px; }
+.strip { min-width: 0; margin: 0; padding: 14px 16px 10px; background: rgba(33,18,53,.85); border: 1px solid var(--grid); }
+.strip figcaption { font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+.strip figcaption b { font-family: var(--pixel); font-size: 11px; color: var(--text); font-weight: normal; margin-right: 8px; }
+
+/* The drag strip: a name, then a bar from one baseline, its value at the tip. */
+.drag { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; }
+.drag .row { display: contents; }
+.drag .name { text-align: right; color: var(--text-2); font-size: 14px; }
+.drag .track { display: flex; align-items: center; gap: 8px; min-width: 0; border-left: 1px solid var(--text-3); padding: 2px 0; }
+.drag .bar { height: 20px; width: calc(var(--share) * 72%); min-width: 2px; border-radius: 0 4px 4px 0;
+  transform-origin: left; animation: launch .9s cubic-bezier(.2,.9,.2,1); }
+.drag .value { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.drag .dnf { color: var(--gold); }
+@keyframes launch { from { transform: scaleX(0); } }
+
+.chart-scroll { overflow-x: auto; }
+.chart { width: 100%; min-width: 560px; height: auto; display: block; }
+.chart text { font-family: var(--mono); fill: var(--text-2); font-size: 12px; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .tick { text-anchor: end; fill: var(--text-3); font-size: 11px; }
+.chart .date { text-anchor: middle; fill: var(--text-3); font-size: 11px; }
+.s-go { --series: var(--series-go); }
+.s-axum { --series: var(--series-axum); }
+.s-fourneau-zig { --series: var(--series-fourneau-zig); }
+.s-roux { --series: var(--series-roux); }
+.s-basic-webserver { --series: var(--series-basic-webserver); }
+.swatch, .drag .bar { background: var(--series, #8a8a8a); }
+.line { fill: none; stroke: var(--series, #8a8a8a); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.point { fill: var(--series, #8a8a8a); stroke: var(--surface); stroke-width: 2; }
+.table { margin-top: 8px; font-size: 13px; max-width: 100%; overflow-x: auto; }
+.table summary { cursor: pointer; color: var(--text-3); font-size: 12px; }
+.table summary:hover { color: var(--gold); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--grid); background: var(--surface-2); padding: 14px 16px; }
+.card h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.card .lang { color: var(--text-3); margin: 0; font-size: 13px; }
+.card a { margin-right: 10px; font-size: 13px; white-space: nowrap; }
+
+footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--grid); padding: 0 16px 28px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .copper, .drag .bar { animation: none; }
+}
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  nav a { font-size: 9px; padding: 7px 8px; }
+  /* The logo at the same height on every page (the owner, 2026-10-06):
+     the front page keeps room below for its fire, not above. */
+  .home .masthead { padding-top: 48px; min-height: 300px; }
+  .drag .name, .drag .value { font-size: 12px; }
+  .class { font-size: 11px; }
+  main { padding-top: 24px; }
+}
+
+/* The server-class tabs over the results: one row of short names, joined
+   like a segmented control; on a narrow screen the row scrolls rather than
+   stacking (2026-10-06: three stacked tabs, each repeating the heading
+   under it). */
+nav.tabs { flex-wrap: nowrap; justify-content: flex-start; gap: 0; padding: 14px 0 0;
+  overflow-x: auto; }
+nav.tabs a { font-size: 10px; white-space: nowrap; padding: 9px 14px; }
+nav.tabs a + a { border-left: 0; }
+@media (max-width: 560px) {
+  nav.tabs a { font-size: 9px; padding: 8px 10px; }
+}
+
+/* History on a phone: the whole chart in view, not scrolled; the legend
+   above names the lines, the axis text grows to stay legible (SVG units
+   shrink with the chart). */
+@media (max-width: 560px) {
+  .chart { min-width: 0; }
+  .chart .end { display: none; }
+  .chart .tick, .chart .date { font-size: 20px; }
+}
+
+/* The open-loop chart: a step where the loader was the limit is hollow. */
+.point.hollow { fill: var(--surface); stroke: var(--series, #8a8a8a); stroke-width: 2; }
+.open { margin-top: 22px; }
+.axis-note { margin: 2px 0 0; font-size: 11px; color: var(--text-3); text-align: right; }
+.drag .tag { font-weight: 400; font-size: 11px; color: var(--gold); border: 1px solid var(--grid); padding: 0 5px; margin-left: 6px; }
+.legend a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-3); }
+.legend a:hover { color: var(--gold); }
+
+/* Each bar's whisker spans its slowest to its fastest round: the bar is
+   the median, the whisker how much the rounds agreed. `reach` keeps the
+   value clear of a whisker that runs past the bar. */
+.drag .track { position: relative; }
+.drag .reach { flex: none; width: calc(var(--reach) * 72%); margin-left: -4px; }
+.drag .whisker {
+  position: absolute; top: calc(50% - 6px); height: 12px;
+  left: calc(var(--low) * 72% + 1px); width: calc((var(--high) - var(--low)) * 72%);
+  border-left: 2px solid var(--text); border-right: 2px solid var(--text);
+  background: linear-gradient(to bottom, transparent 5px, var(--text) 5px, var(--text) 7px, transparent 7px);
+  opacity: .75; pointer-events: none;
+}
+
+/* The tables: one line a row, scrolled sideways when wide, never tall. */
+.table th, .table td { white-space: nowrap; padding: 4px 8px; }
+.table td[colspan] { white-space: normal; min-width: 18em; }

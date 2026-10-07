@@ -1,0 +1,40 @@
+{{> Top}}<article class="prose">
+<h1>Workloads</h1>
+<p>Five workloads, each one part of an HTTP server&rsquo;s job, with nothing else in the way. Every server answers the same requests with the same bytes.</p>
+<dl>
+<dt>Plaintext <code>GET /plaintext</code></dt>
+<dd>Answers <code>Hello, World!</code> (13 bytes) over kept-alive connections: the cost of HTTP itself.<span class="spec">256 connections, kept alive.</span></dd>
+<dt>Echo 4 KiB <code>POST /echo</code></dt>
+<dd>A 4 KiB body, answered with the same bytes: reading bodies and writing larger responses.<span class="spec">256 connections, kept alive, 4,096-byte body.</span></dd>
+<dt>Connection churn <code>GET /plaintext</code></dt>
+<dd>A new connection for every request: accepting and closing, as fast as possible.<span class="spec">64 connections, each request on a new one.</span></dd>
+<dt>Templates <code>GET /menu</code></dt>
+<dd>A 12-row HTML table rendered from a template per request, every value escaped: Go&rsquo;s <code>html/template</code>, askama on axum, rocstache on roux, the platform&rsquo;s <code>Html</code> on basic-webserver, a comptime template in Zig. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/menu.html">the reference page</a>.<span class="spec">256 connections, kept alive.</span></dd>
+<dt>SSE (Datastar) <code>GET /sse</code></dt>
+<dd>A Datastar action: the page&rsquo;s signals as JSON in the query, answered with a stream of ten Datastar events (the new count as a signal, the count&rsquo;s element, eight log lines appended), each event a chunk of its own: Go flushing each, axum&rsquo;s <code>Sse</code>, basic-webserver&rsquo;s <code>Sse.unfold!</code>, roux&rsquo;s <code>Sse</code> effects, fourneau&rsquo;s streams. Checked against <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/workloads/sse.txt">the reference stream</a>, chunk by chunk.<span class="spec">256 connections, kept alive.</span></dd>
+</dl>
+<p>Each: 5 seconds of warmup (discarded), 20 seconds measured, three rounds. A database workload (SQLite, then Postgres) is planned. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
+
+<h2>How the load is made: a closed loop</h2>
+<p>The load generator, <a href="https://github.com/hatoo/oha">oha</a>, holds a fixed number of connections (256; 64 for churn), and each connection sends its next request only when the answer to the last one has arrived. That is a <b>closed loop</b>: the server&rsquo;s own speed sets the pace. A faster server gets more requests, and the numbers are what each server does flat out.</p>
+<p>In a closed loop, throughput and latency are two views of one thing. With <i>N</i> requests always in flight, Little&rsquo;s law gives latency &asymp; <i>N</i> &divide; throughput. At 256 connections and 50,000 requests a second, the typical request waits about 5&nbsp;ms, mostly in queues, because the server is saturated by design. The latency figures are the latency of a saturated server, not of a lightly loaded one.</p>
+
+<h3>What a closed loop hides</h3>
+<ul>
+<li><b>Coordinated omission.</b> When a server stalls (a garbage-collection pause, a lock, a slow disk), the generator stalls with it: every connection is waiting, so no new requests are sent. The requests that real users would have sent during the stall are never made, so they are never counted as slow. p99 and p99.9 therefore understate what users arriving at a steady rate would see, and they understate it most for servers with pauses.</li>
+<li><b>Latency at a given load.</b> Users do not slow down when a server does. The question &ldquo;how slow is it at 20,000 requests a second?&rdquo; is not asked here: every server runs at its own maximum, and the maximum differs.</li>
+<li><b>The knee.</b> Real servers degrade sharply near capacity: queues grow and the tail explodes. A closed loop sits at capacity the whole time, so it never shows the climb.</li>
+</ul>
+
+<h3>Under load: an open loop</h3>
+<p>So after its rounds, each server climbs a ladder on one workload: requests offered at a fixed rate whatever happens, each measured from when it was <i>meant</i> to be sent, so a stall counts against every request it delays (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s method; oha&rsquo;s <code>-q</code> with <code>--latency-correction</code>). The steps are 50%, 75%, 90%, 100% and 120% of that server&rsquo;s own closed-loop median, each held long enough to settle. That is a ladder, not a ramp: a rate that keeps changing never settles long enough for its percentiles to mean that rate. The chart plots each step at its absolute rate, so a slow server&rsquo;s comfortable half is never mistaken for speed. The 120% step is past saturation on purpose: there the queue grows for as long as the step lasts, and the latency says so.</p>
+<p>A caveat measured, not assumed: oha pacing requests costs about half again the loader CPU of its closed loop. At the fastest servers&rsquo; rates the loader can become the limit. Each step records the loader&rsquo;s CPU, and the chart draws a step where it was 85% busy or more as a hollow point: that point is about the loader, not the server.</p>
+
+<h3>Also worth knowing</h3>
+<ul>
+<li>The loader runs on a bigger droplet than the server, and its CPU is recorded with every round, so a result where the loader was the limit can be told apart.</li>
+<li>Echo 4 KiB on the larger classes reaches the droplet&rsquo;s network link before most servers&rsquo; limits: there, the fast servers tie. Each round records the network traffic, so this shows in the raw data.</li>
+<li>Throughput counts successful (2xx) answers only. Errors and other statuses are no work done.</li>
+</ul>
+</article>
+{{> Bottom}}

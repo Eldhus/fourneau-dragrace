@@ -1,0 +1,12 @@
+{{> Top}}<article class="prose">
+<h1>Contribute</h1>
+<p>Make a server faster, or add one, with a pull request; the next race shows it.</p>
+<ol>
+<li>Clone <a href="https://github.com/Eldhus/fourneau-dragrace">fourneau-dragrace</a> beside <a href="https://github.com/Eldhus/fourneau">fourneau</a> and <a href="https://github.com/Eldhus/roux">roux</a> (<a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/RACING.md">RACING.md</a>).</li>
+<li>Change <code>competitors/NAME/</code>: the code, the build, <code>competitor.json</code>.</li>
+<li>Race it locally: <code>out/dragrace race local -competitors NAME</code>.</li>
+<li>Open a pull request saying what changed and why it is fair.</li>
+</ol>
+<p><b>Fair</b>: configured as its users would deploy it, no benchmark-only modes or cached responses, the same bytes out, and it passes the checks. Real-world tuning (workers, allocators, socket options) is welcome, noted in the competitor&rsquo;s README. Details: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+</article>
+{{> Bottom}}

@@ -1,0 +1,45 @@
+{
+  "comment": "Every version a race depends on. VERSIONS.md says how to update each.",
+  "zig": {
+    "version": "0.17.0",
+    "url": "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz",
+    "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
+  },
+  "roc": {
+    "version": "nightly-2026-10-04-130536d",
+    "url": "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-04-130536d/roc_nightly-linux_x86_64-2026-10-04-130536d.tar.gz",
+    "sha256": "893c86d2da0a4c390cbdbd4258ce45d686e5ec15b42eeeb811fd1ac44537714f"
+  },
+  "roc_musl": {
+    "comment": "musl's crt1.o and libc.a for x86_64, from Roc's test platform at the nightly's commit: roc build links the roux host with them.",
+    "commit": "130536d915d4355d6152c7e20529a09a5a0cbe32",
+    "url": "https://github.com/roc-lang/roc/archive/130536d915d4355d6152c7e20529a09a5a0cbe32.tar.gz",
+    "files": {
+      "test/fx/platform/targets/x64musl/crt1.o": "ffb51a69191a69fc34acaec1003fabe245d8841da7036d124d3445718415f9ea",
+      "test/fx/platform/targets/x64musl/libc.a": "85f5eb2316bc6f86be7bd66008488c7d2eca290942b01ad2e86f02f8b5e8c90f"
+    }
+  },
+  "oha": {
+    "version": "1.16.0",
+    "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64",
+    "sha256": "620bb9e16fb53eabc9a3fc45f88bdb41fefa3fee5c05e75892011ce320391716"
+  },
+  "go": { "version": "1.27.1", "pinned_in": "competitors/go/go.mod and tools/go.mod (toolchain lines)" },
+  "rust": { "version": "1.94.1", "pinned_in": "competitors/axum/rust-toolchain.toml" },
+  "axum": { "version": "0.8.9", "pinned_in": "competitors/axum/Cargo.lock" },
+  "tokio": { "version": "1.53.2", "pinned_in": "competitors/axum/Cargo.lock" },
+  "droplet_image": "ubuntu-26-04-x64",
+  "runner_image": "ubuntu-26.04",
+  "fourneau": {
+    "comment": "Not pinned on purpose: the nightly races fourneau's main, and records the commit it raced.",
+    "repository": "https://github.com/Eldhus/fourneau",
+    "branch": "main",
+    "checkout": "../fourneau"
+  },
+  "roux": {
+    "comment": "Not pinned either: roux's main, built on the fourneau checkout above (its build.zig.zon points there).",
+    "repository": "https://github.com/Eldhus/roux",
+    "branch": "main",
+    "checkout": "../roux"
+  }
+}

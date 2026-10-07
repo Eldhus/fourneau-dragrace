@@ -1,0 +1,167 @@
+# The nightly race: at 03:00 New York time, only when this repository or
+# fourneau has a commit the last race did not race (or when run by hand
+# with "force"). Race droplets live for the race only; the results go to
+# the results branch and to the site host.
+#
+# Secrets, all in the "dragrace" environment (SECURITY.md):
+#   DIGITALOCEAN_TOKEN   the narrow race token
+#   SITE_HOST            the site host's address
+#   SITE_DEPLOY_KEY      the rrsync-only deploy key
+#   SITE_KNOWN_HOSTS     the site host's pinned host key
+name: nightly
+on:
+  schedule:
+    - cron: "0 3 * * *"
+      timezone: "America/New_York"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Race even if nothing changed
+        type: boolean
+        default: false
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  gate:
+    if: github.repository == 'Eldhus/fourneau-dragrace'
+    runs-on: ubuntu-26.04
+    outputs:
+      race: ${{ steps.changed.outputs.race }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fourneau-dragrace
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/fourneau
+          ref: main
+          path: fourneau
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/roux
+          ref: main
+          path: roux
+      - name: The results so far
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          if git ls-remote --exit-code --heads "$remote" results; then
+            git clone --depth 1 --branch results "$remote" history
+          else
+            mkdir -p history/data
+          fi
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: fourneau-dragrace/tools/go.mod
+          cache: false
+      - id: changed
+        working-directory: fourneau-dragrace
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "race=true" >> "$GITHUB_OUTPUT"
+          elif go run -C tools ./cmd/dragrace changed ../../history/data; then
+            echo "race=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "race=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  race:
+    needs: gate
+    if: needs.gate.outputs.race == 'true'
+    runs-on: ubuntu-26.04
+    environment: dragrace
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fourneau-dragrace
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/fourneau
+          ref: main
+          path: fourneau
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/roux
+          ref: main
+          path: roux
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: fourneau-dragrace/tools/go.mod
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/fourneau-dragrace
+          key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
+      - name: Build the tool
+        working-directory: fourneau-dragrace
+        run: go build -C tools -o ../out/dragrace ./cmd/dragrace
+      - name: Race on DigitalOcean
+        working-directory: fourneau-dragrace
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: out/dragrace race cloud
+      - name: Delete anything the race left behind
+        if: always()
+        working-directory: fourneau-dragrace
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: out/dragrace reap
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: results
+          path: fourneau-dragrace/out/results/*.json
+
+  publish:
+    needs: race
+    runs-on: ubuntu-26.04
+    environment: dragrace
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fourneau-dragrace
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: fourneau-dragrace/tools/go.mod
+          cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: results
+          path: new
+      - name: Add the run to the results branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          if git ls-remote --exit-code --heads "$remote" results; then
+            git clone --depth 1 --branch results "$remote" history
+          else
+            git init -b results history && git -C history remote add origin "$remote"
+          fi
+          go build -C fourneau-dragrace/tools -o ../out/dragrace ./cmd/dragrace
+          (cd fourneau-dragrace && out/dragrace publish -into ../history/data ../new/*.json)
+          cd history
+          git config user.name "fourneau-dragrace"
+          git config user.email "fourneau-dragrace@users.noreply.github.com"
+          git add data
+          git commit -m "race $(basename ../new/*.json .json)"
+          git push origin results
+      - name: Deploy to the site host
+        working-directory: fourneau-dragrace
+        env:
+          SITE_DEPLOY_KEY: ${{ secrets.SITE_DEPLOY_KEY }}
+          SITE_KNOWN_HOSTS: ${{ secrets.SITE_KNOWN_HOSTS }}
+          SITE_HOST: ${{ secrets.SITE_HOST }}
+        run: |
+          umask 077
+          mkdir -p "$RUNNER_TEMP/site"
+          printf '%s\n' "$SITE_DEPLOY_KEY" > "$RUNNER_TEMP/site/key"
+          printf '%s\n' "$SITE_KNOWN_HOSTS" > "$RUNNER_TEMP/site/known_hosts"
+          out/dragrace site deploy -host "$SITE_HOST" -key "$RUNNER_TEMP/site/key" \
+            -known-hosts "$RUNNER_TEMP/site/known_hosts" -data ../history/data

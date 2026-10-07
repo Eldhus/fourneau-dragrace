@@ -1,0 +1,15 @@
+{{> Top}}<section id="latest" class="results" aria-live="polite">
+{{?ready}}<p class="run-meta"><span>Race <b>{{ id }}</b></span> <span>{{ started }}</span>{{?timed}} <span>{{ took }}</span>{{/timed}}{{#commits}} <span>{{ name }} <a href="{{ url }}">{{ short }}</a></span>{{/commits}}</p>
+<ul class="legend" aria-label="Competitors">{{#competitors}}<li><span class="swatch s-{{ . }}"></span><a href="/competitors">{{ . }}</a></li>{{/competitors}}</ul>
+{{> RaceClasses}}{{/ready}}{{^ready}}<p class="pending">No race yet: the first nightly has not run.</p>{{/ready}}
+</section>
+<article class="prose">
+<h2>How it runs</h2>
+<ul>
+<li>A race runs at 03:00 New York time when fourneau, roux or this repository has a new commit. Each result names the commits it raced.</li>
+<li>Each server class gets fresh DigitalOcean droplets: the server on one, the load generator (<a href="https://github.com/hatoo/oha">oha</a>) on a bigger one, over the private network.</li>
+<li>Five workloads: plaintext, a 4 KiB echo, a templated HTML page, a Datastar event stream, and a new connection per request. Three rounds in random order; the median counts, of throughput and of each latency percentile.</li>
+</ul>
+<p>Details: <a href="/workloads">Workloads</a>, <a href="/method">Method</a>. To make a server faster or add one: <a href="/contribute">Contribute</a>.</p>
+</article>
+{{> Bottom}}

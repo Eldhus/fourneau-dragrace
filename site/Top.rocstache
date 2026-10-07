@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<meta name="description" content="HTTP server drag races: fourneau (Zig) and roux (Roc on fourneau) against Go, axum and basic-webserver (Roc), on DigitalOcean droplets. Part of Eldhus.">
+<meta name="theme-color" content="#170b26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/datastar-v1.0.2.js"></script>
+</head>
+<body{{?home}} class="home"{{/home}}>
+<div class="crt" aria-hidden="true"></div>
+<header class="masthead">
+{{?home}}  <canvas id="fire" aria-hidden="true"></canvas>
+{{/home}}  <a class="logo" href="/"><span class="logo-top">FOURNEAU</span><span class="logo-bottom">HTTP DRAG RACE</span></a>
+  <nav>{{#nav}}<a href="{{ href }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/nav}}</nav>
+  <div class="copper" aria-hidden="true"></div>
+</header>
+<main>

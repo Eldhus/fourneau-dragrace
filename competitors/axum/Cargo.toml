@@ -1,0 +1,21 @@
+[package]
+name = "dragrace-axum"
+version = "0.1.0"
+edition = "2021"
+
+# axum as its users write it: axum::serve on tokio's multi-threaded runtime
+# (one worker per core). Versions are locked in Cargo.lock.
+[dependencies]
+axum = "0.8"
+# The templates workload: askama compiles templates/menu.html into Rust.
+askama = "0.16"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+# The SSE workload: Datastar's signals are JSON in a query parameter;
+# axum's Sse takes a stream of events.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures-util = { version = "0.3", default-features = false }
+
+[profile.release]
+codegen-units = 1
+lto = true

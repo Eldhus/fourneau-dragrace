@@ -1,0 +1,16 @@
+{
+  "title": "basic-webserver (Roc)",
+  "language": "Roc",
+  "framework": "basic-webserver 0.17.0: Roc's own platform, a Rust host on hyper and tokio",
+  "links": {
+    "basic-webserver": "https://github.com/roc-lang/basic-webserver",
+    "Roc": "https://www.roc-lang.org"
+  },
+  "build": [
+    { "cwd": "competitors/basic-webserver", "argv": ["{roc}", "build", "main.roc", "--output={out}/basic-webserver"] }
+  ],
+  "run": {
+    "argv": ["sh", "-c", "trap '' PIPE; exec \"$0\"", "{bin}"],
+    "env": { "DRAGRACE_ADDRESS": "{address}", "DRAGRACE_PORT": "{port}" }
+  }
+}

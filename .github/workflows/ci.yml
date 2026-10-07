@@ -1,0 +1,59 @@
+# Every push and pull request: build every competitor, race them briefly on
+# the runner (a smoke test, never published), and build the site and run
+# its expects.
+# No secrets here: pull requests from forks run this, and only this.
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      # The layout RACING.md describes: this repository beside fourneau and roux.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fourneau-dragrace
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/fourneau
+          ref: main
+          path: fourneau
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Eldhus/roux
+          ref: main
+          path: roux
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: fourneau-dragrace/tools/go.mod
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/fourneau-dragrace
+          key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
+      - name: Build the tool
+        working-directory: fourneau-dragrace
+        run: |
+          test -z "$(gofmt -l tools)"
+          (cd tools && go vet ./...)
+          go build -C tools -o ../out/dragrace ./cmd/dragrace
+      - name: Race, briefly
+        working-directory: fourneau-dragrace
+        run: out/dragrace race local -quick -server-cpus 0-1 -loader-cpus 2-3
+      - name: Build the site
+        working-directory: fourneau-dragrace
+        run: |
+          out/dragrace publish -into site/data out/results/*.json
+          out/dragrace site build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site-preview
+          path: |
+            fourneau-dragrace/out/bin/dragrace-site
+            fourneau-dragrace/site/static
+            fourneau-dragrace/site/data
+          retention-days: 7

@@ -1,0 +1,165 @@
+# Racing
+
+How a race runs, where everything is, and every command of the tool.
+
+## Layout
+
+This repository, fourneau and roux sit side by side, as they do in CI and
+in the owner's `~/devel/eldhus/`:
+
+```
+some-dir/
+  fourneau-dragrace/     this repository
+  fourneau/              the server (versions.json: fourneau.checkout)
+  roux/                  the Roc platform on it (versions.json: roux.checkout)
+```
+
+fourneau-zig builds against fourneau (`competitors/fourneau-zig/build.zig.zon`);
+roux's app names its platform in roux (`competitors/roux/main.roc`), and
+roux builds against fourneau (its own `build.zig.zon`).
+
+## What is where
+
+| path | what |
+|---|---|
+| `race.json` | the race: workloads, rounds, durations, droplet sizes, local CPUs |
+| `versions.json` | every pin (VERSIONS.md) |
+| `competitors/NAME/` | a competitor: its source, `competitor.json` (build and run), README |
+| `tools/cmd/dragrace/` | the tool: Go, standard library only |
+| `site/` | the site, a roux app: rocstache templates, `site/data/*.json` read per request |
+| `.github/workflows/` | ci (every push), nightly (03:00 New York), reaper (every 6 h) |
+| `out/` | builds, results, secrets (ignored) |
+
+## The contract
+
+Every competitor listens where it is told (`{address}`, `{port}` in its
+`competitor.json`; port 8080) and answers:
+
+- `GET /plaintext`: 200, `Content-Type: text/plain; charset=utf-8`, body `Hello, World!`
+- `POST /echo`: 200, `Content-Type: application/octet-stream`, the request body (up to 64 KiB)
+- `GET /menu`: 200, `Content-Type: text/html; charset=utf-8`, the page in
+  `workloads/menu.html`, rendered from a template per request with the
+  competitor's usual engine, every value HTML-escaped (entities may be
+  spelled `&amp;` or `&#38;`: the check treats them alike)
+- `GET /sse?datastar=JSON`: a Datastar action. The signals are JSON in the
+  `datastar` query parameter (`{"count":41}`); the answer is 200,
+  `Content-Type: text/event-stream`, the events in `workloads/sse.txt`
+  for count + 1, streamed: chunked, no `Content-Length`, each event a
+  chunk of its own, made and sent in turn with the competitor's own SSE
+  support (whether ready chunks share a write is the stack's business).
+  Without good signals: 400.
+- anything else: 404
+
+The race checks all of them before a competitor runs (`/sse` when the
+race has the SSE workload); one that fails is DNF.
+
+## A race
+
+For each server class, for each round (a new random order every round, from
+a seed recorded in the results), for each competitor: start it, wait until
+it answers, check it (first round), then for each workload a warmup
+(discarded) and a measured oha run, with a snapshot of both machines
+before and after (`snapshot.go`). The result is the median of the rounds,
+for throughput and for p50, p95, p99 and p99.9; throughput counts 2xx
+answers only (errors and other statuses are no work done).
+
+Each round keeps (the raw data, `results.go`'s `Round`):
+
+| from | what |
+|---|---|
+| oha | requests/s; latency p50, p90, p95, p99, p99.9, p99.99, mean and max; time to first byte, p50 and p99 (for a stream, when events start); the per-second spread of throughput; the mean connect time; bytes per response; errors and non-2xx |
+| the server machine | CPU busy, user, system, irq, softirq and steal on the server's CPUs (softirq is the network stack's work for it); network in and out, Mbit/s (a result at the droplet's link shows here); TCP retransmits |
+| the server process | peak RSS; threads; voluntary and involuntary context switches, every thread's |
+| the server machine (also) | packets a second in and out: DigitalOcean also limits packets, which small responses reach before bytes |
+| the loader machine | CPU busy: a busy loader means the server was not the limit |
+
+Rates and shares are taken over oha's own duration (`load_seconds`), not
+the snapshots' window, which also holds the shell calls around the load
+(about six seconds of 26 from GitHub's runner: every CPU figure read 23%
+low until 2026-10-06; `publish` mends those rounds once). Fields added on
+2026-10-06 are 0 in older runs; the site shows a percentile a run did not
+record as "–".
+
+oha runs with `--disable-compression` (it asks for gzip and brotli
+otherwise, which a server that compresses honours and the checks never
+see) and `--worker-threads` at the loader's CPUs.
+
+What limited each result, as the site says it: the server's CPU (at least
+90% busy: the case the race is for), the loader's (at least 90%), the
+network (at least 1,400 Mbit/s either way, 70% of the 2 Gbit/s
+DigitalOcean documents, where retransmits began; or at least 1,000 with
+a TCP retransmit per 100 requests or more: dedicated-2's link dropped
+packets from 1,320 Mbit/s on 2026-10-06, p99 205 ms), or none of them: then
+the closed loop's 256 connections and their round trips were the limit,
+and the server was under-driven.
+
+## The same machine every night
+
+DigitalOcean gives a size whatever host has room, and hosts of one size
+differ by a CPU generation (c-2 on a Xeon 8280 one night, an 8168 the
+next), which moves results night to night. Every machine records its CPU
+model and its `family:model:stepping` (the generation, even where the
+name is hidden: the smallest droplet says only "DO-Regular"). A class may
+ask for one (`server_cpu`: part of the model name, or family:model:stepping);
+a server on another CPU is deleted and another requested, up to six
+droplets (a minute of a c-2 is a tenth of a cent). Past that the race goes
+on, and the run and the site say the server was not the asked-for CPU.
+dedicated-2 asks for the Platinum 8168; the smallest droplet will once its
+usual family:model:stepping is known.
+
+Each class has a `label` (its tab: small, medium) and a `title` (its
+heading: what it is for); `publish` gives every stored run the current
+ones, by name, and `retired` holds those of classes no longer raced.
+
+## Under load: the open loop
+
+After the rounds, each server climbs a ladder on one workload
+(`race.json`'s `open_loop`: templates): fixed offered rates at 50, 75, 90,
+100 and 120% of its own closed-loop median, 3 s of warmup and 10 s
+measured each, latency from when each request was due (oha `-q`,
+`--latency-correction`; `open_loop.go` says why steps and not a ramp).
+oha pacing costs about half again the loader CPU of its closed loop
+(measured): a step with the loader 85% busy or more is the loader's, and
+the site draws it hollow.
+
+## Commands
+
+| command | does |
+|---|---|
+| `dragrace toolchain` | fetch Zig, Roc, oha and musl's crt files, each checked against its sha256 |
+| `dragrace build` | build every competitor into `out/bin` |
+| `dragrace race local [-quick] [-server-cpus 0-1 -loader-cpus 2-7]` | race here; loopback, so it compares competitors, not deployments |
+| `dragrace race cloud [-quick]` | race on fresh droplets; deletes them however it ends |
+| `dragrace sizes [-prefix c]` | droplet sizes with prices and the regions offering them |
+| `dragrace reap [-all]` | delete race droplets and keys older than `race.json` allows |
+| `dragrace fingerprint` / `changed DIR` | the commits a race would race; whether they changed (the nightly's gate) |
+| `dragrace publish RUN.json...` | file runs into `site/data` (or `-into DIR`) |
+| `dragrace site build` | build the site into `out/bin/dragrace-site` |
+| `dragrace site provision \| install-server \| deploy` | the 24/7 site host (SECURITY.md) |
+
+`-competitors a,b` and `-workloads x,y` narrow any race.
+
+## Cost
+
+Per nightly, two pairs at once in lon1, each a server and a loader with
+more vCPUs (`dragrace sizes` has the prices): s-1vcpu-512mb with
+c-4 (c-2 was 92-98% busy under fourneau-zig, 2026-10-06), and c-2 with
+s-8vcpu-16gb (c-4 was the limit for the fastest server, 98%
+busy at 152k plaintext requests/s, 2026-10-06, and lon1 offers no
+dedicated size above it: eight shared vCPUs give the loader headroom, its
+CPU recorded every round); about $0.27 an hour together,
+billed per second (a minute at least). With five competitors, five
+workloads and the open-loop ladder a class races for about 40 minutes:
+roughly $0.30 a race. `premium-4` (Basic Premium AMD) is out until
+dedicated Premium Intel is offered: its shared vCPUs varied by 15% round
+to round, its "up to 10 Gbit/s" stopped near 1 Gbit/s with retransmits,
+and its slower network left 256 connections unable to saturate anything,
+so its numbers measured round trips, not servers. The site host is $4 a
+month. The nightly does not run when nothing changed.
+
+Each droplet is created once per race and deleted as soon as its class
+is done (the classes finish at different times; the slowest no longer
+keeps the others up). Every run records its `timing`: the whole race,
+the build, the launch, the racing and each class's; and each droplet's
+life, from requested to deleted, with its estimated cost at the size's
+listed hourly price, and their sum (`cost_usd`).

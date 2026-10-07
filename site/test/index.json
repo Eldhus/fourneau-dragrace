@@ -1,0 +1,320 @@
+[
+  {
+    "id": "2026-10-06T132934Z-local",
+    "where": "local",
+    "started_at": "2026-10-06T13:29:34Z",
+    "fingerprint": {
+      "dragrace": "13a4e0b13a83c16d14ede9308a8331f95266c00d",
+      "dragrace_dirty": true,
+      "fourneau": "7aa221890360613af553ec3a3aaa504b9811896b",
+      "fourneau_dirty": false,
+      "roux": "c674eaaa7598219d4101a1a181ac3d1e6f4bc0c0",
+      "roux_dirty": false
+    },
+    "results": [
+      {
+        "class": "local",
+        "workload": "templates",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 19650.340564840128,
+        "median_p99_ms": 27.01474
+      },
+      {
+        "class": "local",
+        "workload": "templates",
+        "competitor": "fourneau-zig",
+        "valid": true,
+        "median_rps": 208583.55921926143,
+        "median_p99_ms": 2.738213
+      },
+      {
+        "class": "local",
+        "workload": "templates",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 118263.9100805236,
+        "median_p99_ms": 3.4188270000000003
+      },
+      {
+        "class": "local",
+        "workload": "templates",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 94616.749520768,
+        "median_p99_ms": 4.642237
+      }
+    ]
+  },
+  {
+    "id": "2026-10-06T135849Z-cloud",
+    "where": "cloud",
+    "started_at": "2026-10-06T13:58:49Z",
+    "fingerprint": {
+      "dragrace": "dbdc9686896ef9d1d00d9d3ae4184767881a867c",
+      "dragrace_dirty": false,
+      "fourneau": "49da1f40d81d946096dc88f6011ac65c3c44c1a5",
+      "fourneau_dirty": false,
+      "roux": "c674eaaa7598219d4101a1a181ac3d1e6f4bc0c0",
+      "roux_dirty": false
+    },
+    "results": [
+      {
+        "class": "smallest",
+        "workload": "plaintext",
+        "competitor": "fourneau-zig",
+        "valid": false,
+        "median_rps": 0,
+        "median_p99_ms": 0
+      },
+      {
+        "class": "smallest",
+        "workload": "echo-4k",
+        "competitor": "fourneau-zig",
+        "valid": false,
+        "median_rps": 0,
+        "median_p99_ms": 0
+      },
+      {
+        "class": "smallest",
+        "workload": "templates",
+        "competitor": "fourneau-zig",
+        "valid": false,
+        "median_rps": 0,
+        "median_p99_ms": 0
+      },
+      {
+        "class": "smallest",
+        "workload": "churn",
+        "competitor": "fourneau-zig",
+        "valid": false,
+        "median_rps": 0,
+        "median_p99_ms": 0
+      },
+      {
+        "class": "smallest",
+        "workload": "plaintext",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 59137.482855233706,
+        "median_p99_ms": 12.311489
+      },
+      {
+        "class": "smallest",
+        "workload": "echo-4k",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 22838.474275962166,
+        "median_p99_ms": 24.834011999999998
+      },
+      {
+        "class": "smallest",
+        "workload": "templates",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 38336.07290208354,
+        "median_p99_ms": 12.081256
+      },
+      {
+        "class": "smallest",
+        "workload": "churn",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 12619.361735052182,
+        "median_p99_ms": 12.096671
+      },
+      {
+        "class": "smallest",
+        "workload": "plaintext",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 32720.22768640747,
+        "median_p99_ms": 12.191388
+      },
+      {
+        "class": "smallest",
+        "workload": "echo-4k",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 18810.151497087798,
+        "median_p99_ms": 21.581656000000002
+      },
+      {
+        "class": "smallest",
+        "workload": "templates",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 30133.900261641036,
+        "median_p99_ms": 11.956078999999999
+      },
+      {
+        "class": "smallest",
+        "workload": "churn",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 8232.065799399572,
+        "median_p99_ms": 15.289172
+      },
+      {
+        "class": "smallest",
+        "workload": "plaintext",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 20011.8641720458,
+        "median_p99_ms": 25.118838
+      },
+      {
+        "class": "smallest",
+        "workload": "echo-4k",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 8266.124948465218,
+        "median_p99_ms": 74.679427
+      },
+      {
+        "class": "smallest",
+        "workload": "templates",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 7892.10648698241,
+        "median_p99_ms": 56.547834
+      },
+      {
+        "class": "smallest",
+        "workload": "churn",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 6384.2185847864375,
+        "median_p99_ms": 17.920924000000003
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "plaintext",
+        "competitor": "fourneau-zig",
+        "valid": true,
+        "median_rps": 167971.28620025067,
+        "median_p99_ms": 5.300207
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "echo-4k",
+        "competitor": "fourneau-zig",
+        "valid": true,
+        "median_rps": 35705.25638821818,
+        "median_p99_ms": 208.18787999999998
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "templates",
+        "competitor": "fourneau-zig",
+        "valid": true,
+        "median_rps": 168278.41121338832,
+        "median_p99_ms": 4.391215000000001
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "churn",
+        "competitor": "fourneau-zig",
+        "valid": true,
+        "median_rps": 21669.73328270537,
+        "median_p99_ms": 8.409652
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "plaintext",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 167886.48728998125,
+        "median_p99_ms": 4.111962999999999
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "echo-4k",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 35985.63440626613,
+        "median_p99_ms": 207.984756
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "templates",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 113397.56604694984,
+        "median_p99_ms": 4.4868369999999995
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "churn",
+        "competitor": "roux",
+        "valid": true,
+        "median_rps": 20524.257949389037,
+        "median_p99_ms": 8.294571000000001
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "plaintext",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 89932.78103670305,
+        "median_p99_ms": 4.8879600000000005
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "echo-4k",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 35898.26572728623,
+        "median_p99_ms": 207.774547
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "templates",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 81492.54830066177,
+        "median_p99_ms": 5.489299
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "churn",
+        "competitor": "axum",
+        "valid": true,
+        "median_rps": 20090.89595620852,
+        "median_p99_ms": 6.134062
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "plaintext",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 45619.71990953054,
+        "median_p99_ms": 14.241950999999998
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "echo-4k",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 18151.821114188813,
+        "median_p99_ms": 55.004122
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "templates",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 18033.42518132919,
+        "median_p99_ms": 35.681104999999995
+      },
+      {
+        "class": "dedicated-2",
+        "workload": "churn",
+        "competitor": "go",
+        "valid": true,
+        "median_rps": 15353.716563041542,
+        "median_p99_ms": 11.008721000000001
+      }
+    ]
+  }
+]

@@ -1,0 +1,112 @@
+{
+  "comment": "What a race is: the port, the rounds, the droplets and the workloads. RACING.md says how a race uses them.",
+  "port": 8080,
+  "rounds": 3,
+  "warmup_seconds": 5,
+  "measure_seconds": 20,
+  "competitors": [
+    "go",
+    "axum",
+    "fourneau-zig",
+    "roux",
+    "basic-webserver"
+  ],
+  "workloads": [
+    {
+      "name": "plaintext",
+      "title": "Plaintext",
+      "summary": "GET /plaintext answers 13 bytes over kept-alive connections: the cost of HTTP itself.",
+      "method": "GET",
+      "path": "/plaintext",
+      "connections": 256,
+      "keepalive": true
+    },
+    {
+      "name": "echo-4k",
+      "title": "Echo 4 KiB",
+      "summary": "POST /echo with a 4 KiB body, answered with the same bytes: reading bodies and writing larger responses.",
+      "method": "POST",
+      "path": "/echo",
+      "body_bytes": 4096,
+      "content_type": "application/octet-stream",
+      "connections": 256,
+      "keepalive": true
+    },
+    {
+      "name": "templates",
+      "title": "Templates",
+      "summary": "GET /menu renders a 12-row HTML table from a template per request, every value escaped: the work of a server-rendered page.",
+      "method": "GET",
+      "path": "/menu",
+      "connections": 256,
+      "keepalive": true
+    },
+    {
+      "name": "sse",
+      "title": "SSE (Datastar)",
+      "summary": "GET /sse with Datastar's signals in the query, answered with a stream of ten Datastar events, a chunk each: the work of a Datastar action.",
+      "method": "GET",
+      "path": "/sse?datastar=%7B%22count%22%3A41%7D",
+      "connections": 256,
+      "keepalive": true
+    },
+    {
+      "name": "churn",
+      "title": "Connection churn",
+      "summary": "GET /plaintext on a new connection every request: accepting, and closing, as fast as possible.",
+      "method": "GET",
+      "path": "/plaintext",
+      "connections": 64,
+      "keepalive": false
+    }
+  ],
+  "cloud": {
+    "region": "lon1",
+    "image": "ubuntu-26-04-x64",
+    "servers": [
+      {
+        "name": "smallest",
+        "label": "small",
+        "title": "What a $4 droplet can do",
+        "size": "s-1vcpu-512mb-10gb",
+        "loader_size": "c-4",
+        "server_cpu": ""
+      },
+      {
+        "name": "dedicated-2",
+        "label": "medium",
+        "title": "Dedicated cores, no neighbours",
+        "size": "c-2",
+        "loader_size": "s-8vcpu-16gb",
+        "server_cpu": "Platinum 8168"
+      }
+    ],
+    "tag": "fourneau-dragrace-race",
+    "max_age_minutes": 180,
+    "retired": [
+      {
+        "name": "premium-4",
+        "label": "large",
+        "title": "Premium AMD, shared cores",
+        "size": "s-4vcpu-8gb-amd",
+        "loader_size": "s-8vcpu-16gb-amd"
+      }
+    ]
+  },
+  "local": {
+    "server_cpus": "0-1",
+    "loader_cpus": "2-7"
+  },
+  "open_loop": {
+    "workload": "templates",
+    "shares": [
+      0.5,
+      0.75,
+      0.9,
+      1.0,
+      1.2
+    ],
+    "warmup_seconds": 3,
+    "measure_seconds": 10
+  }
+}

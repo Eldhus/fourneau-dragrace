@@ -1,0 +1,46 @@
+event: datastar-patch-signals
+data: signals {"count":42}
+
+event: datastar-patch-elements
+data: elements <span id="count">42</span>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 1 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 2 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 3 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 4 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 5 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 6 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 7 of 8</li>
+
+event: datastar-patch-elements
+data: selector #log
+data: mode append
+data: elements <li>Event 8 of 8</li>
+

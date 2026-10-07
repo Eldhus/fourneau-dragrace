@@ -1,0 +1,13 @@
+{{> Top}}<article class="prose">
+<h1>About</h1>
+<p><b>fourneau</b> (French for <i>stove</i>; say <i>inferno</i> and drop the <i>in</i>) is an HTTP server in Zig on io_uring: a fiber per connection, one shard per core sharing nothing, all memory allocated at startup, and a deterministic simulator for testing. It serves HTTP/1.1 and HTTPS (with ACME) today; HTTP/2 is next.</p>
+<p><b>roux</b> is a <a href="https://www.roc-lang.org">Roc</a> platform on fourneau: a Roc app and the server compile into one static binary, with typed HTML templates (rocstache). This site is a roux app.</p>
+<p>All MIT-licensed, part of <a href="https://github.com/Eldhus">Eldhus</a>:</p>
+<ul>
+<li><a href="https://github.com/Eldhus/fourneau">fourneau</a>: the server.</li>
+<li><a href="https://github.com/Eldhus/roux">roux</a>: the Roc platform.</li>
+<li><a href="https://github.com/Eldhus/rocstache">rocstache</a>: the template language&rsquo;s grammar and editor support.</li>
+<li><a href="https://github.com/Eldhus/fourneau-dragrace">fourneau-dragrace</a>: the race and this site.</li>
+</ul>
+</article>
+{{> Bottom}}

@@ -1,0 +1,12 @@
+.{
+    .name = .fourneau_zig,
+    .version = "0.1.0",
+    .fingerprint = 0xf2377c1af8c267e0,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        // The fourneau checkout beside this repository: the nightly races
+        // whatever fourneau's main is, and records its commit.
+        .fourneau = .{ .path = "../../../fourneau" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}
