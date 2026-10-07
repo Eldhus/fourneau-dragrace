@@ -226,15 +226,23 @@ nav.tabs a + a { border-left: 0; }
 .open { margin-top: 22px; }
 /* Which latency the chart draws: every measure is on the page, the
    unchecked ones hidden, so switching needs no request and no script
-   (the owner, 2026-10-07). Joined like the class tabs. */
-.metrics { display: flex; border: 0; margin: 10px 0 4px; padding: 0; min-width: 0; }
-.metrics legend { float: left; margin-right: 10px; padding: 7px 0 0; font-size: 12px; color: var(--text-3); }
-.metrics label { position: relative; font-family: var(--pixel); font-size: 9px; padding: 7px 10px;
-  border: 1px solid var(--grid); background: rgba(33,18,53,.82); cursor: pointer; }
-.metrics label + label { border-left: 0; }
-.metrics input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.metrics label:has(input:checked) { color: var(--surface); background: var(--gold); border-color: var(--gold); }
-.metrics label:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
+   (the owner, 2026-10-07). Phosphor-green radio buttons, the owner's
+   ask: a ring that lights up with a glowing dot. */
+.metrics { --phosphor: #39ff7a; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  border: 0; margin: 12px 0 6px; padding: 0; min-width: 0; }
+.metrics legend { float: left; margin-right: 4px; padding: 0; font-family: var(--pixel); font-size: 9px; color: var(--text-3); }
+.metrics label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-family: var(--pixel); font-size: 10px; color: var(--text-2); }
+.metrics input { appearance: none; margin: 0; width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
+  border: 2px solid color-mix(in srgb, var(--phosphor) 55%, transparent); background: transparent;
+  display: grid; place-content: center; transition: box-shadow .15s, border-color .15s; }
+.metrics input::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--phosphor);
+  transform: scale(0); transition: transform .12s; }
+.metrics input:checked { border-color: var(--phosphor); box-shadow: 0 0 8px var(--phosphor), inset 0 0 4px rgba(57,255,122,.5); }
+.metrics input:checked::before { transform: scale(1); box-shadow: 0 0 6px var(--phosphor); }
+.metrics label:hover input { border-color: var(--phosphor); }
+.metrics label:has(input:checked) { color: var(--phosphor); text-shadow: 0 0 6px rgba(57,255,122,.6); }
+.metrics input:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 3px; }
 .open:has(input[value="p50"]:not(:checked)) .m-p50,
 .open:has(input[value="p90"]:not(:checked)) .m-p90,
 .open:has(input[value="p99"]:not(:checked)) .m-p99,

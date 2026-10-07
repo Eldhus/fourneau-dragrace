@@ -33,7 +33,8 @@ import (
 // a changed template is regenerated (rocstache-gen), changed queries
 // regenerate the db modules (roux-db), and when any Roc source then
 // differs from the last build the app is built with `--opt=dev` and
-// restarted. A changed static file only reloads the browser. Changes are
+// restarted. A changed static file restarts the app without a build
+// (roux reads static files at startup). Changes are
 // decided by content (sha256), not by modification time or by which event
 // came, so a save that changes nothing, and the generators' own writes,
 // cost nothing.
@@ -181,7 +182,15 @@ func (dev *devServer) step(ctx context.Context, first bool) {
 	dev.changed(inputs)
 	digest := rocDigest(inputs)
 	if digest == dev.built && dev.app.running() {
-		log.Printf("dev: %s; reload (%d ms)", strings.Join(changed, " "), time.Since(started).Milliseconds())
+		// roux loads static files once, at startup (fourneau's site.zig
+		// keeps them, gzipped, in memory): a changed one needs the app
+		// restarted, though not rebuilt (found 2026-10-07: the old CSS
+		// served after a reload).
+		if out, err := dev.app.restart(ctx); err != nil {
+			dev.fail("start", out+err.Error())
+			return
+		}
+		log.Printf("dev: %s; restarted (%d ms)", strings.Join(changed, " "), time.Since(started).Milliseconds())
 		dev.events.send(devEvent{kind: "reload"})
 		return
 	}

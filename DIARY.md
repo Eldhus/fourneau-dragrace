@@ -965,3 +965,12 @@ Checked: 113 expects (the new one: which measures each kind offers, p99
 shown); on the live data's race the controls read p50 p90 p99 p99.9 and p50
 p99 p99.9 mean, p99 checked, 8 charts on the page. Built and reloaded by
 `site dev` (3.4 s; the CSS 7 ms). Not looked at in a browser.
+
+The owner looked: every measure showed at once, its caption four times.
+The new CSS had never been served: roux reads static files once, at
+startup (fourneau's site.zig keeps them in memory, gzipped), so `site
+dev`'s "a static file only reloads" served the old style.css; a static
+change now restarts the app, without a build (about 60 ms). The caption
+is one per chart, the measure only on the axis. The control is
+phosphor-green radio buttons (the owner's ask): a ring that lights up
+with a glowing dot.

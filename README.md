@@ -33,7 +33,7 @@ out/dragrace site dev            # working on the UI: http://127.0.0.1:8090/ reb
 
 `site build` is LLVM's optimized build (about 90 s), for races and
 deploys. `site dev` builds with Roc's dev backend (2 to 3 s from a save
-to the reloaded page; a static file, at once) and shows a failed build or
+to the reloaded page; a static file, a restart without a build) and shows a failed build or
 failing expects over the page.
 
 Go from `tools/go.mod`; everything else pinned in `versions.json`

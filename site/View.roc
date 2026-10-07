@@ -38,10 +38,11 @@ View :: [].{
 	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## One measure's drawing, chosen with a radio button (`key`, its
 	## value; `checked`, the one shown first). `measure`: what the y axis
-	## is; `caption`, how the ladder was climbed.
-	OpenMetric : { key : Str, label : Str, checked : Bool, measure : Str, caption : Str, lines : List(OpenLine), ticks_y : List(Tick) }
-	## `id`: the radio buttons' name, one per chart on the page.
-	OpenChart : { id : Str, title : Str, ticks_x : List(Mark), competitors : List(Str), metrics : List(OpenMetric) }
+	## is.
+	OpenMetric : { key : Str, label : Str, checked : Bool, measure : Str, lines : List(OpenLine), ticks_y : List(Tick) }
+	## `id`: the radio buttons' name, one per chart on the page;
+	## `caption`, how the ladder was climbed.
+	OpenChart : { id : Str, title : Str, caption : Str, ticks_x : List(Mark), competitors : List(Str), metrics : List(OpenMetric) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -579,13 +580,21 @@ open_chart = |{ id, title, results, mixed }| {
 	metrics = available.map(|metric| {
 		{ key, label } = metric_key(metric)
 		drawn = open_metric(results, steps, x, metric, mixed)
-		{ key, label, checked: metric == shown, measure: drawn.measure, caption: drawn.caption, lines: drawn.lines, ticks_y: drawn.ticks_y }
+		{ key, label, checked: metric == shown, measure: drawn.measure, lines: drawn.lines, ticks_y: drawn.ticks_y }
 	})
-	{ id, title, ticks_x, competitors: results.map(|r| r.competitor), metrics }
+	# One caption, whichever latency is drawn (2026-10-07: one a measure,
+	# all four showed at once, the same sentence four times).
+	caption =
+		if mixed {
+			"Latency against the offered rate: the article list (50%), an article (30%), a comment (15%) and a favorite (5%) at once, open loop, at the same rates for every server, each climbing until it falls behind. A percentile is the slowest part's; the mean is over every request."
+		} else {
+			"Latency against the offered rate (open loop: requests arrive at a fixed rate whatever the server does). Each server is offered 50% to 120% of its own maximum above."
+		}
+	{ id, title, caption, ticks_x, competitors: results.map(|r| r.competitor), metrics }
 }
 
 ## One metric's lines on a log axis of its own.
-open_metric : List(Data.Result), List(Data.OpenStep), (F64 -> F64), Metric, Bool -> { measure : Str, caption : Str, lines : List(View.OpenLine), ticks_y : List(View.Tick) }
+open_metric : List(Data.Result), List(Data.OpenStep), (F64 -> F64), Metric, Bool -> { measure : Str, lines : List(View.OpenLine), ticks_y : List(View.Tick) }
 open_metric = |results, steps, x, metric, mixed| {
 	slowest = steps.fold(0.0, |worst, s| if metric_of(metric, s) > worst metric_of(metric, s) else worst)
 	fastest = steps.fold(slowest, |best, s| if metric_of(metric, s) > 0.0 and metric_of(metric, s) < best metric_of(metric, s) else best)
@@ -598,19 +607,8 @@ open_metric = |results, steps, x, metric, mixed| {
 	}
 	lines = spread_open(results.map(|r| open_line(r, x, y, metric, mixed)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
-	label = metric_key(metric).label
-	measure = "${label} latency"
-	caption =
-		match (mixed, metric) {
-			(Bool.True, Mean) => "The mean latency of every request against the offered rate: ${mixed_ladder}"
-			(Bool.True, _) => "The slowest part's ${label} latency against the offered rate: ${mixed_ladder}"
-			(Bool.False, _) => "${label} latency against the offered rate (open loop: requests arrive at a fixed rate whatever the server does). Each server is offered 50% to 120% of its own maximum above."
-		}
-	{ measure, caption, lines, ticks_y }
+	{ measure: "${metric_key(metric).label} latency", lines, ticks_y }
 }
-
-mixed_ladder : Str
-mixed_ladder = "the article list (50%), an article (30%), a comment (15%) and a favorite (5%) at once, open loop, at the same rates for every server, each climbing until it falls behind."
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Metric, Bool -> View.OpenLine
 open_line = |result, x, y, metric, mixed| {
