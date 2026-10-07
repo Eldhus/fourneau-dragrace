@@ -16,3 +16,10 @@ flushed (`http.ResponseController`), as Datastar's Go SDK does.
 a pooled buffer (`sync.Pool`), where `io.ReadAll` grew a fresh one every
 request: +28% requests/s and half the p99, measured locally in three
 interleaved rounds (2026-10-06: 30-33k against 39-41k).
+
+`/api/...` (conduit): `database/sql` with `modernc.org/sqlite` (SQLite in
+pure Go, so the binary stays static; mattn/go-sqlite3 would need cgo), as
+a Go team runs SQLite: WAL and `synchronous=NORMAL`, a pool of readers
+(twice GOMAXPROCS), one writer connection (SQLite writes one at a time;
+the pool queues them in Go rather than retrying on SQLITE_BUSY) with
+`BEGIN IMMEDIATE`. JSON with `encoding/json`.

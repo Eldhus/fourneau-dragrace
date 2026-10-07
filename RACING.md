@@ -54,6 +54,40 @@ Every competitor listens where it is told (`{address}`, `{port}` in its
 The race checks all of them before a competitor runs (`/sse` when the
 race has the SSE workload); one that fails is DNF.
 
+### Conduit: reads and writes on SQLite
+
+A slice of [RealWorld](https://realworld-docs.netlify.app/)'s Conduit API.
+The server is started with `{db}`: a fresh copy of a database seeded the
+same for everyone (`workloads/conduit/schema.sql`, seeded by
+`tools/cmd/dragrace/conduit.go`: 100 users, 1,000 articles, tags,
+favorites, comments). It opens it in WAL mode with `synchronous=NORMAL`,
+and answers JSON (`Content-Type: application/json`) as the spec's
+response format says:
+
+- `GET /api/articles?limit=L&offset=O`: `{"articles": [...], "articlesCount": N}`,
+  newest first (`created_at`, then `id`, descending); each article without
+  its body (the spec since 2024-08), `tagList` sorted, `favorited` false,
+  `favoritesCount` counted, `author` with `following` false and `image`
+  null when the user has none
+- `GET /api/articles/SLUG`: `{"article": {...}}`, with the body; 404 for no such article
+- `POST /api/articles/SLUG/comments` with `{"comment":{"body":"..."}}`:
+  200, `{"comment": {"id", "createdAt", "updatedAt", "body", "author"}}`,
+  the time ISO 8601 with milliseconds (`2026-01-01T00:00:00.000Z`)
+- `POST /api/articles/SLUG/favorite`: 200, the article with `favorited`
+  true and its count with the new favorite (a second favorite adds none)
+
+Both writes need `Authorization: Token TOKEN` (the `users.token` column:
+a session, where the spec has a JWT; 401 without one). No follows: every
+`following` is false. The race checks the answers against the seed's
+model (`validateConduit`): a competitor that differs is DNF on conduit.
+
+Under load it is open loop only: at each total rate of `mixed.rates`, the
+list (50%), an article (30%), a comment (15%) and a favorite (5%) at once,
+a random article or page each request (oha `--rand-regex-url`), one oha
+a part. A server climbs until it answers under 90% of the rate offered,
+or errs. Each step records the mean over every request (the chart) and
+each part's rate, mean, p50, p99 and p99.9.
+
 ## A race
 
 For each server class, for each round (a new random order every round, from

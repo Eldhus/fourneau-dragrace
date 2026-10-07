@@ -97,21 +97,19 @@ func mixedLoop(ctx context.Context, race Race, competitors []Competitor, target 
 	return nil
 }
 
-// startFresh starts a competitor on a fresh copy of the seeded database.
-func startFresh(ctx context.Context, race Race, competitor Competitor, target Target) (string, error) {
-	fresh := fmt.Sprintf("cd %s && rm -f %s %[2]s-wal %[2]s-shm && cp %s %[2]s",
+// freshDatabase is the server's script to start from the seed again: a
+// race with a mixed workload starts every server (each round too) on a
+// fresh copy of the seeded database, `{db}` in its arguments.
+func freshDatabase(target Target) string {
+	return fmt.Sprintf("cd %s && rm -f %s %[2]s-wal %[2]s-shm && cp %s %[2]s",
 		quote(target.ServerHome), conduitDatabaseName, conduitSeedName)
-	if _, err := target.Server.Shell(ctx, fresh); err != nil {
-		return "", err
-	}
-	return startServer(ctx, race, competitor, target)
 }
 
 // climbMixed checks the competitor against the contract, then climbs; a
 // competitor that fails the checks has no steps and says why.
 func climbMixed(ctx context.Context, race Race, workload Workload, competitor Competitor,
 	target Target) ([]OpenStep, string, error) {
-	pid, err := startFresh(ctx, race, competitor, target)
+	pid, err := startServer(ctx, race, competitor, target)
 	if err != nil {
 		return nil, "", err
 	}
@@ -126,7 +124,7 @@ func climbMixed(ctx context.Context, race Race, workload Workload, competitor Co
 		return nil, why, nil
 	}
 	// The checks wrote: the climb starts from the seed again.
-	pid, err = startFresh(ctx, race, competitor, target)
+	pid, err = startServer(ctx, race, competitor, target)
 	if err != nil {
 		return nil, "", err
 	}

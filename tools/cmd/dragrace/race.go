@@ -183,6 +183,11 @@ func startServer(ctx context.Context, race Race, competitor Competitor, target T
 		"port":    strconv.Itoa(race.Port),
 		"db":      target.ServerHome + "/" + conduitDatabaseName,
 	}
+	if race.hasMixed() {
+		if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
+			return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
+		}
+	}
 	var command strings.Builder
 	command.WriteString("cd " + quote(target.ServerHome) + " && ")
 	command.WriteString("ulimit -n $(ulimit -Hn); ")
@@ -552,6 +557,14 @@ func summaryTable(run Run) string {
 		mark := ""
 		if !result.Valid {
 			mark = "  INVALID: " + result.Note
+		}
+		if result.Rounds == nil && len(result.OpenLoop) > 0 {
+			// A mixed workload: its top step, its mean.
+			top := result.OpenLoop[len(result.OpenLoop)-1]
+			fmt.Fprintf(&text, "%-12s %-10s %-14s %12.0f req/s  mean %6.2f ms at %.0f/s offered%s\n",
+				result.Class, result.Workload, result.Competitor, top.AchievedRPS, top.MeanMs,
+				top.OfferedRPS, mark)
+			continue
 		}
 		fmt.Fprintf(&text, "%-12s %-10s %-14s %12.0f req/s  p99 %7.2f ms%s\n", result.Class,
 			result.Workload, result.Competitor, result.MedianRPS, result.MedianP99Ms, mark)
