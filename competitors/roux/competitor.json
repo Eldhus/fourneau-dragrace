@@ -42,19 +42,11 @@
     {
       "cwd": "competitors/roux",
       "argv": [
-        "{roux}/zig-out/bin/rocstache-gen",
-        "-o",
-        "Menu.roc",
-        "Menu.rocstache"
-      ]
-    },
-    {
-      "cwd": "competitors/roux",
-      "argv": [
-        "{roc}",
+        "{roux}/zig-out/bin/roux",
         "build",
-        "main.roc",
-        "--output={out}/roux"
+        "--roc={roc}",
+        "--output={out}/roux",
+        "main.roc"
       ]
     }
   ],

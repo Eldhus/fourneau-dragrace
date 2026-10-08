@@ -1,4 +1,6 @@
-Menu.roc
+# roux build's working files, and its binary when built here by hand.
+.roux/
+main
 # Made by the build: roux-db from db/*.sql, and the workload's schema copied.
 db/*.roc
 db/schema.sql
