@@ -187,9 +187,7 @@ func siteProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site provision")
 	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
 		"the owner's public key, for the cook user (sudo)")
-	// 1 GB: on 512 MB, Ubuntu 26.04's kernel (7.0.0-38) failed to unpack its
-	// initramfs at boot, two panics in a row.
-	size := flags.String("size", "s-1vcpu-1gb", "droplet size")
+	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
 	flags.Parse(args)
 	race, err := loadRace(root)
 	if err != nil {
@@ -312,7 +310,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup(),
+	setup := strings.Join(append(hostSetup("22", "80", "443"),
 		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
 		"rm /tmp/dragrace-host-agent",
 		// The layout before self-hosting: the rrsync deploy user and its data.
@@ -323,7 +321,9 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo install -d -m 700 -o site -g site "+siteState+" "+siteState+"/secrets "+
 			siteState+"/backups",
 		"sudo ln -sfn "+siteHome+"/current/static "+siteState+"/static",
-		"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q sqlite3 >/dev/null 2>&1",
+		// The first boot's dist-upgrade can outlive `cloud-init status
+		// --wait`: wait for its lock.
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q sqlite3 >/dev/null 2>&1",
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
@@ -391,12 +391,36 @@ var hostRetired = []string{
 // first boot's package checks), and Ubuntu's update-notifier and motd
 // timers off (nobody logs in to read them; on the racer they took a CPU
 // for minutes).
-func hostSetup() []string {
+//
+// And a boot without an initramfs: GRUB_FORCE_PARTUUID, Ubuntu's own
+// cloud images' setting (DigitalOcean's image leaves it out). The kernel
+// has virtio and ext4 built in and mounts the root partition itself; a
+// failed boot falls back to the initramfs, which can panic on a 512 MB
+// droplet ("No working init found", "System is deadlocked on memory").
+// Only the boot changes: the initramfs is freed once the root is mounted.
+//
+// The firewall too: incoming refused but for `ports`. It was cloud-init's
+// alone, whose final stage stops at a failed package step, leaving ufw
+// inactive, while `status` says done.
+func hostSetup(ports ...string) []string {
+	firewall := "sudo ufw default deny incoming >/dev/null"
+	for _, port := range ports {
+		firewall += " && sudo ufw allow " + port + "/tcp >/dev/null"
+	}
 	return []string{
 		"(cloud-init status --wait >/dev/null; true)",
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q ufw >/dev/null 2>&1",
+		firewall,
+		"sudo ufw --force enable >/dev/null",
+		"sudo ufw status | grep -q '^Status: active'",
+		"echo \"GRUB_FORCE_PARTUUID=$(findmnt -no PARTUUID /)\" | " +
+			"sudo tee /etc/default/grub.d/40-force-partuuid.cfg >/dev/null",
+		"grep -q '^GRUB_FORCE_PARTUUID=[0-9a-f-]\\{36\\}$' /etc/default/grub.d/40-force-partuuid.cfg",
+		"sudo update-grub 2>/dev/null",
 		"sudo sshd -t && sudo systemctl reload ssh",
 		"(sudo systemctl disable --now dragrace-reboot.timer 2>/dev/null; true)",
 		"sudo rm -f " + strings.Join(hostRetired, " "),
+		"(sudo rmdir /etc/systemd/system/apt-daily-upgrade.timer.d 2>/dev/null; true)",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl restart apt-daily-upgrade.timer",
 		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +

@@ -119,8 +119,7 @@ func racerProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer provision")
 	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
 		"the owner's public key, for the cook user (sudo)")
-	// 1 GB, as the site host's (siteProvision): 512 MB does not boot reliably.
-	size := flags.String("size", "s-1vcpu-1gb", "droplet size")
+	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
 	flags.Parse(args)
 	race, err := loadRace(root)
 	if err != nil {
@@ -220,7 +219,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup(),
+	setup := strings.Join(append(hostSetup("22"),
 		"sudo install -m 755 /tmp/dragrace /usr/local/bin/dragrace-guard",
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
 		// A first racer binary: from then on it updates itself.
