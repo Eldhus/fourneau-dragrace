@@ -74,6 +74,15 @@
      rocstache templates are interpreted, not compiled, which needs the
      contexts as data (Roc has no reflection). Then port the devserver
      into roux (Zig) once it has settled.
+3. **Ad-hoc races: any branch or commit of each dependency, any subset of
+   the tests.** (owner, 2026-10-08) The racer runs a race on request with
+   each competitor's dependencies (fourneau, roux, roc, ...) pinned to a
+   pushed branch or a commit hash, and only the workloads and competitors
+   asked for; for comparing work in progress (roux's `templates` and
+   `templates-vm` branches) by clock time and requests a second, not only
+   the instructions measured on the laptop.
+   - Where it stands (2026-10-08): asked for; not started (the owner had
+     more questions first).
 
 ## Chores
 
