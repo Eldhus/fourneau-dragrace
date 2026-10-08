@@ -9,8 +9,8 @@ can do if it is taken (designed with the owner 2026-10-06, live since
 
 | machine | runs | holds | inbound |
 |---|---|---|---|
-| site host (lon1, 1 GB, $6) | the site (roux, SQLite FULL); `dragrace host-agent` (a timer) | the races' database and its copies; the racer and manual tokens | 22 (owner), 80, 443 |
-| racer (lon1, 1 GB, $6) | `dragrace racer` (a service); `dragrace guard` (a service) | the DigitalOcean token (the guard's only); a GitHub token (Actions only); the racer token | 22 (owner) |
+| site host (lon1, $4) | the site (roux, SQLite FULL); `dragrace host-agent` (a timer) | the races' database and its copies; the racer and manual tokens | 22 (owner), 80, 443 |
+| racer (lon1, $4) | `dragrace racer` (a service); `dragrace guard` (a service) | the DigitalOcean token (the guard's only); a GitHub token (Actions only); the racer token | 22 (owner) |
 | race droplets (per race) | a server; a loader running `dragrace worker` | the run's SSH key; the run's worker token | 22 (the run's key) |
 | GitHub | `build.yml`: builds and releases; `ci.yml` as today | nothing secret | |
 
@@ -28,16 +28,18 @@ retry through; the racer's mid-race would end the run (`interrupted`,
 its droplets deleted), so a manual race is not started between 02:00 and
 03:30 New York time.
 
+Both boot without an initramfs (`GRUB_FORCE_PARTUUID`, as Ubuntu's own
+cloud images; the kernel has virtio and ext4 built in, and the
+initramfs is GRUB's fallback): the site host's first boot of a new
+kernel, 2026-10-08, panicked in its initramfs, twice. Both run ufw,
+set up by the install (cloud-init's setup of it can silently not run).
+
 Until 2026-10-08 a homemade timer rebooted both at 02:30 New York time;
-the site host's first such reboot came up to a kernel panic ("No
-working init found"), and its restored backup to another ("System is
-deadlocked on memory"): 512 MB is too little for Ubuntu 26.04's kernel
-to unpack its initramfs, so both hosts are 1 GB (DIARY.md). A race
-droplet stays 512 MB where its class says so: it boots once, from the
-image, and never reboots.
-`dragrace site restore` lists the backups; restoring one needs a token
-with `droplet:admin`, which the project's lacks, so it is done in
-DigitalOcean's panel (Backups, Restore Droplet).
+after that night's panic the site host was rebuilt from the base image
+in DigitalOcean's panel (Destroy, Rebuild; same address) and installed
+from scratch (DIARY.md). `dragrace site restore` lists the backups;
+restoring one needs a token with `droplet:admin`, which the project's
+lacks, so it is done in the panel.
 
 ## Builds and deploys
 

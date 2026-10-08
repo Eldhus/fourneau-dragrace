@@ -36,19 +36,21 @@
    - 2026-10-07, after: the site host moved to lon1 on Ubuntu 26.04
      (104.248.175.105), its data migrated (no CPU pin, so three columns
      fewer); both hosts reboot for updates at 02:30 New York time.
-   - 2026-10-08: that reboot left the site host in a kernel panic ("No
-     working init found"); no race ran. Owner restores the 2026-10-07
-     17:29 UTC backup in the panel (DIARY.md). The updates are Ubuntu's
-     stock cycle now, its own reboot on, the check at 05:00. The cause:
-     512 MB cannot boot the new kernel's initramfs; both hosts go to
-     1 GB (resized in the panel, the racer before its next reboot).
-   - Next, by the owner or with SSH allowed: after the restore, `site
-     install-server -host fourneau.y2kbugger.com` and `racer install`
-     (the stock settings; the old timer's files deleted), the memory
-     migration again (the backup predates it; DIARY.md 2026-10-07);
-     DigitalOcean's uptime check on `/api/health` to the owner's email;
-     Livepatch if the owner makes an Ubuntu Pro account. Then the 05:00
-     check proves the timer path; then this item goes.
+   - 2026-10-08: that reboot left the site host in a kernel panic; no
+     race ran. Rebuilt from the base image and installed from scratch,
+     the database from the local copy; both hosts on Ubuntu's stock
+     updates, booting without an initramfs, ufw set up by the install,
+     the check at 05:00 (DIARY.md). Up, every page 200.
+   - Next: the owner pushes, so the racer takes the check's fix (it
+     failed on a GitHub token it never had) from the release before
+     05:00 New York; then the 05:00 check proves the timer path, and
+     the night's reboots (if any) the boot. DigitalOcean's uptime check
+     on `/api/health` to the owner's email. Then this item goes.
+   - Backups (owner, 2026-10-08): droplets are rebuilt, not restored; the
+     data is the site's SQLite file, copied nightly to the same disk.
+     Wanted: an off-machine copy and a tested restore from it; then
+     DigitalOcean's droplet backups go (no volume: network block
+     storage's fsync, owner).
 2. **`dragrace site dev`: edit a template, see it in under a second.**
    (owner, 2026-10-07) A watcher over the templates, queries, Roc and
    static files; regeneration and a dev-backend build (`--opt=dev`); the

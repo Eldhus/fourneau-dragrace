@@ -1107,17 +1107,38 @@ racer's ends the run, so no manual race between 02:00 and 03:30 New York.
 owner restores in the panel. Left (TODO): the installs on both hosts,
 the migration again, an uptime check, Livepatch.
 
-The cause, found after: the restored backup (11:42 UTC) did not boot
-either; the owner restored again and its console showed `Kernel panic -
-not syncing: System is deadlocked on memory` at 1.1 s, before userspace.
-Both panics are a 512 MB droplet (453 MB usable) failing to unpack Ubuntu
-26.04's 40 MB initramfs for kernel 7.0.0-38: out of memory, the unpack
-fails (no init) or the kernel deadlocks; two boots, two panics, a
-machine at the edge. Others found 512 MB too little for Ubuntu's boot
-since 22.04, 768 MB enough. Not the timer, not DigitalOcean, not a bad
-update: the first reboot since the kernel update. The racer, also 512 MB,
-runs 7.0.0-38 since its boot of 2026-10-07 12:51 UTC, which got through;
-its next reboot might not. Both hosts go to s-1vcpu-1gb ($6 each,
-`site provision` and `racer provision`'s default now); the owner resizes
-(CPU and RAM only, the disk kept) in the panel, the project's token
-having no `droplet:admin`.
+The restored backup did not boot either: twice the same `No working init
+found`, and once `System is deadlocked on memory` at 1.1 s. I blamed 512
+MB and moved both hosts to 1 GB; the owner refused, and a throwaway 512 MB
+droplet of the same image, upgraded to the same kernel (7.0.0-38) and
+initramfs (40 MB), booted 4 of 4: not memory alone. Both hosts stay 512
+MB (reverted). What differed on the site host is not known: its disk is
+gone. It had never booted 7.0.0-38 (installed by cloud-init's first-boot
+dist-upgrade, which runs under eatmydata, no fsync; the racer had booted
+it once). The kernel has virtio and ext4 built in, so the hosts now boot
+without an initramfs (`GRUB_FORCE_PARTUUID`, Ubuntu's cloud images' own
+setting, which DigitalOcean's image leaves out; the initramfs is the
+fallback): the test droplet 3 of 3, then the site host 2 of 2 and the
+racer once. Runtime memory is the same; only the boot's spike goes.
+
+From scratch: the owner rebuilt the droplet from the base image in the
+panel (same id, address, user data), I ran `install-server`. A clean
+build found what a host kept since 2026-10-06 hid:
+- cloud-init's first-boot dist-upgrade outlives `cloud-init status
+  --wait`, so the install's apt failed on its lock (exit 100). It waits
+  for the lock now.
+- that package step failed, cloud-init's final stage stopped, and the
+  firewall, which only its runcmd set up, was off; `status` said done.
+  The install sets ufw up and checks it now (site 22, 80, 443; racer 22).
+- the racer's nightly check fails at once: its unit has only the racer
+  token and `racer check` loaded the GitHub token too. The timer path
+  had never run (the first race was by hand); `check` loads the racer
+  token alone now. The racer gets it from the next release.
+The database came back from `site/site.db`, the local copy `site dev`
+serves: integrity ok, the counts the migration recorded (runs 1,
+results 60, rounds 150, machines 4, open steps 92, requests 1), already
+the new schema; installed as `site.db` (the empty one kept beside it),
+the same sha256 both ends. Every page 200, HTTP to HTTPS, HSTS, a new
+certificate. Then the racer's `racer install`: settings, firewall and
+boot the same; its catch-up of today's missed 05:00 check (Persistent)
+found the bug above.

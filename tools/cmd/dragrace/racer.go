@@ -159,8 +159,14 @@ func commandRacer(ctx context.Context, args []string) error {
 	if err := readJSON(*path, &config); err != nil {
 		return err
 	}
-	for variable, credential := range map[string]string{"RACER_TOKEN": "racer-token",
-		"GITHUB_TOKEN": "github-token"} {
+	// The check posts to the site alone: its unit has the racer token and
+	// no other (it failed on a GitHub token it never had: found
+	// 2026-10-08, the timer path never having run).
+	credentials := map[string]string{"RACER_TOKEN": "racer-token"}
+	if args[0] != "check" {
+		credentials["GITHUB_TOKEN"] = "github-token"
+	}
+	for variable, credential := range credentials {
 		if err := tokenFromCredential(variable, credential); err != nil {
 			return err
 		}

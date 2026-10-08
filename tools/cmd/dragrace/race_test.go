@@ -309,6 +309,20 @@ func TestHostFiles(t *testing.T) {
 			t.Fatalf("setup does not delete %s", path)
 		}
 	}
+	setup := strings.Join(hostSetup("22", "443"), " && ")
+	for _, part := range []string{"ufw default deny incoming", "ufw allow 22/tcp", "ufw allow 443/tcp",
+		"ufw --force enable", "grep -q '^Status: active'"} {
+		if !strings.Contains(setup, part) {
+			t.Fatalf("setup's firewall lacks %q", part)
+		}
+	}
+	if strings.Contains(setup, "80/tcp") {
+		t.Fatalf("a port not asked for is open")
+	}
+	if !strings.Contains(setup, "GRUB_FORCE_PARTUUID=$(findmnt -no PARTUUID /)") ||
+		!strings.Contains(setup, "sudo update-grub") {
+		t.Fatalf("setup must boot without an initramfs: %s", setup)
+	}
 	if !strings.Contains(racerUnits()["/etc/systemd/system/dragrace-racer-check.timer"],
 		"OnCalendar=*-*-* 05:00:00 America/New_York") {
 		t.Fatalf("the check must come after the updates' window")
