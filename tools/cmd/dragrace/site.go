@@ -188,7 +188,9 @@ func siteProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site provision")
 	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
 		"the owner's public key, for the cook user (sudo)")
-	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
+	// 1 GB: on 512 MB, Ubuntu 26.04's kernel (7.0.0-38) failed to unpack its
+	// initramfs at boot, two panics in a row on 2026-10-08 (DIARY.md).
+	size := flags.String("size", "s-1vcpu-1gb", "droplet size")
 	flags.Parse(args)
 	race, err := loadRace(root)
 	if err != nil {

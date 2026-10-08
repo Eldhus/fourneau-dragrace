@@ -39,7 +39,9 @@
    - 2026-10-08: that reboot left the site host in a kernel panic ("No
      working init found"); no race ran. Owner restores the 2026-10-07
      17:29 UTC backup in the panel (DIARY.md). The updates are Ubuntu's
-     stock cycle now, its own reboot on, the check at 05:00.
+     stock cycle now, its own reboot on, the check at 05:00. The cause:
+     512 MB cannot boot the new kernel's initramfs; both hosts go to
+     1 GB (resized in the panel, the racer before its next reboot).
    - Next, by the owner or with SSH allowed: after the restore, `site
      install-server -host fourneau.y2kbugger.com` and `racer install`
      (the stock settings; the old timer's files deleted), the memory

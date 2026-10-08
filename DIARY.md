@@ -1106,3 +1106,18 @@ racer's ends the run, so no manual race between 02:00 and 03:30 New York.
 `droplet:admin`, which the project's token leaves out on purpose, so the
 owner restores in the panel. Left (TODO): the installs on both hosts,
 the migration again, an uptime check, Livepatch.
+
+The cause, found after: the restored backup (11:42 UTC) did not boot
+either; the owner restored again and its console showed `Kernel panic -
+not syncing: System is deadlocked on memory` at 1.1 s, before userspace.
+Both panics are a 512 MB droplet (453 MB usable) failing to unpack Ubuntu
+26.04's 40 MB initramfs for kernel 7.0.0-38: out of memory, the unpack
+fails (no init) or the kernel deadlocks; two boots, two panics, a
+machine at the edge. Others found 512 MB too little for Ubuntu's boot
+since 22.04, 768 MB enough. Not the timer, not DigitalOcean, not a bad
+update: the first reboot since the kernel update. The racer, also 512 MB,
+runs 7.0.0-38 since its boot of 2026-10-07 12:51 UTC, which got through;
+its next reboot might not. Both hosts go to s-1vcpu-1gb ($6 each,
+`site provision` and `racer provision`'s default now); the owner resizes
+(CPU and RAM only, the disk kept) in the panel, the project's token
+having no `droplet:admin`.
