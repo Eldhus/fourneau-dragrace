@@ -1074,3 +1074,22 @@ why s-8vcpu was chosen on 2026-10-06 after c-4 hit 98% at 152k. c-4 again
 for dedicated-2: honest about its busy time, half busy at ~110k on the
 smallest class; past ~150k it is the limit and says so. One change for
 tonight's race; TODO says how to read it.
+
+## 2026-10-07: roux's competitor on templates compiled by Zig (branch)
+
+On the branch `templates`, against roux's branch of the same name (its
+DIARY): roux's templates are compiled to machine code by Zig, the Roc
+side only a contract. The competitor follows: `Menu.rocstache` declares
+its contract (`Ctx : { dishes : List({ name : Str, price : U32 }) }`,
+the prices being numbers), the context holds it as `menu : Menu.Ctx`,
+`/menu` answers `Menu.render!(context.menu)`, and the build is one step,
+`roux build --roc={roc} --output={out}/roux main.roc`, in place of
+rocstache-gen and `roc build`. `Menu.roc`, now only the contract, is
+committed: it changes only when the template's type does.
+
+Checked locally (a workspace of worktrees, `~/devel/eldhus-templates`):
+`/menu` is `workloads/menu.html` byte for byte; `/plaintext` answers.
+Against roux main's build, five interleaved rounds, two server cores,
+64 connections: 109k against 165k requests/s, 39,030 against 14,807
+instructions a request, p99 1.03 against 0.62 ms (roux's DIARY has the
+table). Not raced on the droplets yet: the branch is not merged.

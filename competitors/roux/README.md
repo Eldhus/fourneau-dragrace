@@ -5,7 +5,11 @@ Roc, compiled with the server into one static binary (musl). The host
 listens on `ROUX_ADDRESS`; the app names port 8080. Built with the pinned Roc
 nightly against the roux and fourneau checkouts beside this repository.
 
-`GET /menu`: `Menu.rocstache`, compiled to Roc by roux's rocstache-gen at build time (`Menu.roc` is generated, not committed).
+`GET /menu`: `Menu.rocstache`, compiled to machine code by Zig and linked
+into the app by `roux build`; `Menu.roc` is its contract (the record it
+reads, declared in the template since the prices are numbers),
+generated and committed. The templates object is ReleaseSafe, as roux's
+host.
 
 `GET /sse`: roux's `Url.query_value` and Roc's `Json.parse` for the
 signals, then roux's `Sse` effects, an event a `send!`, on the request's

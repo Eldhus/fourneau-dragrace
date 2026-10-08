@@ -13,10 +13,11 @@ import Conduit
 import Menu
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
-## (compiled by rocstache-gen at build time) renders them per request.
+## (compiled by Zig into the app by roux build; `Menu.roc` is its
+## contract) renders them per request.
 ## The conduit workload's database: ROUX_DATABASE says where (the race's
 ## `{db}`), in WAL mode with synchronous=NORMAL (the contract).
-Context : { dishes : List({ name : Str, price : U32 }), db : Sqlite.Db }
+Context : { menu : Menu.Ctx, db : Sqlite.Db }
 
 program = { init!, respond! }
 
@@ -27,20 +28,22 @@ init! = || {
 	config: { port: 8080, static_dir: "" },
 	context: {
 		db,
-		dishes: [
-			{ name: "Roux", price: 120 },
-			{ name: "Fish & chips", price: 290 },
-			{ name: "Crème brûlée", price: 180 },
-			{ name: "<b>Bold</b> stew", price: 240 },
-			{ name: "Skyr & berries", price: 150 },
-			{ name: "Hákarl", price: 990 },
-			{ name: "Plokkfiskur", price: 310 },
-			{ name: "Kjötsúpa", price: 270 },
-			{ name: "Rúgbrauð <warm>", price: 90 },
-			{ name: "Pylsa með öllu", price: 120 },
-			{ name: "Flatkaka & hangikjöt", price: 210 },
-			{ name: "1 < 2 > 0 pie", price: 160 },
-		],
+		menu: {
+			dishes: [
+				{ name: "Roux", price: 120 },
+				{ name: "Fish & chips", price: 290 },
+				{ name: "Crème brûlée", price: 180 },
+				{ name: "<b>Bold</b> stew", price: 240 },
+				{ name: "Skyr & berries", price: 150 },
+				{ name: "Hákarl", price: 990 },
+				{ name: "Plokkfiskur", price: 310 },
+				{ name: "Kjötsúpa", price: 270 },
+				{ name: "Rúgbrauð <warm>", price: 90 },
+				{ name: "Pylsa með öllu", price: 120 },
+				{ name: "Flatkaka & hangikjöt", price: 210 },
+				{ name: "1 < 2 > 0 pie", price: 160 },
+			],
+		},
 	},
 	})
 }
@@ -66,7 +69,7 @@ respond! = |request, context| {
 					)
 				Err(BodyErr(err)) => Err(BadRequest(Str.inspect(err)))
 			}
-		("GET", "/menu") => Ok(Server.html(Menu.render(context)))
+		("GET", "/menu") => Ok(Server.html(Menu.render!(context.menu)))
 		("GET", "/sse") =>
 			match signals(request.target) {
 				Ok({ count }) => datastar!(request, count.to_u64() + 1)
