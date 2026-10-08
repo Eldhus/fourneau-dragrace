@@ -14,12 +14,12 @@ import Conduit
 import Menu
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
-## (compiled to bytecode linked into the app by roux build; `Menu.roc` is
-## its contract and the walkers that run it) renders them per request,
-## from the bytecode `init!` loads.
+## (compiled to bytecode linked into the app by roux build, which the
+## host's renderer runs; `Menu.roc` is its contract) renders them per
+## request.
 ## The conduit workload's database: ROUX_DATABASE says where (the race's
 ## `{db}`), in WAL mode with synchronous=NORMAL (the contract).
-Context : { menu : Menu.Ctx, db : Sqlite.Db, code : Rocstache.Templates }
+Context : { menu : Menu.Ctx, db : Sqlite.Db }
 
 program = { init!, respond! }
 
@@ -30,7 +30,6 @@ init! = || {
 	config: { port: 8080, static_dir: "" },
 	context: {
 		db,
-		code: Rocstache.load!(),
 		menu: {
 			dishes: [
 				{ name: "Roux", price: 120 },
@@ -72,7 +71,7 @@ respond! = |request, context| {
 					)
 				Err(BodyErr(err)) => Err(BadRequest(Str.inspect(err)))
 			}
-		("GET", "/menu") => Ok(Rocstache.html!(Menu.render(context.code, context.menu)))
+		("GET", "/menu") => Ok(Rocstache.html(Menu.render!(context.menu)))
 		("GET", "/sse") =>
 			match signals(request.target) {
 				Ok({ count }) => datastar!(request, count.to_u64() + 1)
