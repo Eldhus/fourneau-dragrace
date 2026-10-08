@@ -25,7 +25,7 @@
 //
 //	dragrace guard [-config F]      the racer's DigitalOcean token and budget
 //	dragrace racer serve            take the site's requests and race them
-//	dragrace racer check            ask the site for a check (the 03:00 timer)
+//	dragrace racer check            ask the site for a check (the 05:00 timer)
 //	dragrace racer once -local DIR  take one request, racing on this machine
 //	dragrace host-agent             deploy the newest build's site (a timer)
 //
