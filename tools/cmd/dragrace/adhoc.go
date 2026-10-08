@@ -2,18 +2,18 @@ package main
 
 // Ad-hoc races: two (or more) builds of a competitor, each at its own
 // commits of this repository, fourneau and roux, raced against each other
-// on one server droplet, a few workloads, in under a minute once the
-// machines are up (docs/adhoc.md).
+// on one server droplet, in under a minute once the machines are up
+// (docs/adhoc.md).
 //
 //	dragrace adhoc race -workloads templates \
 //	    roux:roux=templates,dragrace=templates \
 //	    roux:roux=templates-vm,dragrace=templates-vm
-//	dragrace adhoc up | status | down
+//	dragrace adhoc down
 //
 // What makes it fast: the machines are a session, kept warm between races
-// and deleted after `-idle` minutes unused (a user systemd timer, re-armed
-// by every command; `dragrace reap` is the backstop); a variant is built
-// once per set of commits, locally, from `git archive` exports, and
+// and deleted after 20 minutes unused (a user systemd timer, re-armed by
+// every race; `dragrace reap` is the backstop); a variant is built once
+// per content, locally, in its own checkout updated in place, and
 // uploaded once per session, stripped and compressed; every ssh call to
 // the session shares one kept connection; and the race is short and
 // interleaved (rounds of every variant in a new order each).
@@ -54,19 +54,15 @@ func adhocDir(root string) string { return filepath.Join(outDir(root), "adhoc") 
 
 func commandAdhoc(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: dragrace adhoc race|up|status|down [flags]")
+		return errors.New("usage: dragrace adhoc race [-workloads W] [-rounds N] VARIANT... | adhoc down")
 	}
 	switch args[0] {
 	case "race":
 		return adhocRace(ctx, root, args[1:])
-	case "up":
-		return adhocUp(ctx, root, args[1:])
-	case "status":
-		return adhocStatus(root)
 	case "down":
 		return adhocDown(ctx, root, args[1:])
 	}
-	return fmt.Errorf("adhoc: no command %q (race, up, status, down)", args[0])
+	return fmt.Errorf("adhoc: no command %q (race, down)", args[0])
 }
 
 // --- events -------------------------------------------------------------------
@@ -410,34 +406,15 @@ func adhocProvider(ctx context.Context) (*DigitalOcean, error) {
 	return newDigitalOcean()
 }
 
+// upFlags is the session's setup, one for every ad-hoc race (owner,
+// 2026-10-08: "simple"): dedicated cores, so a difference is the builds';
+// race.json's region; deleted after 20 minutes unused.
 type upFlags struct {
 	class, region string
 	idle          int
 }
 
-func (flags *upFlags) register(set interface {
-	StringVar(*string, string, string, string)
-	IntVar(*int, string, int, string)
-}) {
-	set.StringVar(&flags.class, "class", "dedicated-2", "the server class (race.json's cloud.servers)")
-	set.StringVar(&flags.region, "region", "", "the region (default race.json's)")
-	set.IntVar(&flags.idle, "idle", 20, "minutes unused before the session's droplets are deleted")
-}
-
-func adhocUp(ctx context.Context, root string, args []string) error {
-	flags := newFlags("adhoc up")
-	var up upFlags
-	up.register(flags)
-	flags.Parse(args)
-	unlock, err := lockSession(root, true)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	ev := &events{start: time.Now()}
-	_, err = ensureSession(ctx, root, up, ev)
-	return err
-}
+var adhocSetup = upFlags{class: "dedicated-2", idle: 20}
 
 // ensureSession returns the warm session, making it if there is none (or
 // the one there is for another class or region, or gone).
@@ -482,6 +459,7 @@ func ensureSession(ctx context.Context, root string, up upFlags, ev *events) (*a
 					return nil, err
 				}
 				armReaper(root, up.idle)
+				logMachines(session, true)
 				ev.emit("session", map[string]any{"reused": true, "class": session.Class,
 					"machines": session.Machines})
 				return session, nil
@@ -496,9 +474,23 @@ func ensureSession(ctx context.Context, root string, up upFlags, ev *events) (*a
 		return nil, err
 	}
 	armReaper(root, up.idle)
+	logMachines(session, false)
 	ev.emit("session", map[string]any{"reused": false, "class": session.Class,
 		"seconds": round2(time.Since(started).Seconds()), "machines": session.Machines})
 	return session, nil
+}
+
+// logMachines says which machines race (there is no status command).
+func logMachines(session *adhocSession, reused bool) {
+	how := "new"
+	if reused {
+		how = "warm"
+	}
+	for _, machine := range session.Machines {
+		log.Printf("adhoc: %s %s, %s: %s, %d CPUs (%s); deleted after %d min unused",
+			how, machine.Role, machine.Size, machine.CPU, machine.CPUs, machine.CPUID,
+			session.IdleMinute)
+	}
 }
 
 func makeSession(ctx context.Context, root string, do Provider, race Race, class ServerClass,
@@ -667,55 +659,38 @@ func adhocDown(ctx context.Context, root string, args []string) error {
 	return nil
 }
 
-func adhocStatus(root string) error {
-	session, err := loadSession(root)
-	if err != nil {
-		return err
-	}
-	if session == nil {
-		fmt.Println("no ad-hoc session")
-		return nil
-	}
-	fmt.Printf("%s in %s: server %d (%s), loader %d (%s); up %s, unused %s, deleted after %d min unused\n",
-		session.Class, session.Region, session.Server.ID, session.Server.Public, session.Loader.ID,
-		session.Loader.Public, time.Since(session.Created).Round(time.Second),
-		time.Since(session.Used).Round(time.Second), session.IdleMinute)
-	for _, machine := range session.Machines {
-		fmt.Printf("  %s: %s, %d CPUs (%s)\n", machine.Role, machine.CPU, machine.CPUs, machine.CPUID)
-	}
-	return nil
-}
-
 // --- the race -----------------------------------------------------------------
+
+// A workload's warmup and measure, seconds: short, since rounds interleave.
+const adhocWarmup, adhocMeasure = 1, 4
 
 func adhocRace(ctx context.Context, root string, args []string) error {
 	flags := newFlags("adhoc race")
-	var up upFlags
-	up.register(flags)
-	workloads := flags.String("workloads", "", "comma-separated (required): "+workloadNames(root))
+	up := adhocSetup
+	workloads := flags.String("workloads", workloadNames(root), "comma-separated")
 	rounds := flags.Int("rounds", 3, "rounds, each variant once a round in a new order")
-	warmup := flags.Int("warmup", 1, "seconds of warmup before each measure")
-	measure := flags.Int("measure", 4, "seconds measured")
 	flags.Parse(args)
 	ev := &events{start: time.Now()}
-	if *workloads == "" || flags.NArg() < 1 {
-		return errors.New("adhoc race: -workloads and at least one VARIANT " +
+	if flags.NArg() < 1 {
+		return errors.New("adhoc race: at least one VARIANT " +
 			"(competitor[:dragrace=REF,fourneau=REF,roux=REF])")
 	}
 	race, err := loadRace(root)
 	if err != nil {
 		return err
 	}
-	race.Rounds, race.WarmupSeconds, race.MeasureSeconds = *rounds, *warmup, *measure
+	race.Rounds, race.WarmupSeconds, race.MeasureSeconds = *rounds, adhocWarmup, adhocMeasure
 	race.OpenLoop = OpenLoop{}
 	var picked []Workload
 	for _, name := range strings.Split(*workloads, ",") {
+		name = strings.TrimSpace(name)
 		i := slices.IndexFunc(race.Workloads, func(w Workload) bool { return w.Name == name })
 		if i < 0 {
 			return fmt.Errorf("no workload %q (%s)", name, workloadNames(root))
 		}
 		if race.Workloads[i].Mixed != nil {
-			return fmt.Errorf("%s is open loop only: not in ad-hoc races yet", name)
+			return fmt.Errorf("%s is open loop only, not raced ad hoc: a nightly, or "+
+				"`race cloud -workloads %s` (docs/adhoc.md)", name, name)
 		}
 		picked = append(picked, race.Workloads[i])
 	}
@@ -933,7 +908,7 @@ func workloadNames(root string) string {
 			names = append(names, w.Name)
 		}
 	}
-	return strings.Join(names, ", ")
+	return strings.Join(names, ",")
 }
 
 // upload sends each variant's binary the server does not have yet.
@@ -1016,12 +991,14 @@ func comparisonTable(rows []comparisonRow) string {
 	var text strings.Builder
 	fmt.Fprintf(&text, "\n%-10s %-48s %10s %8s %9s  %s\n", "workload", "variant", "req/s", "vs 1st",
 		"p99 ms", "rounds")
+	overlap := false
 	for _, row := range rows {
 		delta := ""
 		if row.DeltaPct != 0 || row.Apart {
 			delta = fmt.Sprintf("%+.1f%%", row.DeltaPct)
 			if !row.Apart {
 				delta += "~"
+				overlap = true
 			}
 		}
 		if !row.Valid {
@@ -1034,6 +1011,8 @@ func comparisonTable(rows []comparisonRow) string {
 		fmt.Fprintf(&text, "%-10s %-48s %10.0f %8s %9.2f  %s\n", row.Workload, row.Variant,
 			row.MedianRPS, delta, row.MedianP99Ms, strings.Join(rounds, " "))
 	}
-	text.WriteString("(~: the rounds' ranges overlap, within this race's noise)\n")
+	if overlap {
+		text.WriteString("(~: the rounds' ranges overlap, within this race's noise)\n")
+	}
 	return text.String()
 }

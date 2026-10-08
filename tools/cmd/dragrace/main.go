@@ -6,9 +6,9 @@
 //	dragrace race local [flags]     race on this machine, server and loader on
 //	                                separate CPUs
 //	dragrace race cloud [flags]     race on fresh droplets (DIGITALOCEAN_TOKEN)
-//	dragrace adhoc race|up|status|down   builds at any commits raced
-//	                                against each other on a warm pair, in
-//	                                under a minute (docs/adhoc.md)
+//	dragrace adhoc race|down        builds at any commits raced against
+//	                                each other on a warm pair, in under a
+//	                                minute (docs/adhoc.md)
 //	dragrace sizes [-prefix c]      droplet sizes and prices in race.json's region
 //	dragrace reap                   delete race droplets older than allowed
 //	dragrace fingerprint            the commits a race would race, as JSON
@@ -142,7 +142,7 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
-  toolchain | build | race local | race cloud | adhoc race|up|status|down |
+  toolchain | build | race local | race cloud | adhoc race|down |
   sizes | reap | fingerprint |
   bundle | worker | site build|provision|install-server|race-now|backups |
   guard | racer serve|check|once|provision|install | host-agent

@@ -1183,3 +1183,15 @@ The answer, five races: the VM 3.6-5.2% behind comptime (139k against
 144-147k requests a second; rounds of a variant within 2-3% of each
 other). On the laptop it had read 5% (157k against 165k); instructions
 14% more.
+
+Then made simple (owner: "I'd like simple adhoc story"): two commands,
+`adhoc race` and `adhoc down`, two flags, `-workloads` (default all
+five closed-loop ones) and `-rounds`; `up`, `status`, the class, region,
+idle and timing flags gone, the race printing its machines instead. The
+open questions decided (docs/adhoc.md): builds stay on the laptop, no
+reuse of release binaries, closed loop only. The idle reaper tested end
+to end: with the idle limit at 0 its user unit ran a minute later, read
+the token from the keyring, and deleted both droplets and the session.
+The final version raced once on new machines (119 s, builds cached, 64 s
+of it booting; the VM 5.0% behind, the sixth race to say so), then `adhoc
+down`: nothing left running.

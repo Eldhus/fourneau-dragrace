@@ -75,23 +75,6 @@
      rocstache templates are interpreted, not compiled, which needs the
      contexts as data (Roc has no reflection). Then port the devserver
      into roux (Zig) once it has settled.
-3. **Ad-hoc races: any branch or commit of each dependency, any subset of
-   the tests.** (owner, 2026-10-08) The racer runs a race on request with
-   each competitor's dependencies (fourneau, roux, roc, ...) pinned to a
-   pushed branch or a commit hash, and only the workloads and competitors
-   asked for; for comparing work in progress (roux's `templates` and
-   `templates-vm` branches) by clock time and requests a second, not only
-   the instructions measured on the laptop.
-   - The owner, after: "push hard ... compare two implementations in
-     less than a minute ... Make the API sick".
-   - Where it stands (2026-10-08): built, from the laptop, not the racer:
-     `dragrace adhoc race|up|status|down` (docs/adhoc.md). A variant is
-     `competitor:dragrace=REF,fourneau=REF,roux=REF`, built locally at
-     those commits (cached by content), raced on a warm pair deleted
-     after 20 minutes unused; JSON events on stdout. Two roux branches
-     compared in 50 s warm, 298 s from nothing. Next: reuse a release's
-     binary when its commits match (downloaded by the droplet); conduit
-     (open loop); a new roux commit still costs its ~2 min build.
 
 ## Chores
 
