@@ -1,7 +1,7 @@
-# Generated from the .rocstache templates by rocstache-gen (dragrace site build).
-Top.roc
-Bottom.roc
-*Page.roc
-*Classes.roc
-# Generated from db/schema.sql and db/*.sql by roux-db (dragrace site build).
+# roux build's working files, and the binary `roux dev` runs.
+.roux/
+main
+# Generated from db/schema.sql and db/*.sql by roux-db (roux build).
 db/*.roc
+# (Each template's contract, `Page.roc`, is generated and committed: it
+# changes only when the template's type does.)

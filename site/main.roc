@@ -66,9 +66,9 @@ respond! = |request, { db, tokens }| {
 			"/history-classes" => history_classes!(db, request, wanted)
 			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
-			"/method" => Ok(page(MethodPage.render(frame("Method", "/method"))))
-			"/contribute" => Ok(page(ContributePage.render(frame("Contribute", "/contribute"))))
-			"/about" => Ok(page(AboutPage.render(frame("About", "/about"))))
+			"/method" => Ok(page(MethodPage.render!(frame("Method", "/method"))))
+			"/contribute" => Ok(page(ContributePage.render!(frame("Contribute", "/contribute"))))
+			"/about" => Ok(page(AboutPage.render!(frame("About", "/about"))))
 			"/data/latest.json" => latest_file!(db, request)
 			"/data/index.json" => index_file!(db, request)
 			_ =>
@@ -79,7 +79,7 @@ respond! = |request, { db, tokens }| {
 				} else if path.ends_with(".html") {
 					Ok(moved(old_address(path)))
 				} else {
-					Ok(not_found())
+					Ok(not_found!())
 				}
 		}
 	}
@@ -100,7 +100,7 @@ index! = |db, request, wanted| {
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
 	racer = Store.status(Store.racer!(db, request)?)
-	Ok(page(IndexPage.render({
+	Ok(page(IndexPage.render!({
 		title: base.title,
 		home: Bool.True,
 		nav: base.nav,
@@ -113,7 +113,7 @@ index! = |db, request, wanted| {
 		commits: latest.commits,
 		competitors: latest.competitors,
 		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, "/"),
-		classes: latest.classes.keep_if(|class| class.name == current),
+		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
 	})))
 }
 
@@ -122,7 +122,7 @@ history! = |db, request, wanted| {
 	base = frame("History", "/history")
 	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
-	Ok(page(HistoryPage.render({
+	Ok(page(HistoryPage.render!({
 		title: base.title,
 		home: base.home,
 		nav: base.nav,
@@ -130,7 +130,7 @@ history! = |db, request, wanted| {
 		note: view.note,
 		competitors: view.competitors,
 		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),
-		classes: view.classes.keep_if(|class| class.name == current),
+		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
 	})))
 }
 
@@ -143,7 +143,7 @@ competitors! = |db, request| {
 			Err(NotFound) => []
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	Ok(page(CompetitorsPage.render({ title: base.title, home: base.home, nav: base.nav, pins })))
+	Ok(page(CompetitorsPage.render!({ title: base.title, home: base.home, nav: base.nav, pins })))
 }
 
 ## The workloads as the newest race asked them.
@@ -156,7 +156,7 @@ workloads! = |db, request| {
 			Err(NotFound) => { ready: Bool.False, cards: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	Ok(page(WorkloadsPage.render({
+	Ok(page(WorkloadsPage.render!({
 		title: base.title,
 		home: base.home,
 		nav: base.nav,
@@ -186,6 +186,14 @@ no_history = { waiting: Bool.True, note: "", competitors: [], classes: [] }
 no_race : View.Latest
 no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], classes: [] }
 
+## A server class as the race's templates read it: without its tab's
+## label (the tabs have it), since a template's contract is exactly what
+## it reads.
+race_class = |class| { name: class.name, title: class.title, machines: class.machines, strips: class.strips, open: class.open }
+
+## A server class's history charts as their template reads them.
+history_class = |class| { title: class.title, charts: class.charts }
+
 # --- the raw data -------------------------------------------------------------
 
 ## The newest run whole, as the race page reads it.
@@ -193,7 +201,7 @@ latest_file! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
 latest_file! = |db, request|
 	match Store.latest!(db, request) {
 		Ok(run) => json(Json.to_str_try(run))
-		Err(NotFound) => Ok(not_found())
+		Err(NotFound) => Ok(not_found!())
 		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
@@ -211,7 +219,7 @@ run_file! = |db, request, path| {
 	} else {
 		match Store.run!(Sqlite.read(db, request), id) {
 			Ok(run) => json(Json.to_str_try(run))
-			Err(NotFound) => Ok(not_found())
+			Err(NotFound) => Ok(not_found!())
 			Err(DbErr(err)) => Err(DbErr(err))
 		}
 	}
@@ -227,7 +235,7 @@ class_file! = |db, request, path| {
 			if is_name(parts.before) and is_name(class) and class != parts.after {
 				match Store.run!(Sqlite.read(db, request), parts.before) {
 					Ok(run) => json(Json.to_str_try(for_class(run, class)))
-					Err(NotFound) => Ok(not_found())
+					Err(NotFound) => Ok(not_found!())
 					Err(DbErr(err)) => Err(DbErr(err))
 				}
 			} else {
@@ -284,8 +292,9 @@ html_headers = [{ name: "Content-Type", value: "text/html; charset=utf-8" }]
 page : Str -> Server.Response
 page = |html| Server.html(html)
 
-not_found : () -> Server.Response
-not_found = || { status: 404, headers: html_headers, body: Str.to_utf8(NotFoundPage.render(frame("Not found", ""))) }
+## Effectful: a page rendered by the host (templates compiled by Zig).
+not_found! : () => Server.Response
+not_found! = || { status: 404, headers: html_headers, body: Str.to_utf8(NotFoundPage.render!(frame("Not found", ""))) }
 
 moved : Str -> Server.Response
 moved = |location| { status: 301, headers: [{ name: "Location", value: location }], body: [] }
@@ -347,10 +356,10 @@ race_classes! = |db, request, wanted| {
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
-	patch!(request, RaceClasses.render({
+	patch!(request, RaceClasses.render!({
 		id: latest.id,
 		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, "/"),
-		classes: latest.classes.keep_if(|class| class.name == current),
+		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
 	}))
 }
 
@@ -358,9 +367,9 @@ history_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
 history_classes! = |db, request, wanted| {
 	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
-	patch!(request, HistoryClasses.render({
+	patch!(request, HistoryClasses.render!({
 		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),
-		classes: view.classes.keep_if(|class| class.name == current),
+		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
 	}))
 }
 
