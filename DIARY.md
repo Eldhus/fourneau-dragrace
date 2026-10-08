@@ -1074,3 +1074,35 @@ why s-8vcpu was chosen on 2026-10-06 after c-4 hit 98% at 152k. c-4 again
 for dedicated-2: honest about its busy time, half busy at ~110k on the
 smallest class; past ~150k it is the limit and says so. One change for
 tonight's race; TODO says how to read it.
+
+## 2026-10-08: the site host's reboot ended in a kernel panic; stock updates
+
+In the morning the site was down: no ping, no port (22, 80, 443) on
+104.248.175.105; the racer (144.126.227.9, same region) answered. The
+panel's graphs: the update run at ~01:40 New York, the 02:30 reboot timer's
+reboot, then 100% user CPU, no disk, no network from ~02:35 on. The
+Recovery Console showed why: `Kernel panic - not syncing: No working init
+found` on the new kernel (#38-Ubuntu): it mounted the disk and found no
+working `/sbin/init`. No race ran. Not known why: the broken disk was
+replaced by the restore before anyone read it. Searched: no report of
+Ubuntu 26.04 or DigitalOcean doing this now; the error's usual causes
+are a broken initramfs or systemd on the disk. The homemade timer did
+not hold the reboot for apt, though the disk graph says the update was
+done by 01:45.
+
+The owner asked for what DigitalOcean and Canonical advise rather than
+the homemade timer: Ubuntu's stock unattended-upgrades (security only,
+its daily run 06:00 UTC plus up to an hour) with its own
+`Automatic-Reboot "true"`, which reboots at the end of the run, never
+mid-install, and monitoring, since apt reports nothing when it breaks.
+That reboot window, to 07:30 UTC, held the 03:00 New York race in
+summer, so the check moved to 05:00 (owner). `hostFiles` is now sshd's
+file and the reboot setting; an install deletes the old timer's files.
+The site's reboot mid-race costs nothing (posts retry 20 minutes); the
+racer's ends the run, so no manual race between 02:00 and 03:30 New York.
+
+`dragrace site restore` lists the site host's backups (one: 2026-10-07
+17:29 UTC, before the memory migration); restoring was refused, 403
+`droplet:admin`, which the project's token leaves out on purpose, so the
+owner restores in the panel. Left (TODO): the installs on both hosts,
+the migration again, an uptime check, Livepatch.

@@ -45,7 +45,10 @@ runcmd:
   - ufw --force enable
 `
 
-// racerUnits are the guard's and the racer's services, and the 03:00 check.
+// racerUnits are the guard's and the racer's services, and the 05:00 check:
+// at least 90 minutes after Ubuntu's update run and its reboot (06:00 to
+// 07:30 UTC, the hosts' clock), all year (owner, 2026-10-08; it was 03:00,
+// inside that window in summer).
 func racerUnits() map[string]string {
 	return map[string]string{
 		"/etc/systemd/system/dragrace-guard.service": `[Unit]
@@ -101,9 +104,9 @@ LoadCredentialEncrypted=racer-token
 ExecStart=/var/lib/dragrace-racer/bin/dragrace racer check
 `,
 		"/etc/systemd/system/dragrace-racer-check.timer": `[Unit]
-Description=03:00 New York time: the nightly check
+Description=05:00 New York time: the nightly check, after Ubuntu's updates and reboot
 [Timer]
-OnCalendar=*-*-* 03:00:00 America/New_York
+OnCalendar=*-*-* 05:00:00 America/New_York
 Persistent=true
 [Install]
 WantedBy=timers.target
@@ -213,8 +216,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		"/etc/dragrace-racer/config.json": string(racerJSON)}, 0o644); err != nil {
 		return err
 	}
-	// Its reboot put off while a run races (racer.remember).
-	if err := putFiles(ctx, machine, hostFiles("/var/lib/dragrace-racer/racing"), 0o644); err != nil {
+	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
 		return err
 	}
 	setup := strings.Join(append(hostSetup(),

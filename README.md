@@ -14,7 +14,7 @@ decides. Part of [Eldhus](https://github.com/Eldhus).
 
 Status: the site is up at https://fourneau.y2kbugger.com/; it keeps the races
 in its own database and runs them from its own racer, every night at
-03:00 New York time when a repository has a new commit
+05:00 New York time when a repository has a new commit
 ([docs/self-hosting.md](docs/self-hosting.md), [TODO.md](TODO.md)).
 Workloads: plaintext, a 4 KiB echo, a templated page, Datastar SSE,
 connection churn, and RealWorld's Conduit on SQLite; live demos are

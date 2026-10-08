@@ -122,7 +122,7 @@ With `DIGITALOCEAN_TOKEN` exported from the keyring, from this checkout
    within a minute; the racer updates itself.
 4. A first race by hand: `out/dragrace site race-now -host ADDRESS`.
 
-From then on the racer asks for a check at 03:00 New York time, and races
+From then on the racer asks for a check at 05:00 New York time, and races
 when a repository has a new commit. `install-server` and `racer install`
 are run again only to change a unit, a config, a token or the pinned
 guard and host agent.

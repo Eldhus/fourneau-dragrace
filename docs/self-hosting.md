@@ -16,13 +16,24 @@ can do if it is taken (designed with the owner 2026-10-06, live since
 
 No GitHub runner is held for a race, and GitHub holds no secret.
 
-Both hosts install Ubuntu's security updates themselves (unattended-upgrades,
-moved to 01:30 New York time) and reboot when one needs it at 02:30 New
-York time, half an hour before the nightly check, by a timer of New
-York's clock so that daylight saving moves nothing (`hostFiles`; owner,
-2026-10-07). The racer puts its reboot off to the next night while a run
-races (a restarted racer ends its run); the site's is a half minute's
-outage, which posts retry through.
+Both hosts keep Ubuntu's update cycle stock, as DigitalOcean and
+Canonical advise: unattended-upgrades' daily run (security only, 06:00
+UTC plus up to an hour of random delay), and its own reboot at the end
+of that run when an update needs one (`Automatic-Reboot "true"`, the one
+setting changed; `hostFiles`). The reboot never comes mid-install, and is
+over by 07:30 UTC: 03:30 New York time in summer, 02:30 in winter. The
+nightly check is at 05:00 New York time, after it all year (owner,
+2026-10-08). The site's reboot is a half minute's outage, which posts
+retry through; the racer's mid-race would end the run (`interrupted`,
+its droplets deleted), so a manual race is not started between 02:00 and
+03:30 New York time.
+
+Until 2026-10-08 a homemade timer rebooted both at 02:30 New York time;
+the site host's first such reboot came up to a kernel panic ("No
+working init found") and was restored from DigitalOcean's backup (DIARY.md).
+`dragrace site restore` lists the backups; restoring one needs a token
+with `droplet:admin`, which the project's lacks, so it is done in
+DigitalOcean's panel (Backups, Restore Droplet).
 
 ## Builds and deploys
 
@@ -55,7 +66,7 @@ outage, which posts retry through.
 
 1. **Asked.** A request row in the site: `check` (race only if a
    repository has a commit the last finished run did not race) or `race`
-   (always). The racer's timer asks for a check at 03:00 New York time;
+   (always). The racer's timer asks for a check at 05:00 New York time;
    the owner asks for a race with the manual token (`dragrace site
    race-now`).
 2. **Taken.** The racer polls the site every 30 s. It reads the heads

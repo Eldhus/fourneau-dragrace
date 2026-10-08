@@ -36,8 +36,17 @@
    - 2026-10-07, after: the site host moved to lon1 on Ubuntu 26.04
      (104.248.175.105), its data migrated (no CPU pin, so three columns
      fewer); both hosts reboot for updates at 02:30 New York time.
-   - Next: the 03:00 check tonight (it races: new commits) proves the
-     timer path and the new site; then this item goes.
+   - 2026-10-08: that reboot left the site host in a kernel panic ("No
+     working init found"); no race ran. Owner restores the 2026-10-07
+     17:29 UTC backup in the panel (DIARY.md). The updates are Ubuntu's
+     stock cycle now, its own reboot on, the check at 05:00.
+   - Next, by the owner or with SSH allowed: after the restore, `site
+     install-server -host fourneau.y2kbugger.com` and `racer install`
+     (the stock settings; the old timer's files deleted), the memory
+     migration again (the backup predates it; DIARY.md 2026-10-07);
+     DigitalOcean's uptime check on `/api/health` to the owner's email;
+     Livepatch if the owner makes an Ubuntu Pro account. Then the 05:00
+     check proves the timer path; then this item goes.
 2. **`dragrace site dev`: edit a template, see it in under a second.**
    (owner, 2026-10-07) A watcher over the templates, queries, Roc and
    static files; regeneration and a dev-backend build (`--opt=dev`); the

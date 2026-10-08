@@ -290,32 +290,27 @@ func TestKeyNotYetKnown(t *testing.T) {
 	}
 }
 
-// Every host of the owner's refuses root's login and reboots for its
-// updates at 02:30 New York time, before the race, never during one.
+// Every host of the owner's refuses root's login and keeps Ubuntu's update
+// cycle stock, its reboot at the end of the run turned on; the check at
+// 05:00 New York time comes after it.
 func TestHostFiles(t *testing.T) {
-	files := hostFiles("/var/lib/dragrace-racer/racing")
+	files := hostFiles()
 	if files["/etc/ssh/sshd_config.d/10-dragrace.conf"] != "PermitRootLogin no\nPasswordAuthentication no\n" {
 		t.Fatalf("sshd: %q", files["/etc/ssh/sshd_config.d/10-dragrace.conf"])
 	}
-	if !strings.Contains(files["/etc/apt/apt.conf.d/52dragrace-reboot"], `Automatic-Reboot "false";`) {
-		t.Fatalf("unattended-upgrades must not reboot on UTC's clock")
+	if !strings.Contains(files["/etc/apt/apt.conf.d/52dragrace-reboot"], `Automatic-Reboot "true";`) {
+		t.Fatalf("unattended-upgrades must reboot at the end of its run")
 	}
-	if !strings.Contains(files["/etc/systemd/system/dragrace-reboot.timer"],
-		"OnCalendar=*-*-* 02:30:00 America/New_York") {
-		t.Fatalf("timer: %q", files["/etc/systemd/system/dragrace-reboot.timer"])
+	if len(files) != 2 {
+		t.Fatalf("stock updates: no file but sshd's and the reboot's, got %d", len(files))
 	}
-	upgrade := files["/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf"]
-	if !strings.Contains(upgrade, "OnCalendar=\n") || !strings.Contains(upgrade, "01:30:00 America/New_York") {
-		t.Fatalf("updates must come before the reboot: %q", upgrade)
-	}
-	service := files["/etc/systemd/system/dragrace-reboot.service"]
-	for _, part := range []string{"test -e /run/reboot-required || exit 0",
-		"test -e /var/lib/dragrace-racer/racing && {", "systemctl reboot"} {
-		if !strings.Contains(service, part) {
-			t.Fatalf("reboot service lacks %q: %q", part, service)
+	for _, path := range hostRetired {
+		if !strings.Contains(strings.Join(hostSetup(), "\n"), path) {
+			t.Fatalf("setup does not delete %s", path)
 		}
 	}
-	if strings.Contains(hostFiles("")["/etc/systemd/system/dragrace-reboot.service"], "racing") {
-		t.Fatalf("the site host has no racing mark")
+	if !strings.Contains(racerUnits()["/etc/systemd/system/dragrace-racer-check.timer"],
+		"OnCalendar=*-*-* 05:00:00 America/New_York") {
+		t.Fatalf("the check must come after the updates' window")
 	}
 }
