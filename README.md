@@ -63,6 +63,7 @@ beside it.
 | [VERSIONS.md](VERSIONS.md) | every pinned version and how to update it |
 | [SECURITY.md](SECURITY.md) | tokens, keys, droplets, and first-time setup |
 | [docs/self-hosting.md](docs/self-hosting.md) | the site and the racer: machines, a run, the database, the API, the budget |
+| [docs/adhoc.md](docs/adhoc.md) | ad-hoc races: two builds at any commits, one answer, in under a minute |
 | [TODO.md](TODO.md) | what is next |
 | [DIARY.md](DIARY.md) | what was done, in order |
 

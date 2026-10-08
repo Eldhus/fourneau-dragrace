@@ -16,9 +16,22 @@ type SSHMachine struct {
 	Host       string
 	Key        string // private key file
 	KnownHosts string // this run's own known_hosts
+	// Control, if set, is an ssh ControlPath: every call shares one kept
+	// connection, a round trip a call instead of a handshake's several
+	// (an ad-hoc race from the laptop: 90-140 ms to lon1).
+	Control string
 }
 
 func (machine SSHMachine) options() []string {
+	options := machine.baseOptions()
+	if machine.Control != "" {
+		options = append(options, "-o", "ControlMaster=auto", "-o", "ControlPath="+machine.Control,
+			"-o", "ControlPersist=600")
+	}
+	return options
+}
+
+func (machine SSHMachine) baseOptions() []string {
 	return []string{
 		"-i", machine.Key,
 		"-o", "BatchMode=yes",

@@ -1142,3 +1142,44 @@ the same sha256 both ends. Every page 200, HTTP to HTTPS, HSTS, a new
 certificate. Then the racer's `racer install`: settings, firewall and
 boot the same; its catch-up of today's missed 05:00 check (Persistent)
 found the bug above.
+
+## 2026-10-08: ad-hoc races, two builds compared in 50 s
+
+The owner wanted work in progress (roux's `templates` and `templates-vm`
+branches) compared by the clock on real machines, fast enough to ask
+often: "compare two implementations in less than a minute". `dragrace
+adhoc race` (tools/cmd/dragrace/adhoc.go, docs/adhoc.md). The nightly
+path cannot: GitHub builds (up to 40 min), fresh droplets every run. So
+the ad-hoc path differs in three places, each measured:
+
+- **Builds on the laptop, at any commits**, each variant in its own
+  checkout (`git clone --shared`, then checkout in place). First I
+  exported with `git archive` into a fresh directory each build: 121 s
+  every time, identical sources included, because Zig's cache knows a
+  file by path and inode (`zig build platform` 77 s, `tools` 40 s; the
+  same build again in one tree: 33 ms). In place: a rebuild at the same
+  content 3.8-4.0 s. Cached by a hash of every file but Markdown (a
+  TODO commit on roux had cost a rebuild). Stripped and zstd'd: 17 MB is
+  1.6 MB; the builds are reproducible (the same bytes twice).
+- **A warm session**: server and loader kept between races (64 s to make;
+  a user systemd timer deletes them after 20 minutes unused; their own
+  tag, so the racer and guard never see them; `reap` sweeps it).
+- **One ssh connection** (ControlMaster): lon1 is 90-140 ms from the
+  laptop, a handshake several round trips, a measure about ten calls.
+
+The whole command, roux's two branches on `templates` (dedicated-2:
+server c-2, Xeon 8358; loader c-4): from nothing 298 s (builds 123 + 118
+s, droplets 64 s alongside, uploads 2 s, race 50 s); a rebuild at the
+same content 64 s; warm **50 s**. Output: JSON events on stdout (resolved,
+built, session, uploaded, round, result), the table on stderr.
+
+Two rounds of the first eighteen ran with the server at 76% and 83% CPU,
+the loader dipping with them, no retransmits: something outside both.
+Such a round measures that, not the server: the variant is raced again
+(twice at most) and the saturated rounds kept; it fired once in each of
+the next two races.
+
+The answer, five races: the VM 3.6-5.2% behind comptime (139k against
+144-147k requests a second; rounds of a variant within 2-3% of each
+other). On the laptop it had read 5% (157k against 165k); instructions
+14% more.

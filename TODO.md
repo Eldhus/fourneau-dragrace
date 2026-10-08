@@ -82,8 +82,16 @@
    asked for; for comparing work in progress (roux's `templates` and
    `templates-vm` branches) by clock time and requests a second, not only
    the instructions measured on the laptop.
-   - Where it stands (2026-10-08): asked for; not started (the owner had
-     more questions first).
+   - The owner, after: "push hard ... compare two implementations in
+     less than a minute ... Make the API sick".
+   - Where it stands (2026-10-08): built, from the laptop, not the racer:
+     `dragrace adhoc race|up|status|down` (docs/adhoc.md). A variant is
+     `competitor:dragrace=REF,fourneau=REF,roux=REF`, built locally at
+     those commits (cached by content), raced on a warm pair deleted
+     after 20 minutes unused; JSON events on stdout. Two roux branches
+     compared in 50 s warm, 298 s from nothing. Next: reuse a release's
+     binary when its commits match (downloaded by the droplet); conduit
+     (open loop); a new roux commit still costs its ~2 min build.
 
 ## Chores
 

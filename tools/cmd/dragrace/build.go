@@ -50,6 +50,21 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 			return err
 		}
 	}
+	for _, competitor := range competitors {
+		if err := buildCompetitor(ctx, root, tools, competitor); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildCompetitor runs one competitor's build steps in root, into root's
+// out/bin.
+func buildCompetitor(ctx context.Context, root string, tools Toolchain, competitor Competitor) error {
+	out := binDir(root)
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return err
+	}
 	values := map[string]string{
 		"out":      out,
 		"zig":      tools.Zig,
@@ -57,24 +72,22 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 		"fourneau": tools.Fourneau,
 		"roux":     tools.Roux,
 	}
-	for _, competitor := range competitors {
-		for _, step := range competitor.Build {
-			dir := expand(step.Cwd, values)
-			if !filepath.IsAbs(dir) {
-				dir = filepath.Join(root, dir)
-			}
-			argv := make([]string, len(step.Argv))
-			for i, arg := range step.Argv {
-				argv[i] = expand(arg, values)
-			}
-			if err := run(ctx, dir, step.Env, argv...); err != nil {
-				return fmt.Errorf("building %s: %w", competitor.Name, err)
-			}
+	for _, step := range competitor.Build {
+		dir := expand(step.Cwd, values)
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(root, dir)
 		}
-		binary := filepath.Join(out, competitor.Name)
-		if _, err := os.Stat(binary); err != nil {
-			return fmt.Errorf("building %s: no %s afterwards", competitor.Name, binary)
+		argv := make([]string, len(step.Argv))
+		for i, arg := range step.Argv {
+			argv[i] = expand(arg, values)
 		}
+		if err := run(ctx, dir, step.Env, argv...); err != nil {
+			return fmt.Errorf("building %s: %w", competitor.Name, err)
+		}
+	}
+	binary := filepath.Join(out, competitor.Name)
+	if _, err := os.Stat(binary); err != nil {
+		return fmt.Errorf("building %s: no %s afterwards", competitor.Name, binary)
 	}
 	return nil
 }
