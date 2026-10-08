@@ -46,11 +46,10 @@
      05:00 New York; then the 05:00 check proves the timer path, and
      the night's reboots (if any) the boot. DigitalOcean's uptime check
      on `/api/health` to the owner's email. Then this item goes.
-   - Backups (owner, 2026-10-08): droplets are rebuilt, not restored; the
-     data is the site's SQLite file, copied nightly to the same disk.
-     Wanted: an off-machine copy and a tested restore from it; then
-     DigitalOcean's droplet backups go (no volume: network block
-     storage's fsync, owner).
+   - Backups (owner, 2026-10-08): DigitalOcean's droplet backups stay the
+     off-machine copy (daily, seven kept); no volume (network block
+     storage's fsync), no copy to the racer (the site cannot serve a
+     binary file: roux reads text only).
 2. **`dragrace site dev`: edit a template, see it in under a second.**
    (owner, 2026-10-07) A watcher over the templates, queries, Roc and
    static files; regeneration and a dev-backend build (`--opt=dev`); the
