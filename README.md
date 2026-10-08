@@ -31,10 +31,12 @@ out/dragrace site build          # the site, a roux app
 out/dragrace site dev            # working on the UI: http://127.0.0.1:8090/ rebuilt and reloaded on each save
 ```
 
-`site build` is LLVM's optimized build (about 90 s), for races and
-deploys. `site dev` builds with Roc's dev backend (2 to 3 s from a save
-to the reloaded page; a static file, a restart without a build) and shows a failed build or
-failing expects over the page.
+`site build` is the optimized build (`roux build`: roc's LLVM, about
+90 s, and the templates compiled by Zig), for races and deploys. `site
+dev` is roux's dev server (`roux dev`): from a save to the reloaded
+page about 0.3 s for a page's markup (only that template compiles, no
+roc), about 1.3 s for Roc, 80 ms for a static file; a failed build
+prints in the terminal and the last good one keeps serving.
 
 Go from `tools/go.mod`; everything else pinned in `versions.json`
 ([VERSIONS.md](VERSIONS.md)).

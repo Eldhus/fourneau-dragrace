@@ -63,6 +63,15 @@
      rocstache templates are interpreted, not compiled, which needs the
      contexts as data (Roc has no reflection). Then port the devserver
      into roux (Zig) once it has settled.
+   - On the branch `templates` (2026-10-07, with roux's of the same
+     name): templates are no longer Roc but compiled by Zig, and the dev
+     server is roux's (`roux dev`); `site dev` runs it. A page's markup
+     edit on the screen in 266-298 ms, a partial in nine pages ~0.9 s,
+     a Roc edit ~1.3 s, a static file ~80 ms (DIARY). Under a second for
+     templates, without an interpreter. Lost against this command's Go
+     version, for roux dev to take up (roux docs/dev-server.md): a failed
+     build shown over the page, requests held while the app restarts,
+     `roc test` after each build.
 
 ## Chores
 

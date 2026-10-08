@@ -1093,3 +1093,39 @@ Against roux main's build, five interleaved rounds, two server cores,
 64 connections: 109k against 165k requests/s, 39,030 against 14,807
 instructions a request, p99 1.03 against 0.62 ms (roux's DIARY has the
 table). Not raced on the droplets yet: the branch is not merged.
+
+## 2026-10-07: the site on templates compiled by Zig, and `site dev` on `roux dev` (branch)
+
+The site follows the competitor onto roux's `templates` branch:
+- `render` is `render!` everywhere (the host renders), and `not_found`
+  became `not_found!`.
+- A template's contract is exactly what it reads, and the view's records
+  carried more: a class's tab `label`, and the chart lines' `end_x` and
+  `end_y` (where a line ends, to spread the labels apart). The lines are
+  now `View.DraftLine` and `View.DraftOpenLine` until their labels are
+  placed, then `View.Line` and `View.OpenLine` as the templates read
+  them; the one class shown is mapped to its contract in main.roc
+  (`race_class`, `history_class`).
+- Each template's contract (`Page.roc`) is generated and committed now
+  (it changes only when the template's type does); `.roux/` and the dev
+  binary are ignored.
+- `site build` is `roux build --roc=... --output=...` (which also runs
+  roux-db and writes the contracts) then `roc test`. `site dev` runs
+  `roux dev --port=8090 --static=static` (the Go watcher and proxy, 867
+  lines and their test, gone: roux's host now serves the reload stream
+  and adds the script itself); stopped, it sends roux dev a TERM, so
+  roux dev stops the app first.
+
+Checked: main's site build (`out/dev/dragrace-site`) and the branch's,
+each on a copy of site.db: 17 pages and data files byte for byte (every
+page, the Datastar fragments for three classes, both JSON files). `roc
+test`: 94 pass (113 on main: the 19 others were roux's old
+Rocstache.roc's, gone with it; the site's 64 `expect` lines are the
+same). `go vet`, `go test` pass.
+
+`roux dev` on a copy of the site, save to new page: a page's markup
+266-298 ms, the `Top` partial (in nine pages) 927-948 ms, `main.roc`
+1.28-1.33 s, a static file 78-82 ms; `site dev` before: 3.0 s for any
+template. Not yet in roux dev, which the Go version had: a failed build
+over the page, requests held during a restart, `roc test` after each
+build (roux TODO).

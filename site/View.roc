@@ -36,14 +36,19 @@ View :: [].{
 	## The open-loop ladder: p99 against the offered rate, a line per
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
-	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
+	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str }
+	## An open line before its label is placed: `end_x`, `end_y` are where
+	## it ends, for spreading the labels apart (`spread_open`).
+	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note.
 	OpenChart : { title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
-	## `end_x`, `end_y`: where the line ends, for spreading the labels apart.
-	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
+	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str }
+	## A line before its label is placed: `end_x`, `end_y` are where it
+	## ends, for spreading the labels apart (`spread_labels`).
+	DraftLine : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	Tick : { line_y : Str, text_y : Str, label : Str }
 	Mark : { x : Str, label : Str }
 	Chart : { title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
@@ -328,7 +333,7 @@ chart = |entries, class, workload, competitors| {
 
 ## A competitor's medians as an SVG path, lifting the pen over races it
 ## did not finish; its name at its last point.
-line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.Line
+line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.DraftLine
 line = |entries, competitor, value, x, y| {
 	var $path = ""
 	var $pen = "M"
@@ -478,10 +483,11 @@ label_ys = |ends| {
 	$ys.sort_with(|a, b| if a.i < b.i Before else if a.i > b.i After else Same).map(|p| p.y)
 }
 
-spread_labels : List(View.Line) -> List(View.Line)
+## The labels placed, and the lines as the template reads them (no ends).
+spread_labels : List(View.DraftLine) -> List(View.Line)
 spread_labels = |lines| {
 	ys = label_ys(lines.map(|l| { competitor: l.competitor, x: l.end_x, y: l.end_y, drawn: l.drawn }))
-	List.map2(lines, ys, |l, y| { ..l, label_y: Format.one_decimal(y) })
+	List.map2(lines, ys, |l, y| { competitor: l.competitor, drawn: l.drawn, path: l.path, dots: l.dots, label_x: l.label_x, label_y: Format.one_decimal(y) })
 }
 
 expect vcpus(1) == "1 vCPU" and vcpus(4) == "4 vCPUs"
@@ -605,7 +611,7 @@ open_chart = |{ title, summary, results, mixed }| {
 	{ title, caption, measure, lines, ticks_x, ticks_y }
 }
 
-open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.OpenLine
+open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine
 open_line = |result, x, y, mixed| {
 	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(s.p99_ms) })
 	path = Str.join_with(points.map_with_index(|p, i| "${if i == 0 "M" else "L"}${Format.one_decimal(p.px)} ${Format.one_decimal(p.py)}"), " ")
@@ -637,10 +643,10 @@ step_title = |competitor, s, mixed| {
 }
 
 ## The open chart's labels, spread as the history charts' are.
-spread_open : List(View.OpenLine) -> List(View.OpenLine)
+spread_open : List(View.DraftOpenLine) -> List(View.OpenLine)
 spread_open = |lines| {
 	ys = label_ys(lines.map(|l| { competitor: l.competitor, x: l.end_x, y: l.end_y, drawn: Bool.True }))
-	List.map2(lines, ys, |l, y| { ..l, label_y: Format.one_decimal(y) })
+	List.map2(lines, ys, |l, y| { competitor: l.competitor, path: l.path, dots: l.dots, label_x: l.label_x, label_y: Format.one_decimal(y) })
 }
 
 ## Powers of ten from at or below `low` to at or above `high`, at least
