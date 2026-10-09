@@ -70,6 +70,17 @@ lacks, so it is done in the panel.
   any binary that is not that release's (`racer install` starts it on
   the installer's own).
 
+## Knowing it is down
+
+A DigitalOcean uptime check, `fourneau-dragrace-site`, asks
+`https://fourneau.y2kbugger.com/api/health` (200 only when the site and
+its database answer) from every region, and emails the owner: down for
+2 minutes, the certificate expiring within 5 days, latency over 2000 ms
+for 10 minutes. Made by hand in the panel (owner, 2026-10-09): under the
+legacy Monitoring, Uptime; Insights' new alert rules know only the
+probe's duration, which cannot say down, and the project's token has no
+uptime scope (it would widen the racer's too).
+
 ## What is on each host, and whether it matches
 
 | on the host | defined in | put there by | changes when |

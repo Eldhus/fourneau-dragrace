@@ -48,10 +48,10 @@
      race. Pushed after that race so the timer has a new commit.
    - 2026-10-09: proven. The 05:00 timer fired by itself (09:00 UTC) and
      raced, `2026-10-09T090045Z-cloud` finished 09:46; `hosts check` in
-     sync after. Left: DigitalOcean's uptime check on `/api/health` to
-     the owner's email (the panel); the first unattended reboot (no
-     update needed one that night), then `hosts check`. Then this item
-     goes.
+     sync after. The uptime check on `/api/health` and its alerts, to
+     the owner's email, made in the panel (docs/self-hosting.md). Left:
+     the first unattended reboot (no update needed one that night),
+     then `hosts check`. Then this item goes.
    - Backups (owner, 2026-10-08): DigitalOcean's droplet backups stay the
      off-machine copy (daily, seven kept); no volume (network block
      storage's fsync), no copy to the racer (the site cannot serve a
