@@ -6,14 +6,14 @@
     "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
   },
   "roc": {
-    "version": "nightly-2026-10-04-130536d",
-    "url": "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-04-130536d/roc_nightly-linux_x86_64-2026-10-04-130536d.tar.gz",
-    "sha256": "893c86d2da0a4c390cbdbd4258ce45d686e5ec15b42eeeb811fd1ac44537714f"
+    "version": "nightly-2026-10-06-c34079d",
+    "url": "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-06-c34079d/roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz",
+    "sha256": "11bf5c73b81e517ae2807f4211fe9e996f48f87a68b1e85b82c4ae2c6499a5d6"
   },
   "roc_musl": {
     "comment": "musl's crt1.o and libc.a for x86_64, from Roc's test platform at the nightly's commit: roc build links the roux host with them.",
-    "commit": "130536d915d4355d6152c7e20529a09a5a0cbe32",
-    "url": "https://github.com/roc-lang/roc/archive/130536d915d4355d6152c7e20529a09a5a0cbe32.tar.gz",
+    "commit": "c34079d4cde82f475df7c1994c714ba25b29b951",
+    "url": "https://github.com/roc-lang/roc/archive/c34079d4cde82f475df7c1994c714ba25b29b951.tar.gz",
     "files": {
       "test/fx/platform/targets/x64musl/crt1.o": "ffb51a69191a69fc34acaec1003fabe245d8841da7036d124d3445718415f9ea",
       "test/fx/platform/targets/x64musl/libc.a": "85f5eb2316bc6f86be7bd66008488c7d2eca290942b01ad2e86f02f8b5e8c90f"

@@ -8,7 +8,7 @@ which.
 | what | pinned to | where | to update |
 |---|---|---|---|
 | Zig | 0.17.0 | `versions.json` (url, sha256) | new url; `sha256sum` the tarball; run `dragrace toolchain` |
-| Roc | nightly-2026-10-04-130536d | `versions.json` (url, sha256) | new nightly url and sha256; update `roc_musl.commit` to the nightly's commit and the two files' sha256 |
+| Roc | nightly-2026-10-06-c34079d | `versions.json` (url, sha256) | new nightly url and sha256; update `roc_musl.commit` to the nightly's commit and the two files' sha256 |
 | musl crt1.o, libc.a | Roc's test platform at that commit | `versions.json` (`roc_musl`) | from the new commit's `test/fx/platform/targets/x64musl/`, sha256 of each file |
 | oha | 1.16.0 | `versions.json` (url, sha256) | the release's `oha-linux-amd64` and its sha256 |
 | Go | 1.27.1 | `toolchain` line in `competitors/go/go.mod` and `tools/go.mod` | `go mod edit -toolchain=goX.Y.Z` in both; `versions.json` note |
