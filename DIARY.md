@@ -1326,3 +1326,8 @@ roux's DIARY, 2026-10-09). This branch takes it, with main merged in
   roux, same database copied): 22 routes, every page, both tab patches,
   the JSON files, a 404, a 400, a 301, the API's health: status,
   headers (but the date) and bodies byte for byte.
+- Then roux's `Rocstache.patch!` stopped sending an empty `data:
+  elements ` line for a template's final line break (roux DIARY): the
+  two tab patches now differ from the old build by that line alone, the
+  other 18 routes byte for byte still. `go test ./...` passes; the full
+  `dragrace build` (every competitor, as tonight's race) below.
