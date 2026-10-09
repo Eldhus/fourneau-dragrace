@@ -11,7 +11,7 @@ import pf.Sse
 import pf.Url
 import db/Database
 import Conduit
-import Menu
+import templates/Menu
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
 ## (compiled to bytecode linked into the app by roux build, which the
