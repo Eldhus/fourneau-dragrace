@@ -20,7 +20,7 @@ Conduit :: [].{
 	item_of_one = |r| { slug: r.slug, title: r.title, description: r.description, created_at: r.created_at, updated_at: r.updated_at, username: r.username, bio: r.bio, image: r.image, favorites: r.favorites, tags: r.tags }
 
 	## The answer for a /api/ request, or `NotFound` for another path.
-	respond! : Server.Request, Sqlite.Db, Str => Try(Server.Response, [NotFound, DbErr(Sqlite.Err)])
+	respond! : Server.Request, Sqlite.Db, Str => Try(Server.Response(page), [NotFound, DbErr(Sqlite.Err)])
 	respond! = |request, db, path|
 		match (request.method, path.split_on("/")) {
 			("GET", ["", "api", "articles"]) => list!(request, db)
@@ -30,7 +30,7 @@ Conduit :: [].{
 			_ => Err(NotFound)
 		}
 
-	list! : Server.Request, Sqlite.Db => Try(Server.Response, [NotFound, DbErr(Sqlite.Err)])
+	list! : Server.Request, Sqlite.Db => Try(Server.Response(page), [NotFound, DbErr(Sqlite.Err)])
 	list! = |request, db| {
 		limit = clamp(query_int(request.target, "limit", 20), 0, 100)
 		offset = clamp(query_int(request.target, "offset", 0), 0, 1_000_000_000)
@@ -41,7 +41,7 @@ Conduit :: [].{
 		Ok(json(200, "{\"articles\":[${Str.join_with(items, ",")}],\"articlesCount\":${articles.to_str()}}"))
 	}
 
-	article! : Server.Request, Sqlite.Db, Str => Try(Server.Response, [NotFound, DbErr(Sqlite.Err)])
+	article! : Server.Request, Sqlite.Db, Str => Try(Server.Response(page), [NotFound, DbErr(Sqlite.Err)])
 	article! = |request, db, slug|
 		match Queries.by_slug!(Sqlite.read(db, request), { slug: slug }) {
 			Ok(row) => Ok(json(200, "{\"article\":${article_json(item_of_one(row), NotNull(row.body), Bool.False)}}"))
@@ -66,7 +66,7 @@ Conduit :: [].{
 			Err(_) => Err(Unauthorized)
 		}
 
-	comment! : Server.Request, Sqlite.Db, Str => Try(Server.Response, [NotFound, DbErr(Sqlite.Err)])
+	comment! : Server.Request, Sqlite.Db, Str => Try(Server.Response(page), [NotFound, DbErr(Sqlite.Err)])
 	comment! = |request, db, slug|
 		match user!(request, db) {
 			Err(Unauthorized) => Ok(error(401, "a token is needed"))
@@ -111,7 +111,7 @@ Conduit :: [].{
 		}
 	}
 
-	favorite! : Server.Request, Sqlite.Db, Str => Try(Server.Response, [NotFound, DbErr(Sqlite.Err)])
+	favorite! : Server.Request, Sqlite.Db, Str => Try(Server.Response(page), [NotFound, DbErr(Sqlite.Err)])
 	favorite! = |request, db, slug|
 		match user!(request, db) {
 			Err(Unauthorized) => Ok(error(401, "a token is needed"))
@@ -163,11 +163,11 @@ Conduit :: [].{
 		"{\"username\":${Json.to_str(username)},\"bio\":${Json.to_str(bio)},\"image\":${image_json},\"following\":false}"
 	}
 
-	json : U16, Str -> Server.Response
-	json = |status, text| { status, headers: [{ name: "Content-Type", value: "application/json" }], body: Str.to_utf8(text) }
+	json : U16, Str -> Server.Response(page)
+	json = |status, text| { status, headers: [{ name: "Content-Type", value: "application/json" }], body: Text(text) }
 
 	## An error as the spec answers one: {"errors":{"body":[...]}}.
-	error : U16, Str -> Server.Response
+	error : U16, Str -> Server.Response(page)
 	error = |status, message| json(status, "{\"errors\":{\"body\":[${Json.to_str(message)}]}}")
 
 	query_int : Str, Str, I64 -> I64
