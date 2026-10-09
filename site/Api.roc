@@ -198,7 +198,7 @@ Api :: [].{
 	backups_kept = 30
 
 	## Answers a request under /api/.
-	respond! : Server.Request, Sqlite.Db, Tokens, Str => Try(Server.Response, [DbErr(Sqlite.Err)])
+	respond! : Server.Request, Sqlite.Db, Tokens, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	respond! = |request, db, tokens, path| {
 		caller = caller_of(request, tokens)
 		parts = path.split_on("/")
@@ -266,7 +266,7 @@ Api :: [].{
 
 	# --- the racer and the owner ---------------------------------------------
 
-	health! : Sqlite.Db, Server.Request => Try(Server.Response, [DbErr(Sqlite.Err)])
+	health! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	health! = |db, request|
 		match Health.ping!(Sqlite.read(db, request)) {
 			Ok(_) => Ok(answer("{\"ok\":true}"))
@@ -277,7 +277,7 @@ Api :: [].{
 	## A check (race only if something is new) or a race. The owner may ask
 	## either; the racer's timer asks checks. One of a kind waiting is
 	## enough: asking again changes nothing.
-	ask! : Sqlite.Db, Server.Request, Caller => Try(Server.Response, [DbErr(Sqlite.Err)])
+	ask! : Sqlite.Db, Server.Request, Caller => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	ask! = |db, request, caller| {
 		kind = query_value(request.target, "kind")
 		asked_by =
@@ -303,7 +303,7 @@ Api :: [].{
 								Err(DbErr(err)) => return Err(DbErr(err))
 							}
 						Sqlite.commit!(tx)?
-						Ok({ status: 201, headers: json_headers, body: Str.to_utf8("{\"id\":${added.id.to_str()},\"already\":false}") })
+						Ok({ status: 201, headers: json_headers, body: Text("{\"id\":${added.id.to_str()},\"already\":false}") })
 					}
 				}
 			}
@@ -312,7 +312,7 @@ Api :: [].{
 
 	## What the racer should do: the requests waiting, oldest first, and the
 	## commits of the last finished run (a check races what differs).
-	next! : Sqlite.Db, Server.Request => Try(Server.Response, [DbErr(Sqlite.Err)])
+	next! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	next! = |db, request| {
 		reads = Sqlite.read(db, request)
 		waiting = Requests.waiting!(reads)?
@@ -325,7 +325,7 @@ Api :: [].{
 		Ok(answer(Json.to_str({ waiting, raced })))
 	}
 
-	heads! : Sqlite.Db, Server.Request => Try(Server.Response, [DbErr(Sqlite.Err)])
+	heads! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	heads! = |db, request| {
 		parsed : Try(List(HeadPost), _)
 		parsed = body!(request) |> and_parse
@@ -348,7 +348,7 @@ Api :: [].{
 
 	## A run made: the run, its commits and, if it races, its settings, in
 	## one transaction, taking its request.
-	add_run! : Sqlite.Db, Server.Request => Try(Server.Response, [DbErr(Sqlite.Err)])
+	add_run! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	add_run! = |db, request| {
 		parsed : Try(RunPost, _)
 		parsed = body!(request) |> and_parse
@@ -448,7 +448,7 @@ Api :: [].{
 	}
 
 	## A run over: its status, timing and droplets; its worker token goes.
-	end_run! : Sqlite.Db, Server.Request, Str => Try(Server.Response, [DbErr(Sqlite.Err)])
+	end_run! : Sqlite.Db, Server.Request, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	end_run! = |db, request, run_id| {
 		parsed : Try(EndPost, _)
 		parsed = body!(request) |> and_parse
@@ -491,7 +491,7 @@ Api :: [].{
 	}
 
 	## A copy of the database in backups/ (the racer asks after each run).
-	backup! : Sqlite.Db, Server.Request => Try(Server.Response, [DbErr(Sqlite.Err)])
+	backup! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	backup! = |db, request| {
 		name = Sqlite.backup!(db, request, { directory: "backups", keep: backups_kept })?
 		Ok(answer(Json.to_str({ backup: name })))
@@ -501,7 +501,7 @@ Api :: [].{
 
 	## A post for one run: from the racer, or from the run's worker while it
 	## races (its token is the run's).
-	for_run! : Sqlite.Db, Server.Request, Tokens, Str, (Sqlite.Db, Server.Request, Str => Try(Server.Response, [DbErr(Sqlite.Err)])) => Try(Server.Response, [DbErr(Sqlite.Err)])
+	for_run! : Sqlite.Db, Server.Request, Tokens, Str, (Sqlite.Db, Server.Request, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])) => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	for_run! = |db, request, tokens, run_id, post!| {
 		given = bearer(request) ?? ""
 		if same_secret(given, tokens.racer) {
@@ -518,7 +518,7 @@ Api :: [].{
 	}
 
 	## One result, replacing what the run held for it.
-	add_result! : Sqlite.Db, Server.Request, Str => Try(Server.Response, [DbErr(Sqlite.Err)])
+	add_result! : Sqlite.Db, Server.Request, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	add_result! = |db, request, run_id| {
 		parsed : Try(ResultPost, _)
 		parsed = body!(request) |> and_parse
@@ -652,7 +652,7 @@ Api :: [].{
 	}
 
 	## A class's machines (its server and its loader).
-	add_machines! : Sqlite.Db, Server.Request, Str => Try(Server.Response, [DbErr(Sqlite.Err)])
+	add_machines! : Sqlite.Db, Server.Request, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	add_machines! = |db, request, run_id| {
 		parsed : Try(List(MachinePost), _)
 		parsed = body!(request) |> and_parse
@@ -684,7 +684,7 @@ Api :: [].{
 		}
 	}
 
-	set_class! : Sqlite.Db, Server.Request, Str, Str => Try(Server.Response, [DbErr(Sqlite.Err)])
+	set_class! : Sqlite.Db, Server.Request, Str, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
 	set_class! = |db, request, run_id, class| {
 		parsed : Try(ClassPost, _)
 		parsed = body!(request) |> and_parse
@@ -707,7 +707,7 @@ Api :: [].{
 	# --- bodies and answers -----------------------------------------------------
 
 	## The body as text, or the answer refusing it.
-	body! : Server.Request => Try(Str, [Refused(Server.Response)])
+	body! : Server.Request => Try(Str, [Refused(Server.Response(t))])
 	body! = |request|
 		match Server.read_body!(request, body_bytes_max) {
 			Ok(bytes) =>
@@ -735,14 +735,14 @@ Api :: [].{
 	json_headers : List({ name : Str, value : Str })
 	json_headers = [{ name: "Content-Type", value: "application/json" }]
 
-	answer : Str -> Server.Response
-	answer = |json| { status: 200, headers: json_headers, body: Str.to_utf8(json) }
+	answer : Str -> Server.Response(t)
+	answer = |json| { status: 200, headers: json_headers, body: Text(json) }
 
-	refused : U16, Str -> Server.Response
+	refused : U16, Str -> Server.Response(t)
 	refused = |status, why| {
 		status,
 		headers: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
-		body: Str.to_utf8("${why}\n"),
+		body: Text("${why}\n"),
 	}
 
 	is_name : Str -> Bool

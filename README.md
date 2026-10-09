@@ -32,11 +32,14 @@ out/dragrace site dev            # working on the UI: http://127.0.0.1:8090/ reb
 ```
 
 `site build` is the optimized build (`roux build`: roc's LLVM, about
-90 s, and the templates compiled by Zig), for races and deploys. `site
-dev` is roux's dev server (`roux dev`): from a save to the reloaded
-page about 0.3 s for a page's markup (only that template compiles, no
-roc), about 1.3 s for Roc, 80 ms for a static file; a failed build
-prints in the terminal and the last good one keeps serving.
+40 s; the templates are bytecode the host's renderer runs), for races
+and deploys. `site dev` is roux's dev server (`roux dev`): a page's
+markup is on the screen milliseconds after a save (the running app
+rereads the templates' bytecode: nothing compiles, nothing restarts),
+Roc about 1.2 s, a static file 80 ms; a failed build prints in the
+terminal and the last good one keeps serving. The pages are templates
+as data (`IndexPage.template(…)`), rendered by the host as a response
+is sent (roux's DESIGN.md, Templates).
 
 Go from `tools/go.mod`; everything else pinned in `versions.json`
 ([VERSIONS.md](VERSIONS.md)).

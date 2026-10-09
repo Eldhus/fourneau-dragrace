@@ -9,6 +9,7 @@ app [Context, program] { pf: platform "../../roux/platform/main.roc" }
 ## (racer-token and manual-token, one line each) and static/.
 
 import pf.Server
+import pf.Rocstache
 import pf.File
 import pf.Sse
 import pf.Sqlite
@@ -52,7 +53,7 @@ secret! = |path|
 
 Err : [BadRequest(Str), DbErr(Sqlite.Err), SseErr(Sse.SseErr), EncodeErr(Str)]
 
-respond! : Server.Request, Context => Try(Server.Response, Err)
+respond! : Server.Request, Context => Try(Server.Response(_), Err)
 respond! = |request, { db, tokens }| {
 	path = path_of(request.target)
 	wanted = query_value(request.target, "class")
@@ -66,9 +67,9 @@ respond! = |request, { db, tokens }| {
 			"/history-classes" => history_classes!(db, request, wanted)
 			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
-			"/method" => Ok(page(MethodPage.render!(frame("Method", "/method"))))
-			"/contribute" => Ok(page(ContributePage.render!(frame("Contribute", "/contribute"))))
-			"/about" => Ok(page(AboutPage.render!(frame("About", "/about"))))
+			"/method" => Ok(method)
+			"/contribute" => Ok(contribute)
+			"/about" => Ok(about)
 			"/data/latest.json" => latest_file!(db, request)
 			"/data/index.json" => index_file!(db, request)
 			_ =>
@@ -79,17 +80,22 @@ respond! = |request, { db, tokens }| {
 				} else if path.ends_with(".html") {
 					Ok(moved(old_address(path)))
 				} else {
-					Ok(not_found!())
+					Ok(not_found)
 				}
 		}
 	}
 }
 
+## The pages that read nothing: constants, which Roc makes at compile time.
+method = Rocstache.html(MethodPage.template(frame("Method", "/method")))
+contribute = Rocstache.html(ContributePage.template(frame("Contribute", "/contribute")))
+about = Rocstache.html(AboutPage.template(frame("About", "/about")))
+
 # --- the pages that read the races ------------------------------------------
 
 ## The newest race, one server class at a time (`?class=NAME`), with a tab
 ## per class.
-index! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+index! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 index! = |db, request, wanted| {
 	base = frame("FOURNEAU HTTP DRAG RACE", "/")
 	{ ready, latest } =
@@ -100,7 +106,7 @@ index! = |db, request, wanted| {
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
 	racer = Store.status(Store.racer!(db, request)?)
-	Ok(page(IndexPage.render!({
+	Ok(Rocstache.html(IndexPage.template({
 		title: base.title,
 		home: Bool.True,
 		nav: base.nav,
@@ -117,12 +123,12 @@ index! = |db, request, wanted| {
 	})))
 }
 
-history! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+history! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 history! = |db, request, wanted| {
 	base = frame("History", "/history")
 	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
-	Ok(page(HistoryPage.render!({
+	Ok(Rocstache.html(HistoryPage.template({
 		title: base.title,
 		home: base.home,
 		nav: base.nav,
@@ -134,7 +140,7 @@ history! = |db, request, wanted| {
 	})))
 }
 
-competitors! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+competitors! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 competitors! = |db, request| {
 	base = frame("Competitors", "/competitors")
 	pins =
@@ -143,11 +149,11 @@ competitors! = |db, request| {
 			Err(NotFound) => []
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	Ok(page(CompetitorsPage.render!({ title: base.title, home: base.home, nav: base.nav, pins })))
+	Ok(Rocstache.html(CompetitorsPage.template({ title: base.title, home: base.home, nav: base.nav, pins })))
 }
 
 ## The workloads as the newest race asked them.
-workloads! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+workloads! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 workloads! = |db, request| {
 	base = frame("Workloads", "/workloads")
 	view =
@@ -156,7 +162,7 @@ workloads! = |db, request| {
 			Err(NotFound) => { ready: Bool.False, cards: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	Ok(page(WorkloadsPage.render!({
+	Ok(Rocstache.html(WorkloadsPage.template({
 		title: base.title,
 		home: base.home,
 		nav: base.nav,
@@ -197,20 +203,20 @@ history_class = |class| { title: class.title, charts: class.charts }
 # --- the raw data -------------------------------------------------------------
 
 ## The newest run whole, as the race page reads it.
-latest_file! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+latest_file! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 latest_file! = |db, request|
 	match Store.latest!(db, request) {
 		Ok(run) => json(Json.to_str_try(run))
-		Err(NotFound) => Ok(not_found!())
+		Err(NotFound) => Ok(not_found)
 		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
 ## Every finished run's medians.
-index_file! : Sqlite.Db, Server.Request => Try(Server.Response, Err)
+index_file! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 index_file! = |db, request| json(Json.to_str_try(Store.history!(db, request)?))
 
 ## /data/runs/ID.json, where ID is letters, digits and dashes only.
-run_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+run_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 run_file! = |db, request, path| {
 	name = path.drop_prefix("/data/runs/")
 	id = name.drop_suffix(".json")
@@ -219,14 +225,14 @@ run_file! = |db, request, path| {
 	} else {
 		match Store.run!(Sqlite.read(db, request), id) {
 			Ok(run) => json(Json.to_str_try(run))
-			Err(NotFound) => Ok(not_found!())
+			Err(NotFound) => Ok(not_found)
 			Err(DbErr(err)) => Err(DbErr(err))
 		}
 	}
 }
 
 ## /data/classes/ID/CLASS.json: one server class of one run.
-class_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+class_file! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 class_file! = |db, request, path| {
 	rest = path.drop_prefix("/data/classes/")
 	match rest.split_first("/") {
@@ -235,7 +241,7 @@ class_file! = |db, request, path| {
 			if is_name(parts.before) and is_name(class) and class != parts.after {
 				match Store.run!(Sqlite.read(db, request), parts.before) {
 					Ok(run) => json(Json.to_str_try(for_class(run, class)))
-					Err(NotFound) => Ok(not_found!())
+					Err(NotFound) => Ok(not_found)
 					Err(DbErr(err)) => Err(DbErr(err))
 				}
 			} else {
@@ -254,10 +260,10 @@ for_class = |run, class| {
 	results: run.results.keep_if(|r| r.class == class),
 }
 
-json : Try(Str, _) -> Try(Server.Response, Err)
+json : Try(Str, _) -> Try(Server.Response(_), Err)
 json = |encoded|
 	match encoded {
-		Ok(text) => Ok({ status: 200, headers: [{ name: "Content-Type", value: "application/json" }], body: Str.to_utf8(text) })
+		Ok(text) => Ok({ status: 200, headers: [{ name: "Content-Type", value: "application/json" }], body: Text(text) })
 		Err(err) => Err(EncodeErr(Str.inspect(err)))
 	}
 
@@ -289,15 +295,12 @@ frame = |name, here| {
 
 html_headers = [{ name: "Content-Type", value: "text/html; charset=utf-8" }]
 
-page : Str -> Server.Response
-page = |html| Server.html(html)
+## A constant: the page is data, which the host renders as it is sent.
+not_found : Server.Response(_)
+not_found = { status: 404, headers: html_headers, body: Html(NotFoundPage.template(frame("Not found", ""))) }
 
-## Effectful: a page rendered by the host (templates compiled by Zig).
-not_found! : () => Server.Response
-not_found! = || { status: 404, headers: html_headers, body: Str.to_utf8(NotFoundPage.render!(frame("Not found", ""))) }
-
-moved : Str -> Server.Response
-moved = |location| { status: 301, headers: [{ name: "Location", value: location }], body: [] }
+moved : Str -> Server.Response(_)
+moved = |location| { status: 301, headers: [{ name: "Location", value: location }], body: Bytes([]) }
 
 ## The site's addresses before it was roux: /index.html is /, /about.html is
 ## /about.
@@ -347,7 +350,7 @@ expect !is_name("..") and !is_name("a/b") and !is_name("")
 
 ## The race page's tabs and class, alone: what a tab's click swaps in
 ## (Datastar patches #race-classes in place, so the page does not move).
-race_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+race_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 race_classes! = |db, request, wanted| {
 	latest =
 		match Store.latest!(db, request) {
@@ -356,41 +359,28 @@ race_classes! = |db, request, wanted| {
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	current = View.chosen(latest.classes.map(|class| class.name), wanted)
-	patch!(request, RaceClasses.render!({
+	patch!(request, RaceClasses.template({
 		id: latest.id,
 		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, "/"),
 		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
 	}))
 }
 
-history_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response, Err)
+history_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
 history_classes! = |db, request, wanted| {
 	view = history_view!(db, request)?
 	current = View.chosen(view.classes.map(|class| class.name), wanted)
-	patch!(request, HistoryClasses.render!({
+	patch!(request, HistoryClasses.template({
 		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),
 		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
 	}))
 }
 
-## A Datastar patch: one event, its HTML a line per `elements` field, the
-## element replaced by its id (Datastar's default, outer).
-patch! : Server.Request, Str => Try(Server.Response, [SseErr(Sse.SseErr)])
-patch! = |request, html| {
+## A Datastar patch: one event, the template's HTML a line per `elements`
+## field, the element replaced by its id (Datastar's default, outer).
+patch! : Server.Request, Rocstache.Template(t) => Try(Server.Response(t), [SseErr(Sse.SseErr)])
+patch! = |request, made| {
 	stream = Sse.start!(request, [])?
-	Sse.send!(stream, patch_event(html))?
+	Sse.send!(stream, Rocstache.patch!(made))?
 	Sse.end!(stream)
 }
-
-patch_event : Str -> Sse.Event
-patch_event = |html| {
-	data = Str.join_with(html.split_on("\n").map(|line| "elements ${line}"), "\n")
-	match Sse.Event.named("datastar-patch-elements", data) {
-		Ok(event) => event
-		Err(InvalidEventName) => crash "a constant event name has no line break"
-	}
-}
-
-expect
-	Sse.Event.to_bytes(patch_event("<div id=\"a\">\n<b>x</b>\n</div>"))
-	== Str.to_utf8("event: datastar-patch-elements\ndata: elements <div id=\"a\">\ndata: elements <b>x</b>\ndata: elements </div>\n\n")

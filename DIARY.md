@@ -1303,3 +1303,26 @@ overlapping. Again with `-open`, 3 rounds: 125,332, 125,764 (+0.3%),
 open-loop knee is below the closed median here, so from 90% up the
 queue grows and p99 measures the queue. One climb each is one sample a
 rate: the 50% step's 15 ms against 5-8 ms says how noisy one is.
+
+## 2026-10-09: roux's templates as data, the competitor and the site
+
+roux merged its templates work into main (templates as bytecode, one VM
+in the host; then templates as data, the generated `Templates` union:
+roux's DIARY, 2026-10-09). This branch takes it, with main merged in
+(the log10 fix, adhoc's `-open`):
+
+- The competitor: `Rocstache.html(Menu.template(context.menu))`; no
+  `Page` in the app's header, no `Pages.roc`; `Server.Response(_)`.
+  `/menu` is workloads/menu.html byte for byte (md5 61f660a7…); the SSE
+  and Conduit routes answer.
+- The site, from its comptime-Zig port (the templates-vm port was only
+  ever a scratch copy): every `X.render!` is `X.template`, sent with
+  `Rocstache.html`; `/method`, `/contribute`, `/about` and the 404 are
+  top-level constants now (a page that reads nothing is data, made at
+  compile time); the Datastar patches take the template's value
+  (`Rocstache.patch!`, the site's own framing gone with its expect);
+  bodies `Text`/`Bytes`. `site build`: 35.5 s roc, 94 tests pass.
+- Checked against the site as `site dev` built it this morning (old
+  roux, same database copied): 22 routes, every page, both tab patches,
+  the JSON files, a 404, a 400, a 301, the API's health: status,
+  headers (but the date) and bodies byte for byte.
