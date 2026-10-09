@@ -66,7 +66,31 @@ lacks, so it is done in the panel.
   answered.
 - The host agent and the guard are installed by the owner and never
   update themselves (a broken one would stop the updates, or the budget);
-  the racer updates itself from the newest release between races.
+  the racer updates itself from the newest release between races, from
+  any binary that is not that release's (`racer install` starts it on
+  the installer's own).
+
+## What is on each host, and whether it matches
+
+| on the host | defined in | put there by | changes when |
+|---|---|---|---|
+| droplet: size, region, image, user data | `site provision`, `racer provision` | the provision, once | a rebuild |
+| systemd units, host files, configs, firewall, boot setting, swap | `siteUnits`, `racerUnits`, `hostFiles`, `hostSetup` | `site install-server`, `racer install` | the owner installs again |
+| the host agent, the guard | this checkout's `out/dragrace` | the installs | the owner installs again |
+| the site's code | the newest release | the host agent | a push (within a minute) |
+| the racer's binary | the newest release | the racer itself | a push (within 10 minutes, idle) |
+| Ubuntu | Ubuntu | unattended-upgrades | nightly |
+
+Each install stamps the commit it was run from in
+`/etc/dragrace-host/installed` ("-dirty" with changes not committed).
+`out/dragrace hosts check -racer RACER` (read only, any time; after
+every install) renders what this checkout says each host should be and
+compares: every unit and host file by SHA-256, the configs and
+credentials there, the retired files gone, the firewall on with exactly
+its ports, booted without an initramfs, the services up and no unit
+failed, the stamp against HEAD, the site's code and the racer's binary
+against the newest release. It prints each difference and exits 1 on
+any; "in sync" is the goal. A reboot pending is a note, not a difference.
 
 ## A run
 

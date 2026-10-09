@@ -19,6 +19,8 @@
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
 //	dragrace site backups           DigitalOcean's daily backups of the site
 //	dragrace racer provision|install   the racer droplet, set up
+//	dragrace hosts check [-racer H] both hosts against this checkout, read
+//	                                only (docs/self-hosting.md)
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
 //	dragrace bundle [-out DIR]      pack a build for a release (build.yml)
@@ -31,6 +33,7 @@
 //	dragrace racer check            ask the site for a check (the 05:00 timer)
 //	dragrace racer once -local DIR  take one request, racing on this machine
 //	dragrace host-agent             deploy the newest build's site (a timer)
+//	dragrace version                the commit build.yml built this from
 //
 // Every other command runs from anywhere inside the repository.
 package main
@@ -88,6 +91,10 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 		return commandRacer(ctx, args)
 	case "host-agent":
 		return commandHostAgent(ctx, args)
+	case "version":
+		// The commit build.yml built this from; "" built by hand.
+		fmt.Println(buildCommit)
+		return nil
 	}
 	return errNotService
 }
@@ -128,6 +135,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandWorker(ctx, root, args)
 	case "bundle":
 		return commandBundle(ctx, root, args)
+	case "hosts":
+		return commandHosts(ctx, root, args)
 	case "racer":
 		switch args[0] {
 		case "provision":
@@ -145,7 +154,8 @@ func usage() {
   toolchain | build | race local | race cloud | adhoc race|down |
   sizes | reap | fingerprint |
   bundle | worker | site build|provision|install-server|race-now|backups |
-  guard | racer serve|check|once|provision|install | host-agent
+  guard | racer serve|check|once|provision|install | host-agent |
+  hosts check | version
 See README.md, RACING.md and docs/self-hosting.md.`)
 	os.Exit(2)
 }

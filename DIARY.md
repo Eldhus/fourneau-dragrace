@@ -1143,6 +1143,18 @@ certificate. Then the racer's `racer install`: settings, firewall and
 boot the same; its catch-up of today's missed 05:00 check (Persistent)
 found the bug above.
 
+What is on each host, and whether it matches the code (the owner asked):
+nothing recorded what an install applied, so nothing could say a host
+had drifted. Each install now stamps its commit on the box, and `dragrace
+hosts check` renders what the checkout says each host should be and
+compares it (docs/self-hosting.md, "What is on each host"); `dragrace
+version` prints a binary's build commit. Its first run found the racer
+on the owner's hand-built binary, the guard's twin: `racer.update`
+skipped any binary without a build commit, so the racer had not updated
+itself since it was installed and said nothing. It now replaces such a
+binary with the newest release, and the install always starts it on the
+installer's.
+
 ## 2026-10-08: ad-hoc races, two builds compared in 50 s
 
 The owner wanted work in progress (roux's `templates` and `templates-vm`

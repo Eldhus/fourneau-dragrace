@@ -204,6 +204,10 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	stamp, err := installStamp(ctx, root)
+	if err != nil {
+		return err
+	}
 	machine := ownerMachine(root, *host, *key, "racer-known-hosts")
 	if err := machine.Put(ctx, self, "/tmp/dragrace"); err != nil {
 		return err
@@ -213,7 +217,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	}
 	if err := putFiles(ctx, machine, map[string]string{
 		"/etc/dragrace-guard/config.json": string(guardJSON),
-		"/etc/dragrace-racer/config.json": string(racerJSON)}, 0o644); err != nil {
+		"/etc/dragrace-racer/config.json": string(racerJSON), installedPath: stamp}, 0o644); err != nil {
 		return err
 	}
 	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
@@ -222,9 +226,9 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	setup := strings.Join(append(hostSetup("22"),
 		"sudo install -m 755 /tmp/dragrace /usr/local/bin/dragrace-guard",
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
-		// A first racer binary: from then on it updates itself.
-		"(test -e /var/lib/dragrace-racer/bin/dragrace || sudo install -m 755 -o racer -g racer "+
-			"/tmp/dragrace /var/lib/dragrace-racer/bin/dragrace)",
+		// The installer's binary to start from: it replaces itself with the
+		// newest release within 10 minutes, idle (racer.update).
+		"sudo install -m 755 -o racer -g racer /tmp/dragrace /var/lib/dragrace-racer/bin/dragrace",
 		"rm /tmp/dragrace",
 		"sudo install -d -m 700 /etc/credstore.encrypted",
 	), " && ")

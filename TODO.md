@@ -41,11 +41,12 @@
      the database from the local copy; both hosts on Ubuntu's stock
      updates, booting without an initramfs, ufw set up by the install,
      the check at 05:00 (DIARY.md). Up, every page 200.
-   - Next: the owner pushes, so the racer takes the check's fix (it
-     failed on a GitHub token it never had) from the release before
-     05:00 New York; then the 05:00 check proves the timer path, and
-     the night's reboots (if any) the boot. DigitalOcean's uptime check
-     on `/api/health` to the owner's email. Then this item goes.
+   - Pushed (ab346ae); `hosts check` (2026-10-08) found the racer had
+     never updated itself (a hand-built binary skipped updates) and is
+     fixed. Next: the 05:00 check proves the timer path, the night's
+     reboots (if any) the boot; `hosts check -racer 144.126.227.9` in
+     sync after. DigitalOcean's uptime check on `/api/health` to the
+     owner's email (the panel). Then this item goes.
    - Backups (owner, 2026-10-08): DigitalOcean's droplet backups stay the
      off-machine copy (daily, seven kept); no volume (network block
      storage's fsync), no copy to the racer (the site cannot serve a

@@ -267,6 +267,14 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 		KnownHosts: filepath.Join(secretsDir(root), knownHosts)}
 }
 
+// siteHostConfig is the host agent's config, as the install writes it.
+func siteHostConfig(host string) (string, error) {
+	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
+		Home: siteHome, Service: "dragrace-site.service",
+		Health: "https://" + host + "/api/health"}, "", "  ")
+	return string(config), err
+}
+
 // siteInstallServer sets the site host up as docs/self-hosting.md says,
 // as cook: the units, the host agent (this dragrace binary, pinned) and
 // its config, the site's two tokens from the owner's keyring (made there
@@ -292,9 +300,11 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	machine := ownerMachine(root, *host, *key, "site-known-hosts")
-	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
-		Home: siteHome, Service: "dragrace-site.service",
-		Health: "https://" + *host + "/api/health"}, "", "  ")
+	config, err := siteHostConfig(*host)
+	if err != nil {
+		return err
+	}
+	stamp, err := installStamp(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -305,7 +315,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	if err := putFiles(ctx, machine, map[string]string{
-		"/etc/dragrace-host/config.json": string(config)}, 0o644); err != nil {
+		"/etc/dragrace-host/config.json": config, installedPath: stamp}, 0o644); err != nil {
 		return err
 	}
 	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {

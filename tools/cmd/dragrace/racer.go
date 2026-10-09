@@ -781,10 +781,11 @@ func (racer *Racer) recover(ctx context.Context) {
 
 // update replaces this racer's binary with the newest build's, when that
 // is of a newer commit, and exits for systemd to start it again.
+//
+// A binary built by hand (no buildCommit: the one `racer install` starts
+// it with) is replaced too: it once kept the racer on the owner's build,
+// never updating and saying nothing (found 2026-10-08 by `hosts check`).
 func (racer *Racer) update(ctx context.Context) error {
-	if buildCommit == "" {
-		return nil // built by hand: not updated
-	}
 	builds, err := racer.github.builds(ctx)
 	if err != nil || len(builds) == 0 {
 		return err
