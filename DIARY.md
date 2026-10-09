@@ -1207,3 +1207,18 @@ the token from the keyring, and deleted both droplets and the session.
 The final version raced once on new machines (119 s, builds cached, 64 s
 of it booting; the VM 5.0% behind, the sixth race to say so), then `adhoc
 down`: nothing left running.
+
+## 2026-10-09: the race page a third cheaper (log10)
+
+Found profiling roux's templates (roux, DIARY 2026-10-09): the race page
+`/` cost 16.7 M instructions a request (`perf stat -e instructions:u`,
+release, a scratch copy of the site on roux templates-vm), a third of
+them in Roc's `F64.pow` (`float_math.f64.finitePowerMagnitude`), called
+by View.roc's `log10`: Roc's F64 has no logarithm, and the p99 chart
+took three by bisection on `F64.pow` per point, 40 calls each. `log10`
+now counts the decades and takes ln of the rest by its atanh series
+(16 terms, error below 1e-10; a test to 1e-10 at 7 and 123,456). The
+race page 11.3 M instructions a request (-33%, two A/B rounds), its
+bytes and every other page's the same; all 114 tests pass at the pinned
+nightly. What is left on `/`: string concatenation 14%, allocation 14%
+(the chart's SVG built by interpolation), SQLite 5%.
