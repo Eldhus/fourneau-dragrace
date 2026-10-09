@@ -17,7 +17,8 @@ out/dragrace adhoc down            # delete the machines now
 Asked for by the owner on 2026-10-08, to compare roux's template branches
 by the clock rather than by the laptop's instruction counts; built for an
 agent to call as often as a human runs a test. Kept simple on purpose
-(owner, 2026-10-08): two commands, two flags.
+(owner, 2026-10-08): two commands, two flags; a third, `-open`, asked
+for on 2026-10-09.
 
 ## A variant
 
@@ -35,6 +36,14 @@ need this repository's matching branch too (the competitor's Roc differs).
 - `-workloads` (default: all five closed-loop ones, `plaintext,echo-4k,templates,sse,churn`; about two minutes of racing for two variants).
 - `-rounds` (default 3). Each round races every variant once, in a new
   order; a workload is 1 s of warmup and 4 s measured.
+- `-open` (owner, 2026-10-09): after the rounds, race.json's open-loop
+  ladder on each workload, every variant at the **same** offered rates,
+  shares of the first variant's closed-loop median (the nightly's ladder
+  is each server's own share, right for a league table, wrong for an
+  A/B). Latency from when each request was due. A second table, a line
+  per rate and variant; `open_step` events. About 65 s a variant
+  (five steps, 3 s warm, 10 s measured); one climb each, so one sample
+  a rate.
 
 Everything else is fixed: the class `dedicated-2` (dedicated cores, so a
 difference is the builds'), race.json's region, 20 minutes idle.
@@ -116,7 +125,8 @@ Standard output: the same as events, one JSON object a line, each with
   once per session; the builds are reproducible (the same bytes twice).
 - **No reuse of the releases' binaries**: they exist only for main's
   heads, which the nightly races anyway.
-- **Closed-loop workloads only**: conduit is open loop (a seeded
+- **Closed-loop workloads only, and their ladder with `-open`**: conduit is
+  open loop only (a seeded
   database a start, a ladder of rates, minutes a competitor); refused,
   with a pointer to a nightly or `race cloud -workloads conduit`.
 - **A stream of lines, no server with SSE**: nothing stays up between

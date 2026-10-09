@@ -1222,3 +1222,29 @@ race page 11.3 M instructions a request (-33%, two A/B rounds), its
 bytes and every other page's the same; all 114 tests pass at the pinned
 nightly. What is left on `/`: string concatenation 14%, allocation 14%
 (the chart's SVG built by interpolation), SQLite 5%.
+
+## 2026-10-09: adhoc's open-loop ladder (`-open`); roux's page variants raced
+
+The owner: a side by side of roux's current templates, the closure
+(pure-render) and the union (page-union) "on the open and closed loop
+template tests", and "adding the open-loop ladder to adhoc ... do this
+work". adhoc kept race.json's open loop off; now `-open` climbs it after
+the rounds (open_loop.go's `climb`, unchanged) for every variant on each
+workload, at the same offered rates: shares of the first variant's
+closed-loop median, since the nightly's own-share ladder loads each
+variant differently. A second table and `open_step` events; a test of
+the table's order. Branches here for the race: `pure-render` and
+`page-union`, the roux competitor as each roux branch builds it (its
+`/menu` checked against menu.html locally).
+
+Closed loop, dedicated-2 (lon1), 5 rounds: templates-vm 128,086,
+pure-render 125,205 (-2.2%), page-union 128,737 (+0.5%), every range
+overlapping. Again with `-open`, 3 rounds: 125,332, 125,764 (+0.3%),
+127,181 (+1.5%), overlapping. The ladder, one climb each (p99 ms at 50,
+75, 90, 100, 120% of 125,332/s): templates-vm 15.3, 16.3, 46.1, 38.1,
+72.8; pure-render 7.6, 20.6, 60.6, 103.9, 232.6; page-union 5.4, 17.7,
+39.5, 28.2, 75.4. Every variant answered at most ~98-100 k good/s at
+90% and above, with server CPU ~90%, not the closed loop's 100%: the
+open-loop knee is below the closed median here, so from 90% up the
+queue grows and p99 measures the queue. One climb each is one sample a
+rate: the 50% step's 15 ms against 5-8 ms says how noisy one is.

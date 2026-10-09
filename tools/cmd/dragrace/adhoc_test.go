@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseVariant(t *testing.T) {
 	v, err := parseVariant("roux:roux=templates-vm,dragrace=abc123")
@@ -50,5 +53,26 @@ func TestCompare(t *testing.T) {
 	rows = compare(run, "c", []*variant{a, b}, labels)
 	if rows[1].Apart {
 		t.Fatalf("overlapping rounds read apart: %+v", rows[1])
+	}
+}
+
+// The open-loop table: by workload, then by rate, each rate's variants in
+// the order they climbed (the command line's, after a seeded shuffle).
+func TestOpenTable(t *testing.T) {
+	rows := []openRow{
+		{Workload: "templates", Share: 1.0, OfferedRPS: 2000, Variant: "b", P99Ms: 9},
+		{Workload: "templates", Share: 0.5, OfferedRPS: 1000, Variant: "b", P99Ms: 2},
+		{Workload: "templates", Share: 0.5, OfferedRPS: 1000, Variant: "a", P99Ms: 1},
+		{Workload: "templates", Share: 1.0, OfferedRPS: 2000, Variant: "a", P99Ms: 5},
+	}
+	lines := strings.Split(strings.TrimSpace(openTable(rows)), "\n")
+	if len(lines) != 6 {
+		t.Fatalf("%d lines:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	want := []string{"1000  b", "1000  a", "2000  b", "2000  a"}
+	for i, w := range want {
+		if !strings.Contains(lines[2+i], w) {
+			t.Fatalf("line %d %q, want %q", 2+i, lines[2+i], w)
+		}
 	}
 }

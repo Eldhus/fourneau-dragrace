@@ -669,6 +669,8 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	up := adhocSetup
 	workloads := flags.String("workloads", workloadNames(root), "comma-separated")
 	rounds := flags.Int("rounds", 3, "rounds, each variant once a round in a new order")
+	open := flags.Bool("open", false, "then race.json's open-loop ladder on each workload, "+
+		"every variant at the same offered rates (shares of the first variant's median)")
 	flags.Parse(args)
 	ev := &events{start: time.Now()}
 	if flags.NArg() < 1 {
@@ -680,6 +682,10 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	race.Rounds, race.WarmupSeconds, race.MeasureSeconds = *rounds, adhocWarmup, adhocMeasure
+	// The nightly's ladder is each server's own (a share of its own median),
+	// which suits a league table; an A/B wants every variant at the same
+	// rates, so the ladder is climbed here after the rounds (`-open`).
+	ladder := race.OpenLoop
 	race.OpenLoop = OpenLoop{}
 	var picked []Workload
 	for _, name := range strings.Split(*workloads, ",") {
@@ -806,6 +812,15 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	if err := rerunUnsaturated(ctx, race, competitors, target, &runResult, labelOf, ev); err != nil {
 		return err
 	}
+	var openRows []openRow
+	if *open {
+		withLadder := race
+		withLadder.OpenLoop = ladder
+		openRows, err = adhocOpen(ctx, withLadder, competitors, target, &runResult, labelOf, ev)
+		if err != nil {
+			return err
+		}
+	}
 	runResult.FinishedAt = time.Now().UTC()
 	session.Used = time.Now().UTC()
 	if err := session.save(root); err != nil {
@@ -819,9 +834,90 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	ev.emit("result", map[string]any{"race_seconds": round2(time.Since(raced).Seconds()),
-		"comparison": comparison, "results_file": path, "machines": session.Machines})
+		"comparison": comparison, "open_loop": openRows, "results_file": path,
+		"machines": session.Machines})
 	fmt.Fprint(os.Stderr, comparisonTable(comparison))
+	if *open {
+		fmt.Fprint(os.Stderr, openTable(openRows))
+	}
 	return nil
+}
+
+// openRow is one variant at one rate of the ladder.
+type openRow struct {
+	Workload    string  `json:"workload"`
+	Share       float64 `json:"share"`
+	OfferedRPS  float64 `json:"offered_rps"`
+	Variant     string  `json:"variant"`
+	AchievedRPS float64 `json:"achieved_rps"`
+	P99Ms       float64 `json:"p99_ms"`
+	P999Ms      float64 `json:"p999_ms"`
+	CPUBusyPct  float64 `json:"cpu_busy_pct"`
+	LoaderPct   float64 `json:"loader_cpu_busy_pct"`
+}
+
+// adhocOpen climbs the ladder (open_loop.go's `climb`) for every variant
+// on each workload, in a seeded order, at the same offered rates: the
+// shares of the first variant's closed-loop median. Latency is counted
+// from when each request was due, so a variant that stalls shows it.
+func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target Target,
+	run *Run, labelOf map[string]string, ev *events) ([]openRow, error) {
+	if !race.OpenLoop.enabled() {
+		return nil, errors.New("-open: race.json has no open_loop ladder")
+	}
+	bodies, err := putBodies(ctx, race, target, run.Seed)
+	if err != nil {
+		return nil, err
+	}
+	var rows []openRow
+	for _, workload := range race.Workloads {
+		median := resultFor(run, target.Class.Name, workload.Name, competitors[0].Name).MedianRPS
+		if median <= 0 {
+			continue
+		}
+		for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+1) {
+			log.Printf("[%s] open loop: %s at the first's rates", target.Class.Name, competitor.Name)
+			steps, err := climb(ctx, race, workload, competitor, target, bodies, median)
+			if err != nil {
+				return nil, fmt.Errorf("%s open loop: %w", competitor.Name, err)
+			}
+			resultFor(run, target.Class.Name, workload.Name, competitor.Name).OpenLoop = steps
+			for _, s := range steps {
+				row := openRow{Workload: workload.Name, Share: s.Share, OfferedRPS: s.OfferedRPS,
+					Variant: labelOf[competitor.Name], AchievedRPS: round2(s.AchievedRPS),
+					P99Ms: s.P99Ms, P999Ms: s.P999Ms, CPUBusyPct: round2(s.CPUBusyPct),
+					LoaderPct: round2(s.LoaderCPUBusyPct)}
+				rows = append(rows, row)
+				ev.emit("open_step", map[string]any{"variant": row.Variant,
+					"workload": row.Workload, "share": row.Share, "offered_rps": row.OfferedRPS,
+					"achieved_rps": row.AchievedRPS, "p99_ms": row.P99Ms, "p999_ms": row.P999Ms,
+					"cpu_busy_pct": row.CPUBusyPct, "loader_cpu_busy_pct": row.LoaderPct})
+			}
+		}
+	}
+	return rows, nil
+}
+
+// openTable: a block per workload and rate, a line per variant, in the
+// variants' order on the command line.
+func openTable(rows []openRow) string {
+	sorted := slices.Clone(rows)
+	slices.SortStableFunc(sorted, func(a, b openRow) int {
+		if a.Workload != b.Workload {
+			return strings.Compare(a.Workload, b.Workload)
+		}
+		return int(a.OfferedRPS - b.OfferedRPS)
+	})
+	var text strings.Builder
+	fmt.Fprintf(&text, "\nopen loop, the same rates for every variant (shares of the first's median)\n")
+	fmt.Fprintf(&text, "%-10s %5s %9s  %-48s %9s %9s %9s %6s\n", "workload", "share", "offered",
+		"variant", "good/s", "p99 ms", "p99.9 ms", "cpu %")
+	for _, row := range sorted {
+		fmt.Fprintf(&text, "%-10s %4.0f%% %9.0f  %-48s %9.0f %9.2f %9.2f %6.1f\n", row.Workload,
+			row.Share*100, row.OfferedRPS, row.Variant, row.AchievedRPS, row.P99Ms, row.P999Ms,
+			row.CPUBusyPct)
+	}
+	return text.String()
 }
 
 // saturated is the server CPU a round needs to measure the server: below
