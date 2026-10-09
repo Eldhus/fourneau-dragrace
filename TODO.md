@@ -43,7 +43,10 @@
      the check at 05:00 (DIARY.md). Up, every page 200.
    - Pushed (ab346ae); `hosts check` (2026-10-08) found the racer had
      never updated itself (a hand-built binary skipped updates) and is
-     fixed. Next: the 05:00 check proves the timer path, the night's
+     fixed. I ran the check service by hand at 03:04 UTC (a race), which
+     the owner did not want: it spent the commits the 05:00 timer was to
+     race. Pushed after that race so the timer has a new commit. Next:
+     the 05:00 check, by itself, races (the proof), the night's
      reboots (if any) the boot; `hosts check -racer 144.126.227.9` in
      sync after. DigitalOcean's uptime check on `/api/health` to the
      owner's email (the panel). Then this item goes.
