@@ -45,11 +45,13 @@
      never updated itself (a hand-built binary skipped updates) and is
      fixed. I ran the check service by hand at 03:04 UTC (a race), which
      the owner did not want: it spent the commits the 05:00 timer was to
-     race. Pushed after that race so the timer has a new commit. Next:
-     the 05:00 check, by itself, races (the proof), the night's
-     reboots (if any) the boot; `hosts check -racer 144.126.227.9` in
-     sync after. DigitalOcean's uptime check on `/api/health` to the
-     owner's email (the panel). Then this item goes.
+     race. Pushed after that race so the timer has a new commit.
+   - 2026-10-09: proven. The 05:00 timer fired by itself (09:00 UTC) and
+     raced, `2026-10-09T090045Z-cloud` finished 09:46; `hosts check` in
+     sync after. Left: DigitalOcean's uptime check on `/api/health` to
+     the owner's email (the panel); the first unattended reboot (no
+     update needed one that night), then `hosts check`. Then this item
+     goes.
    - Backups (owner, 2026-10-08): DigitalOcean's droplet backups stay the
      off-machine copy (daily, seven kept); no volume (network block
      storage's fsync), no copy to the racer (the site cannot serve a
