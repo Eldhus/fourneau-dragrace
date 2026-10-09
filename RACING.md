@@ -169,6 +169,7 @@ the site draws it hollow.
 | `dragrace build` | build every competitor into `out/bin` |
 | `dragrace race local [-quick] [-server-cpus 0-1 -loader-cpus 2-7]` | race here; loopback, so it compares competitors, not deployments |
 | `dragrace race cloud [-quick]` | race on fresh droplets; deletes them however it ends |
+| `dragrace adhoc race [-workloads W] [-rounds N] VARIANT...` | builds at any commits against each other on a warm pair, in under a minute once warm (docs/adhoc.md); `adhoc down` deletes the pair |
 | `dragrace sizes [-prefix c]` | droplet sizes with prices and the regions offering them |
 | `dragrace reap [-all]` | delete race droplets and keys older than `race.json` allows |
 | `dragrace fingerprint` | the commits a race would race |

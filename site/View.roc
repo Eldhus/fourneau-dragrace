@@ -660,20 +660,35 @@ decades_between = |low, high| {
 	if List.len(chosen) < 2 [from, from * 10.0] else chosen
 }
 
-## Roc's F64 has no logarithm: the exponent t with 10^t = value, by
-## bisection on F64.pow, 40 halvings (2^-40 of a decade: far below a
-## pixel). For positive values between 10^-6 and 10^6.
+## Roc's F64 has no logarithm, so it is computed: the decades counted,
+## then ln of what is left by its atanh series (a few dozen flops, error
+## below 1e-10). Bisection on F64.pow did it before, 40 calls a value:
+## 33% of the race page's instructions (2026-10-09). For positive values
+## between 10^-40 and 10^40.
 log10 : F64 -> F64
 log10 = |value| {
-	var $low = -6.0
-	var $high = 6.0
+	# value = m * 10^k, m in [1, 10).
+	var $m = value
+	var $k = 0.0
 	for _ in 0..<40.U64 {
-		middle = ($low + $high) / 2.0
-		above = F64.pow(10.0, middle) > value
-		$high = if above middle else $high
-		$low = if above $low else middle
+		$k = if $m >= 10.0 $k + 1.0 else if $m < 1.0 $k - 1.0 else $k
+		$m = if $m >= 10.0 $m / 10.0 else if $m < 1.0 $m * 10.0 else $m
 	}
-	($low + $high) / 2.0
+	# Half a decade out (r in [1, sqrt 10)), then ln r = 2 atanh((r-1)/(r+1)),
+	# whose series in s^2 <= 0.27 is below 1e-10 after 16 terms.
+	root10 = 3.1622776601683795
+	half = if $m > root10 0.5 else 0.0
+	r = if $m > root10 $m / root10 else $m
+	s = (r - 1.0) / (r + 1.0)
+	var $term = s
+	var $odd = 1.0
+	var $sum = 0.0
+	for _ in 0..<16.U64 {
+		$sum = $sum + $term / $odd
+		$term = $term * s * s
+		$odd = $odd + 2.0
+	}
+	$k + half + 2.0 * $sum / 2.302585092994046
 }
 
 ms_label : F64 -> Str
@@ -687,6 +702,7 @@ expect ms_label(0.1) == "0.1ms" and ms_label(100.0) == "100ms" and ms_label(1000
 expect took({ seconds: 3180.0, cost_usd: 0.4512 }) == "took 53 min · $0.45"
 expect took({ seconds: 600.0, cost_usd: 0.0 }) == "took 10 min"
 expect F64.abs(log10(1000.0) - 3.0) < 0.000001 and F64.abs(log10(0.1) + 1.0) < 0.000001 and F64.abs(log10(2.0) - 0.30103) < 0.00001
+expect F64.abs(log10(7.0) - 0.8450980400142568) < 0.0000000001 and F64.abs(log10(123456.0) - 5.091512201627772) < 0.0000000001
 
 ## What limited a result, from its rounds' medians: the server's CPU, the
 ## loader's, the network. At least 90% busy is a CPU at its limit; at

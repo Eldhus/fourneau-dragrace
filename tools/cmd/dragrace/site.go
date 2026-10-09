@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // The site host: one small droplet, up all the time, running the site (a
@@ -155,7 +156,7 @@ WantedBy=timers.target
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups")
+		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups|restore")
 	}
 	switch args[0] {
 	case "build":
@@ -170,6 +171,8 @@ func commandSite(ctx context.Context, root string, args []string) error {
 		return siteRaceNow(ctx, args[1:])
 	case "backups":
 		return siteBackups(ctx, args[1:])
+	case "restore":
+		return siteRestore(ctx, args[1:])
 	}
 	return fmt.Errorf("unknown: dragrace site %s", args[0])
 }
@@ -264,6 +267,14 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 		KnownHosts: filepath.Join(secretsDir(root), knownHosts)}
 }
 
+// siteHostConfig is the host agent's config, as the install writes it.
+func siteHostConfig(host string) (string, error) {
+	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
+		Home: siteHome, Service: "dragrace-site.service",
+		Health: "https://" + host + "/api/health"}, "", "  ")
+	return string(config), err
+}
+
 // siteInstallServer sets the site host up as docs/self-hosting.md says,
 // as cook: the units, the host agent (this dragrace binary, pinned) and
 // its config, the site's two tokens from the owner's keyring (made there
@@ -289,9 +300,11 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	machine := ownerMachine(root, *host, *key, "site-known-hosts")
-	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
-		Home: siteHome, Service: "dragrace-site.service",
-		Health: "https://" + *host + "/api/health"}, "", "  ")
+	config, err := siteHostConfig(*host)
+	if err != nil {
+		return err
+	}
+	stamp, err := installStamp(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -302,13 +315,13 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	if err := putFiles(ctx, machine, map[string]string{
-		"/etc/dragrace-host/config.json": string(config)}, 0o644); err != nil {
+		"/etc/dragrace-host/config.json": config, installedPath: stamp}, 0o644); err != nil {
 		return err
 	}
-	if err := putFiles(ctx, machine, hostFiles(""), 0o644); err != nil {
+	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup(),
+	setup := strings.Join(append(hostSetup("22", "80", "443"),
 		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
 		"rm /tmp/dragrace-host-agent",
 		// The layout before self-hosting: the rrsync deploy user and its data.
@@ -319,7 +332,9 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo install -d -m 700 -o site -g site "+siteState+" "+siteState+"/secrets "+
 			siteState+"/backups",
 		"sudo ln -sfn "+siteHome+"/current/static "+siteState+"/static",
-		"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q sqlite3 >/dev/null 2>&1",
+		// The first boot's dist-upgrade can outlive `cloud-init status
+		// --wait` (found on the rebuild of 2026-10-08): wait for its lock.
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q sqlite3 >/dev/null 2>&1",
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
@@ -356,58 +371,70 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 // root's login refused outright (cloud-init's disable_root only gave root
 // a key that prints "login as ..."), and a reboot when an update needs one.
 //
-// The reboot is at 02:30 New York time, before the 03:00 race, by a timer
-// of New York's clock (unattended-upgrades' own Automatic-Reboot-Time is
-// the host's clock, UTC, which moves an hour against the race at each
-// daylight saving change). The updates themselves are moved to 01:30 New
-// York, without a random delay, so that a night's updates are installed
-// by the time it looks. No update needing one, no reboot. `busy`, when
-// set, is a file whose presence puts the reboot off to the next night:
-// the racer's mark of a run racing (a racer restarted ends its run).
-func hostFiles(busy string) map[string]string {
-	check := "test -e /run/reboot-required || exit 0; "
-	if busy != "" {
-		check += "test -e " + busy + " && { echo racing: next night; exit 0; }; "
-	}
+// The updates are Ubuntu's own, stock (owner, 2026-10-08, after a
+// homemade reboot timer's night ended in a kernel panic on the site host;
+// DigitalOcean's and Canonical's advice): unattended-upgrades' daily run,
+// security only, at 06:00 UTC plus up to an hour, and its own reboot at
+// the end of the run when an update needs one: so never mid-install, and
+// over by 03:30 New York time at the latest, before the 05:00 race.
+// Automatic-Reboot is the one setting changed (Ubuntu ships it off).
+func hostFiles() map[string]string {
 	return map[string]string{
 		"/etc/ssh/sshd_config.d/10-dragrace.conf": "PermitRootLogin no\nPasswordAuthentication no\n",
-		"/etc/apt/apt.conf.d/52dragrace-reboot": "// dragrace-reboot.timer reboots, at 02:30 New York time.\n" +
-			"Unattended-Upgrade::Automatic-Reboot \"false\";\n",
-		"/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf": `[Timer]
-OnCalendar=
-OnCalendar=*-*-* 01:30:00 America/New_York
-RandomizedDelaySec=0
-`,
-		"/etc/systemd/system/dragrace-reboot.service": `[Unit]
-Description=Reboot if an update needs it (docs/self-hosting.md)
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c '` + check + `systemctl reboot'
-`,
-		"/etc/systemd/system/dragrace-reboot.timer": `[Unit]
-Description=02:30 New York time, before the 03:00 race: a reboot if an update needs it
-[Timer]
-OnCalendar=*-*-* 02:30:00 America/New_York
-[Install]
-WantedBy=timers.target
-`,
+		"/etc/apt/apt.conf.d/52dragrace-reboot": "// Reboot at the end of the update run when an update needs it (docs/self-hosting.md).\n" +
+			"Unattended-Upgrade::Automatic-Reboot \"true\";\n",
 	}
+}
+
+// hostRetired are the 2026-10-07 reboot timer's files, deleted by an
+// install: the timer, its service, and the moved update time.
+var hostRetired = []string{
+	"/etc/systemd/system/dragrace-reboot.timer",
+	"/etc/systemd/system/dragrace-reboot.service",
+	"/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf",
 }
 
 // hostSetup is the script that goes with hostFiles: the first boot's
 // cloud-init waited for (DigitalOcean's per-instance script can replace
 // the machine id late, and the racer's credentials, encrypted before it,
 // stopped decrypting at the next restart: found 2026-10-07), sshd
-// reloaded, the reboot timer on, a 512 MiB swap file (a 512 MB droplet thrashed in its
+// reloaded, the retired reboot timer gone, a 512 MiB swap file (a 512 MB droplet thrashed in its
 // first boot's package checks), and Ubuntu's update-notifier and motd
 // timers off (nobody logs in to read them; on the racer they took a CPU
 // for minutes).
-func hostSetup() []string {
+//
+// And a boot without an initramfs: GRUB_FORCE_PARTUUID, Ubuntu's own
+// cloud images' setting (DigitalOcean's image leaves it out). The kernel
+// has virtio and ext4 built in and mounts the root partition itself; a
+// failed boot falls back to the initramfs. The site host's first reboot
+// on 7.0.0-38 (2026-10-08) panicked twice in its initramfs ("No working
+// init found", "System is deadlocked on memory"); a 512 MB droplet of the
+// same image and kernel booted 4 of 4 with it and 3 of 3 without it.
+// Only the boot changes: the initramfs is freed once the root is mounted.
+//
+// The firewall too: incoming refused but for `ports`. It was cloud-init's
+// alone, whose final stage stops at a failed package step (the rebuild of
+// 2026-10-08 came up with ufw inactive) while `status` says done.
+func hostSetup(ports ...string) []string {
+	firewall := "sudo ufw default deny incoming >/dev/null"
+	for _, port := range ports {
+		firewall += " && sudo ufw allow " + port + "/tcp >/dev/null"
+	}
 	return []string{
 		"(cloud-init status --wait >/dev/null; true)",
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q ufw >/dev/null 2>&1",
+		firewall,
+		"sudo ufw --force enable >/dev/null",
+		"sudo ufw status | grep -q '^Status: active'",
+		"echo \"GRUB_FORCE_PARTUUID=$(findmnt -no PARTUUID /)\" | " +
+			"sudo tee /etc/default/grub.d/40-force-partuuid.cfg >/dev/null",
+		"grep -q '^GRUB_FORCE_PARTUUID=[0-9a-f-]\\{36\\}$' /etc/default/grub.d/40-force-partuuid.cfg",
+		"sudo update-grub 2>/dev/null",
 		"sudo sshd -t && sudo systemctl reload ssh",
+		"(sudo systemctl disable --now dragrace-reboot.timer 2>/dev/null; true)",
+		"sudo rm -f " + strings.Join(hostRetired, " "),
+		"(sudo rmdir /etc/systemd/system/apt-daily-upgrade.timer.d 2>/dev/null; true)",
 		"sudo systemctl daemon-reload",
-		"sudo systemctl enable --now dragrace-reboot.timer",
 		"sudo systemctl restart apt-daily-upgrade.timer",
 		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +
 			"sudo mkswap -q /swapfile))",
@@ -495,3 +522,69 @@ func siteBackups(ctx context.Context, args []string) error {
 	}
 	return do.enableBackups(ctx, droplets[0].ID)
 }
+
+// siteRestore puts one of DigitalOcean's backups in place of the site
+// host's disk, with the owner's token. Without -backup it lists them and
+// restores nothing. Written when the site host's reboot of 2026-10-08
+// came up to a kernel panic; afterwards, `site install-server` again
+// (what the backup's disk predates). The database loses what was written
+// after the backup.
+func siteRestore(ctx context.Context, args []string) error {
+	flags := newFlags("site restore")
+	backup := flags.Int("backup", 0, "the backup's id (none: list them)")
+	flags.Parse(args)
+	do, err := newDigitalOcean()
+	if err != nil {
+		return err
+	}
+	droplets, err := do.dropletsTagged(ctx, "fourneau-dragrace-site")
+	if err != nil {
+		return err
+	}
+	if len(droplets) != 1 {
+		return fmt.Errorf("%d droplets tagged fourneau-dragrace-site, want 1", len(droplets))
+	}
+	backups, err := do.backups(ctx, droplets[0].ID)
+	if err != nil {
+		return err
+	}
+	if *backup == 0 {
+		for _, each := range backups {
+			fmt.Printf("%d  %s  %s\n", each.ID, each.CreatedAt, each.Name)
+		}
+		return nil
+	}
+	known := false
+	for _, each := range backups {
+		known = known || each.ID == *backup
+	}
+	if !known {
+		return fmt.Errorf("-backup %d is not one of droplet %d's backups", *backup, droplets[0].ID)
+	}
+	action, err := do.restore(ctx, droplets[0].ID, *backup)
+	if err != nil {
+		return err
+	}
+	log.Printf("restoring droplet %d from backup %d (action %d)", droplets[0].ID, *backup, action)
+	for range restoreChecksMax {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(15 * time.Second):
+		}
+		status, err := do.actionStatus(ctx, action)
+		if err != nil {
+			return err
+		}
+		switch status {
+		case "completed":
+			fmt.Printf("restored; next: dragrace site install-server -host <site>\n")
+			return nil
+		case "errored":
+			return fmt.Errorf("the restore (action %d) errored", action)
+		}
+	}
+	return fmt.Errorf("the restore (action %d) is not done after %d checks", action, restoreChecksMax)
+}
+
+const restoreChecksMax = 160 // 15 s apart: 40 minutes

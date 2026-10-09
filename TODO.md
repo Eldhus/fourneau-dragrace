@@ -36,8 +36,26 @@
    - 2026-10-07, after: the site host moved to lon1 on Ubuntu 26.04
      (104.248.175.105), its data migrated (no CPU pin, so three columns
      fewer); both hosts reboot for updates at 02:30 New York time.
-   - Next: the 03:00 check tonight (it races: new commits) proves the
-     timer path and the new site; then this item goes.
+   - 2026-10-08: that reboot left the site host in a kernel panic; no
+     race ran. Rebuilt from the base image and installed from scratch,
+     the database from the local copy; both hosts on Ubuntu's stock
+     updates, booting without an initramfs, ufw set up by the install,
+     the check at 05:00 (DIARY.md). Up, every page 200.
+   - Pushed (ab346ae); `hosts check` (2026-10-08) found the racer had
+     never updated itself (a hand-built binary skipped updates) and is
+     fixed. I ran the check service by hand at 03:04 UTC (a race), which
+     the owner did not want: it spent the commits the 05:00 timer was to
+     race. Pushed after that race so the timer has a new commit.
+   - 2026-10-09: proven. The 05:00 timer fired by itself (09:00 UTC) and
+     raced, `2026-10-09T090045Z-cloud` finished 09:46; `hosts check` in
+     sync after. The uptime check on `/api/health` and its alerts, to
+     the owner's email, made in the panel (docs/self-hosting.md). Left:
+     the first unattended reboot (no update needed one that night),
+     then `hosts check`. Then this item goes.
+   - Backups (owner, 2026-10-08): DigitalOcean's droplet backups stay the
+     off-machine copy (daily, seven kept); no volume (network block
+     storage's fsync), no copy to the racer (the site cannot serve a
+     binary file: roux reads text only).
 2. **`dragrace site dev`: edit a template, see it in under a second.**
    (owner, 2026-10-07) A watcher over the templates, queries, Roc and
    static files; regeneration and a dev-backend build (`--opt=dev`); the

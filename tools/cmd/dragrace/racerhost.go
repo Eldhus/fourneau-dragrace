@@ -45,7 +45,10 @@ runcmd:
   - ufw --force enable
 `
 
-// racerUnits are the guard's and the racer's services, and the 03:00 check.
+// racerUnits are the guard's and the racer's services, and the 05:00 check:
+// at least 90 minutes after Ubuntu's update run and its reboot (06:00 to
+// 07:30 UTC, the hosts' clock), all year (owner, 2026-10-08; it was 03:00,
+// inside that window in summer).
 func racerUnits() map[string]string {
 	return map[string]string{
 		"/etc/systemd/system/dragrace-guard.service": `[Unit]
@@ -101,9 +104,9 @@ LoadCredentialEncrypted=racer-token
 ExecStart=/var/lib/dragrace-racer/bin/dragrace racer check
 `,
 		"/etc/systemd/system/dragrace-racer-check.timer": `[Unit]
-Description=03:00 New York time: the nightly check
+Description=05:00 New York time: the nightly check, after Ubuntu's updates and reboot
 [Timer]
-OnCalendar=*-*-* 03:00:00 America/New_York
+OnCalendar=*-*-* 05:00:00 America/New_York
 Persistent=true
 [Install]
 WantedBy=timers.target
@@ -201,6 +204,10 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	stamp, err := installStamp(ctx, root)
+	if err != nil {
+		return err
+	}
 	machine := ownerMachine(root, *host, *key, "racer-known-hosts")
 	if err := machine.Put(ctx, self, "/tmp/dragrace"); err != nil {
 		return err
@@ -210,19 +217,18 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	}
 	if err := putFiles(ctx, machine, map[string]string{
 		"/etc/dragrace-guard/config.json": string(guardJSON),
-		"/etc/dragrace-racer/config.json": string(racerJSON)}, 0o644); err != nil {
+		"/etc/dragrace-racer/config.json": string(racerJSON), installedPath: stamp}, 0o644); err != nil {
 		return err
 	}
-	// Its reboot put off while a run races (racer.remember).
-	if err := putFiles(ctx, machine, hostFiles("/var/lib/dragrace-racer/racing"), 0o644); err != nil {
+	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup(),
+	setup := strings.Join(append(hostSetup("22"),
 		"sudo install -m 755 /tmp/dragrace /usr/local/bin/dragrace-guard",
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
-		// A first racer binary: from then on it updates itself.
-		"(test -e /var/lib/dragrace-racer/bin/dragrace || sudo install -m 755 -o racer -g racer "+
-			"/tmp/dragrace /var/lib/dragrace-racer/bin/dragrace)",
+		// The installer's binary to start from: it replaces itself with the
+		// newest release within 10 minutes, idle (racer.update).
+		"sudo install -m 755 -o racer -g racer /tmp/dragrace /var/lib/dragrace-racer/bin/dragrace",
 		"rm /tmp/dragrace",
 		"sudo install -d -m 700 /etc/credstore.encrypted",
 	), " && ")

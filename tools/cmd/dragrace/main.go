@@ -6,6 +6,9 @@
 //	dragrace race local [flags]     race on this machine, server and loader on
 //	                                separate CPUs
 //	dragrace race cloud [flags]     race on fresh droplets (DIGITALOCEAN_TOKEN)
+//	dragrace adhoc race|down        builds at any commits raced against
+//	                                each other on a warm pair, in under a
+//	                                minute (docs/adhoc.md)
 //	dragrace sizes [-prefix c]      droplet sizes and prices in race.json's region
 //	dragrace reap                   delete race droplets older than allowed
 //	dragrace fingerprint            the commits a race would race, as JSON
@@ -16,6 +19,8 @@
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
 //	dragrace site backups           DigitalOcean's daily backups of the site
 //	dragrace racer provision|install   the racer droplet, set up
+//	dragrace hosts check [-racer H] both hosts against this checkout, read
+//	                                only (docs/self-hosting.md)
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
 //	dragrace bundle [-out DIR]      pack a build for a release (build.yml)
@@ -25,9 +30,10 @@
 //
 //	dragrace guard [-config F]      the racer's DigitalOcean token and budget
 //	dragrace racer serve            take the site's requests and race them
-//	dragrace racer check            ask the site for a check (the 03:00 timer)
+//	dragrace racer check            ask the site for a check (the 05:00 timer)
 //	dragrace racer once -local DIR  take one request, racing on this machine
 //	dragrace host-agent             deploy the newest build's site (a timer)
+//	dragrace version                the commit build.yml built this from
 //
 // Every other command runs from anywhere inside the repository.
 package main
@@ -85,6 +91,10 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 		return commandRacer(ctx, args)
 	case "host-agent":
 		return commandHostAgent(ctx, args)
+	case "version":
+		// The commit build.yml built this from; "" built by hand.
+		fmt.Println(buildCommit)
+		return nil
 	}
 	return errNotService
 }
@@ -111,6 +121,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		case "cloud":
 			return commandRaceCloud(ctx, root, args[1:])
 		}
+	case "adhoc":
+		return commandAdhoc(ctx, root, args)
 	case "sizes":
 		return commandSizes(ctx, root, args)
 	case "reap":
@@ -123,6 +135,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandWorker(ctx, root, args)
 	case "bundle":
 		return commandBundle(ctx, root, args)
+	case "hosts":
+		return commandHosts(ctx, root, args)
 	case "racer":
 		switch args[0] {
 		case "provision":
@@ -137,9 +151,11 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
-  toolchain | build | race local | race cloud | sizes | reap | fingerprint |
+  toolchain | build | race local | race cloud | adhoc race|down |
+  sizes | reap | fingerprint |
   bundle | worker | site build|provision|install-server|race-now|backups |
-  guard | racer serve|check|once|provision|install | host-agent
+  guard | racer serve|check|once|provision|install | host-agent |
+  hosts check | version
 See README.md, RACING.md and docs/self-hosting.md.`)
 	os.Exit(2)
 }

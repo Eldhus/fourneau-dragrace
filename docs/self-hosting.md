@@ -16,13 +16,30 @@ can do if it is taken (designed with the owner 2026-10-06, live since
 
 No GitHub runner is held for a race, and GitHub holds no secret.
 
-Both hosts install Ubuntu's security updates themselves (unattended-upgrades,
-moved to 01:30 New York time) and reboot when one needs it at 02:30 New
-York time, half an hour before the nightly check, by a timer of New
-York's clock so that daylight saving moves nothing (`hostFiles`; owner,
-2026-10-07). The racer puts its reboot off to the next night while a run
-races (a restarted racer ends its run); the site's is a half minute's
-outage, which posts retry through.
+Both hosts keep Ubuntu's update cycle stock, as DigitalOcean and
+Canonical advise: unattended-upgrades' daily run (security only, 06:00
+UTC plus up to an hour of random delay), and its own reboot at the end
+of that run when an update needs one (`Automatic-Reboot "true"`, the one
+setting changed; `hostFiles`). The reboot never comes mid-install, and is
+over by 07:30 UTC: 03:30 New York time in summer, 02:30 in winter. The
+nightly check is at 05:00 New York time, after it all year (owner,
+2026-10-08). The site's reboot is a half minute's outage, which posts
+retry through; the racer's mid-race would end the run (`interrupted`,
+its droplets deleted), so a manual race is not started between 02:00 and
+03:30 New York time.
+
+Both boot without an initramfs (`GRUB_FORCE_PARTUUID`, as Ubuntu's own
+cloud images; the kernel has virtio and ext4 built in, and the
+initramfs is GRUB's fallback): the site host's first boot of a new
+kernel, 2026-10-08, panicked in its initramfs, twice. Both run ufw,
+set up by the install (cloud-init's setup of it can silently not run).
+
+Until 2026-10-08 a homemade timer rebooted both at 02:30 New York time;
+after that night's panic the site host was rebuilt from the base image
+in DigitalOcean's panel (Destroy, Rebuild; same address) and installed
+from scratch (DIARY.md). `dragrace site restore` lists the backups;
+restoring one needs a token with `droplet:admin`, which the project's
+lacks, so it is done in the panel.
 
 ## Builds and deploys
 
@@ -49,13 +66,52 @@ outage, which posts retry through.
   answered.
 - The host agent and the guard are installed by the owner and never
   update themselves (a broken one would stop the updates, or the budget);
-  the racer updates itself from the newest release between races.
+  the racer updates itself from the newest release between races, from
+  any binary that is not that release's (`racer install` starts it on
+  the installer's own).
+
+## Knowing it is down
+
+A DigitalOcean uptime check, `fourneau-dragrace-site`, asks
+`https://fourneau.y2kbugger.com/api/health` (200 only when the site and
+its database answer) every 60 s, 10 s timeout, from USA East and Europe,
+and emails the owner: down for 2 minutes, latency over 1000 ms for 3
+minutes, the certificate expiring within 1 day. Not more: the
+certificates are short-lived (about 6.7 days) and renewed at the daily
+restart once a third of the life is left (fourneau's acme.zig), so a
+healthy one never falls below about 1.2 days; 7 days fired on every
+certificate (2026-10-09). Made by hand in the panel (owner, 2026-10-09): under the
+legacy Monitoring, Uptime; Insights' new alert rules know only the
+probe's duration, which cannot say down, and the project's token has no
+uptime scope (it would widen the racer's too).
+
+## What is on each host, and whether it matches
+
+| on the host | defined in | put there by | changes when |
+|---|---|---|---|
+| droplet: size, region, image, user data | `site provision`, `racer provision` | the provision, once | a rebuild |
+| systemd units, host files, configs, firewall, boot setting, swap | `siteUnits`, `racerUnits`, `hostFiles`, `hostSetup` | `site install-server`, `racer install` | the owner installs again |
+| the host agent, the guard | this checkout's `out/dragrace` | the installs | the owner installs again |
+| the site's code | the newest release | the host agent | a push (within a minute) |
+| the racer's binary | the newest release | the racer itself | a push (within 10 minutes, idle) |
+| Ubuntu | Ubuntu | unattended-upgrades | nightly |
+
+Each install stamps the commit it was run from in
+`/etc/dragrace-host/installed` ("-dirty" with changes not committed).
+`out/dragrace hosts check -racer RACER` (read only, any time; after
+every install) renders what this checkout says each host should be and
+compares: every unit and host file by SHA-256, the configs and
+credentials there, the retired files gone, the firewall on with exactly
+its ports, booted without an initramfs, the services up and no unit
+failed, the stamp against HEAD, the site's code and the racer's binary
+against the newest release. It prints each difference and exits 1 on
+any; "in sync" is the goal. A reboot pending is a note, not a difference.
 
 ## A run
 
 1. **Asked.** A request row in the site: `check` (race only if a
    repository has a commit the last finished run did not race) or `race`
-   (always). The racer's timer asks for a check at 03:00 New York time;
+   (always). The racer's timer asks for a check at 05:00 New York time;
    the owner asks for a race with the manual token (`dragrace site
    race-now`).
 2. **Taken.** The racer polls the site every 30 s. It reads the heads

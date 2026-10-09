@@ -375,9 +375,13 @@ func commandReap(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	maxAge := time.Duration(race.Cloud.MaxAgeMinutes) * time.Minute
-	droplets, err := do.dropletsTagged(ctx, race.Cloud.Tag)
-	if err != nil {
-		return err
+	var droplets []Droplet
+	for _, tag := range []string{race.Cloud.Tag, adhocTag} {
+		tagged, err := do.dropletsTagged(ctx, tag)
+		if err != nil {
+			return err
+		}
+		droplets = append(droplets, tagged...)
 	}
 	for _, droplet := range droplets {
 		if *all || time.Since(droplet.CreatedAt) > maxAge {
@@ -393,6 +397,7 @@ func commandReap(ctx context.Context, root string, args []string) error {
 	}
 	for _, key := range keys {
 		stamp, found := strings.CutPrefix(key.Name, sshKeyPrefix)
+		stamp = strings.TrimPrefix(stamp, "adhoc-") // an ad-hoc session's (adhoc.go)
 		seconds, parseErr := strconv.ParseInt(stamp, 10, 64)
 		if !found || parseErr != nil {
 			continue // not ours

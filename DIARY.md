@@ -1129,3 +1129,177 @@ same). `go vet`, `go test` pass.
 template. Not yet in roux dev, which the Go version had: a failed build
 over the page, requests held during a restart, `roc test` after each
 build (roux TODO).
+
+## 2026-10-08: the site host's reboot ended in a kernel panic; stock updates
+
+In the morning the site was down: no ping, no port (22, 80, 443) on
+104.248.175.105; the racer (144.126.227.9, same region) answered. The
+panel's graphs: the update run at ~01:40 New York, the 02:30 reboot timer's
+reboot, then 100% user CPU, no disk, no network from ~02:35 on. The
+Recovery Console showed why: `Kernel panic - not syncing: No working init
+found` on the new kernel (#38-Ubuntu): it mounted the disk and found no
+working `/sbin/init`. No race ran. Not known why: the broken disk was
+replaced by the restore before anyone read it. Searched: no report of
+Ubuntu 26.04 or DigitalOcean doing this now; the error's usual causes
+are a broken initramfs or systemd on the disk. The homemade timer did
+not hold the reboot for apt, though the disk graph says the update was
+done by 01:45.
+
+The owner asked for what DigitalOcean and Canonical advise rather than
+the homemade timer: Ubuntu's stock unattended-upgrades (security only,
+its daily run 06:00 UTC plus up to an hour) with its own
+`Automatic-Reboot "true"`, which reboots at the end of the run, never
+mid-install, and monitoring, since apt reports nothing when it breaks.
+That reboot window, to 07:30 UTC, held the 03:00 New York race in
+summer, so the check moved to 05:00 (owner). `hostFiles` is now sshd's
+file and the reboot setting; an install deletes the old timer's files.
+The site's reboot mid-race costs nothing (posts retry 20 minutes); the
+racer's ends the run, so no manual race between 02:00 and 03:30 New York.
+
+`dragrace site restore` lists the site host's backups (one: 2026-10-07
+17:29 UTC, before the memory migration); restoring was refused, 403
+`droplet:admin`, which the project's token leaves out on purpose, so the
+owner restores in the panel. Left (TODO): the installs on both hosts,
+the migration again, an uptime check, Livepatch.
+
+The restored backup did not boot either: twice the same `No working init
+found`, and once `System is deadlocked on memory` at 1.1 s. I blamed 512
+MB and moved both hosts to 1 GB; the owner refused, and a throwaway 512 MB
+droplet of the same image, upgraded to the same kernel (7.0.0-38) and
+initramfs (40 MB), booted 4 of 4: not memory alone. Both hosts stay 512
+MB (reverted). What differed on the site host is not known: its disk is
+gone. It had never booted 7.0.0-38 (installed by cloud-init's first-boot
+dist-upgrade, which runs under eatmydata, no fsync; the racer had booted
+it once). The kernel has virtio and ext4 built in, so the hosts now boot
+without an initramfs (`GRUB_FORCE_PARTUUID`, Ubuntu's cloud images' own
+setting, which DigitalOcean's image leaves out; the initramfs is the
+fallback): the test droplet 3 of 3, then the site host 2 of 2 and the
+racer once. Runtime memory is the same; only the boot's spike goes.
+
+From scratch: the owner rebuilt the droplet from the base image in the
+panel (same id, address, user data), I ran `install-server`. A clean
+build found what a host kept since 2026-10-06 hid:
+- cloud-init's first-boot dist-upgrade outlives `cloud-init status
+  --wait`, so the install's apt failed on its lock (exit 100). It waits
+  for the lock now.
+- that package step failed, cloud-init's final stage stopped, and the
+  firewall, which only its runcmd set up, was off; `status` said done.
+  The install sets ufw up and checks it now (site 22, 80, 443; racer 22).
+- the racer's nightly check fails at once: its unit has only the racer
+  token and `racer check` loaded the GitHub token too. The timer path
+  had never run (the first race was by hand); `check` loads the racer
+  token alone now. The racer gets it from the next release.
+The database came back from `site/site.db`, the local copy `site dev`
+serves: integrity ok, the counts the migration recorded (runs 1,
+results 60, rounds 150, machines 4, open steps 92, requests 1), already
+the new schema; installed as `site.db` (the empty one kept beside it),
+the same sha256 both ends. Every page 200, HTTP to HTTPS, HSTS, a new
+certificate. Then the racer's `racer install`: settings, firewall and
+boot the same; its catch-up of today's missed 05:00 check (Persistent)
+found the bug above.
+
+What is on each host, and whether it matches the code (the owner asked):
+nothing recorded what an install applied, so nothing could say a host
+had drifted. Each install now stamps its commit on the box, and `dragrace
+hosts check` renders what the checkout says each host should be and
+compares it (docs/self-hosting.md, "What is on each host"); `dragrace
+version` prints a binary's build commit. Its first run found the racer
+on the owner's hand-built binary, the guard's twin: `racer.update`
+skipped any binary without a build commit, so the racer had not updated
+itself since it was installed and said nothing. It now replaces such a
+binary with the newest release, and the install always starts it on the
+installer's.
+
+## 2026-10-08: ad-hoc races, two builds compared in 50 s
+
+The owner wanted work in progress (roux's `templates` and `templates-vm`
+branches) compared by the clock on real machines, fast enough to ask
+often: "compare two implementations in less than a minute". `dragrace
+adhoc race` (tools/cmd/dragrace/adhoc.go, docs/adhoc.md). The nightly
+path cannot: GitHub builds (up to 40 min), fresh droplets every run. So
+the ad-hoc path differs in three places, each measured:
+
+- **Builds on the laptop, at any commits**, each variant in its own
+  checkout (`git clone --shared`, then checkout in place). First I
+  exported with `git archive` into a fresh directory each build: 121 s
+  every time, identical sources included, because Zig's cache knows a
+  file by path and inode (`zig build platform` 77 s, `tools` 40 s; the
+  same build again in one tree: 33 ms). In place: a rebuild at the same
+  content 3.8-4.0 s. Cached by a hash of every file but Markdown (a
+  TODO commit on roux had cost a rebuild). Stripped and zstd'd: 17 MB is
+  1.6 MB; the builds are reproducible (the same bytes twice).
+- **A warm session**: server and loader kept between races (64 s to make;
+  a user systemd timer deletes them after 20 minutes unused; their own
+  tag, so the racer and guard never see them; `reap` sweeps it).
+- **One ssh connection** (ControlMaster): lon1 is 90-140 ms from the
+  laptop, a handshake several round trips, a measure about ten calls.
+
+The whole command, roux's two branches on `templates` (dedicated-2:
+server c-2, Xeon 8358; loader c-4): from nothing 298 s (builds 123 + 118
+s, droplets 64 s alongside, uploads 2 s, race 50 s); a rebuild at the
+same content 64 s; warm **50 s**. Output: JSON events on stdout (resolved,
+built, session, uploaded, round, result), the table on stderr.
+
+Two rounds of the first eighteen ran with the server at 76% and 83% CPU,
+the loader dipping with them, no retransmits: something outside both.
+Such a round measures that, not the server: the variant is raced again
+(twice at most) and the saturated rounds kept; it fired once in each of
+the next two races.
+
+The answer, five races: the VM 3.6-5.2% behind comptime (139k against
+144-147k requests a second; rounds of a variant within 2-3% of each
+other). On the laptop it had read 5% (157k against 165k); instructions
+14% more.
+
+Then made simple (owner: "I'd like simple adhoc story"): two commands,
+`adhoc race` and `adhoc down`, two flags, `-workloads` (default all
+five closed-loop ones) and `-rounds`; `up`, `status`, the class, region,
+idle and timing flags gone, the race printing its machines instead. The
+open questions decided (docs/adhoc.md): builds stay on the laptop, no
+reuse of release binaries, closed loop only. The idle reaper tested end
+to end: with the idle limit at 0 its user unit ran a minute later, read
+the token from the keyring, and deleted both droplets and the session.
+The final version raced once on new machines (119 s, builds cached, 64 s
+of it booting; the VM 5.0% behind, the sixth race to say so), then `adhoc
+down`: nothing left running.
+
+## 2026-10-09: the race page a third cheaper (log10)
+
+Found profiling roux's templates (roux, DIARY 2026-10-09): the race page
+`/` cost 16.7 M instructions a request (`perf stat -e instructions:u`,
+release, a scratch copy of the site on roux templates-vm), a third of
+them in Roc's `F64.pow` (`float_math.f64.finitePowerMagnitude`), called
+by View.roc's `log10`: Roc's F64 has no logarithm, and the p99 chart
+took three by bisection on `F64.pow` per point, 40 calls each. `log10`
+now counts the decades and takes ln of the rest by its atanh series
+(16 terms, error below 1e-10; a test to 1e-10 at 7 and 123,456). The
+race page 11.3 M instructions a request (-33%, two A/B rounds), its
+bytes and every other page's the same; all 114 tests pass at the pinned
+nightly. What is left on `/`: string concatenation 14%, allocation 14%
+(the chart's SVG built by interpolation), SQLite 5%.
+
+## 2026-10-09: adhoc's open-loop ladder (`-open`); roux's page variants raced
+
+The owner: a side by side of roux's current templates, the closure
+(pure-render) and the union (page-union) "on the open and closed loop
+template tests", and "adding the open-loop ladder to adhoc ... do this
+work". adhoc kept race.json's open loop off; now `-open` climbs it after
+the rounds (open_loop.go's `climb`, unchanged) for every variant on each
+workload, at the same offered rates: shares of the first variant's
+closed-loop median, since the nightly's own-share ladder loads each
+variant differently. A second table and `open_step` events; a test of
+the table's order. Branches here for the race: `pure-render` and
+`page-union`, the roux competitor as each roux branch builds it (its
+`/menu` checked against menu.html locally).
+
+Closed loop, dedicated-2 (lon1), 5 rounds: templates-vm 128,086,
+pure-render 125,205 (-2.2%), page-union 128,737 (+0.5%), every range
+overlapping. Again with `-open`, 3 rounds: 125,332, 125,764 (+0.3%),
+127,181 (+1.5%), overlapping. The ladder, one climb each (p99 ms at 50,
+75, 90, 100, 120% of 125,332/s): templates-vm 15.3, 16.3, 46.1, 38.1,
+72.8; pure-render 7.6, 20.6, 60.6, 103.9, 232.6; page-union 5.4, 17.7,
+39.5, 28.2, 75.4. Every variant answered at most ~98-100 k good/s at
+90% and above, with server CPU ~90%, not the closed loop's 100%: the
+open-loop knee is below the closed median here, so from 90% up the
+queue grows and p99 measures the queue. One climb each is one sample a
+rate: the 50% step's 15 ms against 5-8 ms says how noisy one is.
