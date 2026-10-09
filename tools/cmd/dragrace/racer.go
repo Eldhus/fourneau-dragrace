@@ -159,8 +159,13 @@ func commandRacer(ctx context.Context, args []string) error {
 	if err := readJSON(*path, &config); err != nil {
 		return err
 	}
-	for variable, credential := range map[string]string{"RACER_TOKEN": "racer-token",
-		"GITHUB_TOKEN": "github-token"} {
+	// The check posts to the site alone: its unit has the racer token and
+	// no other (a GitHub token it never had would fail it).
+	credentials := map[string]string{"RACER_TOKEN": "racer-token"}
+	if args[0] != "check" {
+		credentials["GITHUB_TOKEN"] = "github-token"
+	}
+	for variable, credential := range credentials {
 		if err := tokenFromCredential(variable, credential); err != nil {
 			return err
 		}
@@ -775,10 +780,10 @@ func (racer *Racer) recover(ctx context.Context) {
 
 // update replaces this racer's binary with the newest build's, when that
 // is of a newer commit, and exits for systemd to start it again.
+//
+// A binary built by hand (no buildCommit: the one `racer install` starts
+// it with) is replaced too, so the racer never stays on it.
 func (racer *Racer) update(ctx context.Context) error {
-	if buildCommit == "" {
-		return nil // built by hand: not updated
-	}
 	builds, err := racer.github.builds(ctx)
 	if err != nil || len(builds) == 0 {
 		return err

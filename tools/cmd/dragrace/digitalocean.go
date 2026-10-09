@@ -165,6 +165,46 @@ func (do *DigitalOcean) enableBackups(ctx context.Context, id int) error {
 		map[string]string{"type": "enable_backups"}, nil)
 }
 
+// Backup is one of a droplet's DigitalOcean backups (an image).
+type Backup struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (do *DigitalOcean) backups(ctx context.Context, id int) ([]Backup, error) {
+	var response struct {
+		Backups []Backup `json:"backups"`
+	}
+	err := do.call(ctx, http.MethodGet, fmt.Sprintf("/v2/droplets/%d/backups?per_page=50", id),
+		nil, &response)
+	return response.Backups, err
+}
+
+// restore puts a backup's disk in place of the droplet's (its address and
+// its id stay), and returns the action's id.
+func (do *DigitalOcean) restore(ctx context.Context, id, image int) (int, error) {
+	var response struct {
+		Action struct {
+			ID int `json:"id"`
+		} `json:"action"`
+	}
+	err := do.call(ctx, http.MethodPost, fmt.Sprintf("/v2/droplets/%d/actions", id),
+		map[string]any{"type": "restore", "image": image}, &response)
+	return response.Action.ID, err
+}
+
+// actionStatus is an action's status: in-progress, completed or errored.
+func (do *DigitalOcean) actionStatus(ctx context.Context, id int) (string, error) {
+	var response struct {
+		Action struct {
+			Status string `json:"status"`
+		} `json:"action"`
+	}
+	err := do.call(ctx, http.MethodGet, fmt.Sprintf("/v2/actions/%d", id), nil, &response)
+	return response.Action.Status, err
+}
+
 type SSHKey struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
