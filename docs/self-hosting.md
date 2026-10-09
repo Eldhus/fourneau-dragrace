@@ -76,7 +76,11 @@ A DigitalOcean uptime check, `fourneau-dragrace-site`, asks
 `https://fourneau.y2kbugger.com/api/health` (200 only when the site and
 its database answer) every 60 s, 10 s timeout, from USA East and Europe,
 and emails the owner: down for 2 minutes, latency over 1000 ms for 3
-minutes, the certificate expiring within 7 days. Made by hand in the panel (owner, 2026-10-09): under the
+minutes, the certificate expiring within 1 day. Not more: the
+certificates are short-lived (about 6.7 days) and renewed at the daily
+restart once a third of the life is left (fourneau's acme.zig), so a
+healthy one never falls below about 1.2 days; 7 days fired on every
+certificate (2026-10-09). Made by hand in the panel (owner, 2026-10-09): under the
 legacy Monitoring, Uptime; Insights' new alert rules know only the
 probe's duration, which cannot say down, and the project's token has no
 uptime scope (it would widen the racer's too).
