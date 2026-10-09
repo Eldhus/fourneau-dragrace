@@ -143,6 +143,15 @@ func newestRelease(ctx context.Context) (BuildInfo, error) {
 	return info, readJSON(path, &info)
 }
 
+// sameTools says whether tools/, all an install pushes, is the same at
+// both commits (a dirty stamp never is).
+func sameTools(stamp, head string) bool {
+	if strings.HasSuffix(stamp, "-dirty") || strings.HasSuffix(head, "-dirty") {
+		return false
+	}
+	return exec.Command("git", "diff", "--quiet", stamp, head, "--", "tools").Run() == nil
+}
+
 func stampCommit(stamp string) string {
 	first, _, _ := strings.Cut(stamp, "\n")
 	return strings.TrimPrefix(first, "commit ")
@@ -282,8 +291,10 @@ func compareVersions(report *findings, want hostWant, seen map[string]string, he
 	switch stamp := seen["stamp"]; {
 	case stamp == "":
 		report.diff("no install stamp (installed before stamps: run the install)")
+	case stamp != head && !sameTools(stamp, head):
+		report.diff("installed from %s; tools/ has changed since, at %s", short(stamp), short(head))
 	case stamp != head:
-		report.diff("installed from %s, the checkout is at %s", short(stamp), short(head))
+		report.ok(fmt.Sprintf("installed from %s; tools/ unchanged since (at %s)", short(stamp), short(head)))
 	default:
 		report.ok("installed from this checkout's commit, " + short(head))
 	}
