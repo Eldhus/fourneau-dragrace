@@ -18,16 +18,16 @@ import Api
 import Store
 import Data
 import View
-import IndexPage
-import HistoryPage
-import RaceClasses
-import HistoryClasses
-import WorkloadsPage
-import CompetitorsPage
-import MethodPage
-import ContributePage
-import AboutPage
-import NotFoundPage
+import templates/IndexPage
+import templates/HistoryPage
+import templates/RaceClasses
+import templates/HistoryClasses
+import templates/WorkloadsPage
+import templates/CompetitorsPage
+import templates/MethodPage
+import templates/ContributePage
+import templates/AboutPage
+import templates/NotFoundPage
 
 Context : { db : Sqlite.Db, tokens : Api.Tokens }
 

@@ -1331,3 +1331,14 @@ roux's DIARY, 2026-10-09). This branch takes it, with main merged in
   two tab patches now differ from the old build by that line alone, the
   other 18 routes byte for byte still. `go test ./...` passes; the full
   `dragrace build` (every competitor, as tonight's race) below.
+
+## 2026-10-09: roux links with roc alone; templates in templates/
+
+roux now has roc link the executable and attaches the templates'
+program after it (no Zig to build an app), and an app's templates live
+in `templates/` beside its `.roc`, imported as `templates/X` (roux
+DIARY). The site's twelve templates and the competitor's Menu moved
+there (`git mv`, imports `templates/IndexPage`, …). Checked after each
+change: the full `dragrace build`, `site build` (96 tests), the site's
+22 routes identical (bodies and headers) to the build before, the
+competitor's `/menu` workloads/menu.html byte for byte.
