@@ -88,7 +88,10 @@ list (50%), an article (30%), a comment (15%) and a favorite (5%) at once,
 a random article or page each request (oha `--rand-regex-url`), one oha
 a part. A server climbs until it answers under 90% of the rate offered,
 or errs. Each step records the mean over every request (the chart) and
-each part's rate, mean, p50, p99 and p99.9.
+each part's rate, mean, p50, p99 and p99.9. 3 s of warmup and 60 s
+measured a step: 10 s steps were noisy, and over TLS each step's first
+handshakes weighed on its tail (below, TLS). conduit-tls is the same mix
+over HTTP/2 and TLS.
 
 ## A race
 
@@ -142,8 +145,12 @@ TLS, or the other way, from the seed). A competitor with no `run.tls`
 sits the TLS workloads out with no result (basic-webserver: its platform
 serves no TLS). The site shows these workloads in their own section,
 `"section": "tls"`, beside HTTP/1.1; h2c (`"section": "h2c"`) sits below
-either, plaintext three ways (HTTP/1.1, h2c, HTTPS), so HTTP/2's cost and
-TLS's are apart (the owner, 2026-10-10).
+either, plaintext three ways (HTTP/1.1, h2c, HTTP/2 + TLS), so HTTP/2's
+cost and TLS's are apart (the owner, 2026-10-10). Both sections race the
+same tests: each HTTP/1.1 workload has its twin over TLS, `-tls` after
+its name (the owner, 2026-10-10; `TestRaceSections` holds it). The
+twins over HTTP/2 run 128 connections of 2 streams, as a browser's few
+connections with a handful of requests each.
 
 The same TLS for everyone, so the race measures the engines, not their
 settings:
@@ -167,10 +174,12 @@ settings:
   as any other.
 
 An open loop over TLS starts each oha run with its connections'
-handshakes, all at once: in short steps that weighs on the tail (seen
-in a local quick race, 2026-10-10: p99 ~70 ms at half load for the
-servers with slower handshakes). The 10 s steps dilute it; the ladders'
-p99.9 is read with it in mind.
+handshakes, all at once, and the requests due meanwhile queue behind
+them. In 10 s steps that was the p99: the first race with HTTPS
+(2026-10-10) had fourneau-zig's templates-tls at 72 ms at half load,
+about 128 handshakes at its churn-tls rate. 60 s steps put it near
+0.2% of a step's requests, under the p99; the p99.9 is read with it in
+mind.
 
 What limited each result, as the site says it: the server's CPU (at least
 90% busy: the case the race is for), the loader's (at least 90%), the
@@ -202,12 +211,16 @@ heading: what it is for); each run keeps its classes as raced.
 
 ## Under load: the open loop
 
-After the rounds, each server climbs a ladder on each workload marked
-`"ladder": true` (templates, templates-tls, sse-tls; `race.json`'s
-`open_loop` sets the steps): fixed offered rates at 50, 75, 90,
-100 and 120% of its own closed-loop median, 3 s of warmup and 10 s
-measured each, latency from when each request was due (oha `-q`,
-`--latency-correction`; `open_loop.go` says why steps and not a ramp).
+RealWorld's climb, over HTTP/1.1 and over HTTP/2 + TLS, is the open
+loop (above, Conduit): rates the same for every server, 250 a second
+and doubling. The templates ladder was dropped (owner, 2026-10-10):
+RealWorld is the real-world page, and a race of both at 60 s steps
+would take four hours. A workload marked `"ladder": true` (none now)
+climbs at shares of its own closed-loop median instead (`race.json`'s
+`open_loop`: 5, 25, 50, 75, 90, 100 and 120%, 3 s of warmup and 10 s
+measured each). Either way, latency is from when each request was due
+(oha `-q`, `--latency-correction`; `open_loop.go` says why steps and
+not a ramp).
 oha pacing costs about half again the loader CPU of its closed loop
 (measured): a step with the loader 85% busy or more is the loader's, and
 the site draws it hollow.
@@ -257,7 +270,10 @@ billed per second (a minute at least). With five competitors, six
 workloads and the two ladders a class races for about 43 minutes: the
 first cloud race from the racer (2026-10-07) took 52 minutes from
 request to result, five of them finding dedicated-2's CPU, and cost
-$0.29. `premium-4` (Basic Premium AMD) is out until
+$0.29. With HTTPS (2026-10-10): 82 minutes and $0.36 with 10 s ladders;
+with every workload's twin over TLS and RealWorld's 60 s steps in both,
+about two hours and $0.50 (estimated from that race's steps; `race.json`'s
+`max_age_minutes`, 180, is the ceiling). `premium-4` (Basic Premium AMD) is out until
 dedicated Premium Intel is offered: its shared vCPUs varied by 15% round
 to round, its "up to 10 Gbit/s" stopped near 1 Gbit/s with retransmits,
 and its slower network left 256 connections unable to saturate anything,

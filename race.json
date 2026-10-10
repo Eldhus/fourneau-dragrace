@@ -39,8 +39,7 @@
       "method": "GET",
       "path": "/menu",
       "connections": 256,
-      "keepalive": true,
-      "ladder": true
+      "keepalive": true
     },
     {
       "name": "sse",
@@ -74,7 +73,7 @@
     },
     {
       "name": "plaintext-tls",
-      "title": "Plaintext, HTTPS",
+      "title": "Plaintext, HTTP/2 + TLS",
       "summary": "Plaintext, HTTP/2's shape, over TLS: against Plaintext, HTTP/2 (h2c), the cost of TLS a request.",
       "method": "GET",
       "path": "/plaintext",
@@ -86,8 +85,23 @@
       "section": "tls"
     },
     {
+      "name": "echo-4k-tls",
+      "title": "Echo 4 KiB, HTTP/2 + TLS",
+      "summary": "Echo 4 KiB over HTTP/2 and TLS, 128 connections of 2 streams: bodies both ways, encrypted.",
+      "method": "POST",
+      "path": "/echo",
+      "body_bytes": 4096,
+      "content_type": "application/octet-stream",
+      "connections": 128,
+      "keepalive": true,
+      "http2": true,
+      "streams": 2,
+      "tls": true,
+      "section": "tls"
+    },
+    {
       "name": "templates-tls",
-      "title": "Templates, HTTPS",
+      "title": "Templates, HTTP/2 + TLS",
       "summary": "GET /menu over HTTP/2 and TLS, 128 connections of 2 streams: a server-rendered page as browsers fetch it, with no proxy in front.",
       "method": "GET",
       "path": "/menu",
@@ -96,12 +110,11 @@
       "http2": true,
       "streams": 2,
       "tls": true,
-      "section": "tls",
-      "ladder": true
+      "section": "tls"
     },
     {
       "name": "sse-tls",
-      "title": "SSE (Datastar), HTTPS",
+      "title": "SSE (Datastar), HTTP/2 + TLS",
       "summary": "The Datastar action over HTTP/2 and TLS, 128 connections of 2 streams: as browsers send it, with no proxy in front.",
       "method": "GET",
       "path": "/sse?datastar=%7B%22count%22%3A41%7D",
@@ -110,12 +123,11 @@
       "http2": true,
       "streams": 2,
       "tls": true,
-      "section": "tls",
-      "ladder": true
+      "section": "tls"
     },
     {
       "name": "churn-tls",
-      "title": "Connection churn, HTTPS",
+      "title": "Connection churn, HTTP/1.1 + TLS",
       "summary": "A new TLS connection every request, a full handshake each (no resumption), HTTP/1.1: what a new visitor costs.",
       "method": "GET",
       "path": "/plaintext",
@@ -144,7 +156,64 @@
           32000
         ],
         "warmup_seconds": 3,
-        "measure_seconds": 10,
+        "measure_seconds": 60,
+        "saturated": 0.9,
+        "parts": [
+          {
+            "name": "list",
+            "method": "GET",
+            "path": "/api/articles\\?limit=20&offset=[0-9]{2}0",
+            "share": 0.5
+          },
+          {
+            "name": "article",
+            "method": "GET",
+            "path": "/api/articles/article-0[0-9]{3}",
+            "share": 0.3
+          },
+          {
+            "name": "comment",
+            "method": "POST",
+            "path": "/api/articles/article-0[0-9]{3}/comments",
+            "share": 0.15,
+            "auth": true,
+            "body": "{\"comment\":{\"body\":\"Lovely roux.\"}}"
+          },
+          {
+            "name": "favorite",
+            "method": "POST",
+            "path": "/api/articles/article-0[0-9]{3}/favorite",
+            "share": 0.05,
+            "auth": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "conduit-tls",
+      "title": "RealWorld (Conduit), HTTP/2 + TLS",
+      "summary": "RealWorld's mix over HTTP/2 and TLS, 128 connections of 2 streams: an application as browsers reach it, with no proxy in front.",
+      "method": "MIXED",
+      "path": "/api/articles",
+      "connections": 128,
+      "keepalive": true,
+      "http2": true,
+      "streams": 2,
+      "tls": true,
+      "section": "tls",
+      "mixed": {
+        "rates": [
+          250,
+          500,
+          1000,
+          2000,
+          4000,
+          8000,
+          16000,
+          32000
+        ],
+        "warmup_seconds": 3,
+        "measure_seconds": 60,
         "saturated": 0.9,
         "parts": [
           {
@@ -205,8 +274,10 @@
     "loader_cpus": "2-7"
   },
   "open_loop": {
-    "comment": "The ladder each workload marked \"ladder\" climbs after the rounds.",
+    "comment": "The ladder each workload marked \"ladder\" climbs after the rounds. None is marked since 2026-10-10: RealWorld's climb is the open loop (owner).",
     "shares": [
+      0.05,
+      0.25,
       0.5,
       0.75,
       0.9,

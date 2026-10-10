@@ -75,6 +75,21 @@ func TestOhaCommandOverTLS(t *testing.T) {
 	if strings.Contains(command, "--insecure") || !strings.Contains(command, " http://10.0.0.7") {
 		t.Errorf("plain: %q", command)
 	}
+	// RealWorld's parts over TLS, as its twin over HTTP/1.1 but for these.
+	part := Part{Name: "list", Method: "GET", Path: "/api/articles", Share: 0.5}
+	conduit := Workload{Name: "conduit-tls", Method: "MIXED", Connections: 128, Keepalive: true,
+		HTTP2: true, Streams: 2, TLS: true, Mixed: &Mixed{Parts: []Part{part}}}
+	command = partCommand(race, conduit, target, part, 500, 60)
+	for _, want := range []string{" -c 64 ", " --http2 -p 2", " --insecure", " 'https://10[.]0[.]0[.]7:8080/api/articles'"} {
+		if !strings.Contains(command, want) {
+			t.Errorf("%q lacks %q", command, want)
+		}
+	}
+	conduit.HTTP2, conduit.TLS = false, false
+	command = partCommand(race, conduit, target, part, 500, 60)
+	if strings.Contains(command, "--insecure") || strings.Contains(command, "--http2") {
+		t.Errorf("RealWorld plain: %q", command)
+	}
 }
 
 func TestOffers(t *testing.T) {
@@ -92,23 +107,42 @@ func TestOffers(t *testing.T) {
 	}
 }
 
-// race.json as committed: every section known, the ladders where the
-// site draws them.
+// race.json as committed: every section known, and both flavours of HTTP
+// race the same tests (owner, 2026-10-10): each HTTP/1.1 workload has its
+// twin over TLS, open loop the same. No share ladder: RealWorld's climb
+// is the open loop.
 func TestRaceSections(t *testing.T) {
 	race, err := loadRace("../../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ladders := []string{}
+	byName := map[string]Workload{}
 	for _, workload := range race.Workloads {
+		byName[workload.Name] = workload
 		if workload.TLS != (workload.section() == "tls") {
 			t.Errorf("%s: TLS and the tls section go together", workload.Name)
 		}
 		if workload.Ladder {
-			ladders = append(ladders, workload.Name)
+			t.Errorf("%s: a share ladder", workload.Name)
 		}
 	}
-	if strings.Join(ladders, ",") != "templates,templates-tls,sse-tls" {
-		t.Errorf("ladders %v", ladders)
+	twins := 0
+	for _, workload := range race.Workloads {
+		if workload.section() != "http1" {
+			continue
+		}
+		twin, found := byName[workload.Name+"-tls"]
+		if !found {
+			t.Errorf("%s has no twin over TLS", workload.Name)
+			continue
+		}
+		twins++
+		if twin.Path != workload.Path || twin.Method != workload.Method ||
+			(twin.Mixed == nil) != (workload.Mixed == nil) {
+			t.Errorf("%s-tls is not %s over TLS", workload.Name, workload.Name)
+		}
+	}
+	if twins+1 != len(race.Workloads)-twins { // and plaintext-h2, h2c's own
+		t.Errorf("%d twins of %d workloads", twins, len(race.Workloads))
 	}
 }

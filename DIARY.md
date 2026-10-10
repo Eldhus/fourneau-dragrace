@@ -1527,3 +1527,30 @@ dedicated-2:
   handshake again (TODO).
 - The loader is near its limit for fourneau-zig (95% of its CPUs on sse,
   89% on plaintext-h2).
+
+## 2026-10-10: both flavours, the same tests
+
+The owner's review of that race: HTTP/1.1 and HTTP/2 + TLS race the same
+tests, and the open loop is RealWorld's, not SSE's. So:
+
+- echo-4k-tls and conduit-tls are new: every HTTP/1.1 workload has its
+  twin over TLS (`TestRaceSections` checks it, and that the twin's path,
+  method and kind match). conduit-tls is the same mix over HTTP/2 and
+  TLS: `climbMixed` starts the server in the workload's mode, and the
+  parts' oha and the contract's curls take the TLS and HTTP/2 flags
+  (`partCommand`, `validateConduit`; a test for the command).
+- No share ladder: templates', templates-tls' and sse-tls' are gone
+  (the owner: RealWorld is the real-world one). The shares gain 5% and
+  25%, for a ladder that comes back.
+- RealWorld's steps are 60 s, not 10 (the owner chose 60 over 100):
+  the 10 s steps were noisy, and over TLS the first handshakes set the
+  p99. At 60 s they are ~0.2% of a step. With templates' ladder too,
+  100 s steps would have made a race four hours, past the guard's cap.
+- Labels: "HTTPS" said nothing of the HTTP; the titles say "HTTP/2 +
+  TLS" (churn-tls "HTTP/1.1 + TLS"), and so does the h2c table's
+  column.
+
+Checked: Go tests, the site's 101 tests; a quick local race of
+echo-4k-tls, conduit and conduit-tls (`race local -quick`), every TLS
+competitor valid, TLS 1.3 / AES-128-GCM / X25519 agreed. An estimated
+race: two hours, $0.50.

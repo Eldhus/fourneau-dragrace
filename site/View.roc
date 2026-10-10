@@ -283,7 +283,7 @@ intro = |section|
 	}
 
 ## Plaintext three ways, when the race has h2c: its bars, and each
-## competitor's HTTP/1.1, h2c and HTTPS plaintext side by side.
+## competitor's HTTP/1.1, h2c and HTTP/2 + TLS plaintext side by side.
 h2c_view : Data.Run, Str -> List(View.H2c)
 h2c_view = |run, class|
 	match run.race.workloads.find_first(|w| w.section == "h2c") {
@@ -661,7 +661,7 @@ loader_limit_pct = 85.0
 ## The Workloads page's sections, in the race page's order.
 workload_groups = [
 	{ section: "http1", heading: "HTTP/1.1", note: "Plain HTTP/1.1, as a server behind a proxy sees it." },
-	{ section: "h2c", heading: "HTTP/2 without TLS (h2c)", note: "HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section, beside Plaintext over HTTP/1.1 and HTTPS." },
+	{ section: "h2c", heading: "HTTP/2 without TLS (h2c)", note: "HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section, beside Plaintext over HTTP/1.1 and over HTTP/2 + TLS." },
 	{ section: "tls", heading: "HTTP/2 + TLS: the realistic deployment", note: "HTTPS as browsers reach a server with no proxy in front. Every server: TLS 1.3, AES-128-GCM, X25519, the race's ECDSA P-256 certificate, no session resumption. basic-webserver serves no TLS and sits these out." },
 ]
 
@@ -674,11 +674,12 @@ workload_card = |w| {
 			Ok({ before, after: _ }) => before
 			Err(_) => w.path
 		}
+	streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
 	if w.kind == "mixed" {
 		rates = "${Format.thousands(w.lowest.to_f64())} to ${Format.thousands(w.highest.to_f64())} requests a second"
-		{ title: w.title, route: path, summary: w.summary, spec: "Open loop only: ${w.mix}; ${rates}, the same for every server, each climbing until it falls behind." }
+		secure = if w.tls " ${w.connections.to_str()} connections${streams}, over TLS." else ""
+		{ title: w.title, route: path, summary: w.summary, spec: "Open loop only: ${w.mix}; ${rates}, the same for every server, each climbing until it falls behind.${secure}" }
 	} else {
-		streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
 		reuse = if w.keepalive "kept alive" else "a new one per request"
 		body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
 		secure = if w.tls ", over TLS" else ""
@@ -692,11 +693,13 @@ expect {
 	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False))
 	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True))
 	page = workload_card({ ..spec("closed", "GET", "/menu", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls" })
+	conduit_tls = workload_card({ ..spec("mixed", "MIXED", "/api/articles", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls" })
 	echo.spec == "256 connections, kept alive, 4,096-byte body."
 	and sse.route == "GET /sse" and sse.spec == "64 connections, a new one per request."
 	and conduit.route == "/api/articles"
 	and conduit.spec == "Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."
 	and page.spec == "128 connections of 2 HTTP/2 streams, kept alive, over TLS."
+	and conduit_tls.spec.ends_with("falls behind. 128 connections of 2 HTTP/2 streams, over TLS.")
 }
 
 ## The class's open-loop charts, a ladder each: the closed workload's

@@ -118,13 +118,17 @@
      owner's push, which the 05:00 check then races). `site
      install-server` (the socket units, from the graceful restart) is
      still the owner's to run: the agent may not.
-   - Open, the owner's choice: the TLS ladders' p99 is the handshake
-     again (each 10 s step a new oha run, all 128 connections opened at
-     once: ~1% of the step queues behind them; DIARY). Ways: open the
-     connections in a run that is not measured and keep them (oha
-     cannot: another loader, or our own), or steps long enough to dilute
-     it under 0.1% (100 s: ten times the ladders' time). Until then the
-     TLS ladders' tails are not results.
+   - The owner's review of that race (2026-10-10): both flavours race
+     the same tests; no open loop on SSE; the templates ladder dropped,
+     RealWorld's climb in both flavours at 60 s steps (the owner chose
+     60 s over 100 s); "HTTPS" labelled "HTTP/2 + TLS"; 5% and 25%
+     added to the shares. Done, uncommitted until checked: echo-4k-tls
+     and conduit-tls added, every TLS title says which HTTP. A quick
+     local race of echo-4k-tls, conduit and conduit-tls: all valid.
+   - Next, in this order (owner): push fourneau 5739295 (the OOM fix)
+     and this, race it; then, alone, build the competitors for speed
+     instead of `safe` and race that, to see what it does on its own.
+     Not before: the build type changes nothing else in that race.
 
 ## Chores
 
