@@ -81,8 +81,12 @@ func mixedLoop(ctx context.Context, race Race, competitors []Competitor, target 
 			continue
 		}
 		for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+2) {
+			if !competitor.offers(workload) {
+				continue
+			}
 			result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
-			result.Valid, result.Note = valid[competitor.Name] == "", valid[competitor.Name]
+			why := valid[validKey(competitor.Name, workload.mode())]
+			result.Valid, result.Note = why == "", why
 			if result.Valid {
 				log.Printf("[%s] %s: %s", target.Class.Name, workload.Name, competitor.Name)
 				steps, why, err := climbMixed(ctx, race, workload, competitor, target)
@@ -109,27 +113,28 @@ func freshDatabase(target Target) string {
 // competitor that fails the checks has no steps and says why.
 func climbMixed(ctx context.Context, race Race, workload Workload, competitor Competitor,
 	target Target) ([]OpenStep, string, error) {
-	pid, err := startServer(ctx, race, competitor, target, plainMode)
+	mode := workload.mode()
+	pid, err := startServer(ctx, race, competitor, target, mode)
 	if err != nil {
 		return nil, "", err
 	}
-	if err := waitReady(ctx, race, target, plainMode); err != nil {
+	if err := waitReady(ctx, race, target, mode); err != nil {
 		why := "did not start: " + whyNotReady(ctx, competitor, target, pid)
 		stopServer(context.WithoutCancel(ctx), target, pid)
 		return nil, why, nil
 	}
-	why := validateConduit(ctx, race, target)
+	why := validateConduit(ctx, race, target, mode)
 	stopServer(context.WithoutCancel(ctx), target, pid)
 	if why != "" {
 		return nil, why, nil
 	}
 	// The checks wrote: the climb starts from the seed again.
-	pid, err = startServer(ctx, race, competitor, target, plainMode)
+	pid, err = startServer(ctx, race, competitor, target, mode)
 	if err != nil {
 		return nil, "", err
 	}
 	defer stopServer(context.WithoutCancel(ctx), target, pid)
-	if err := waitReady(ctx, race, target, plainMode); err != nil {
+	if err := waitReady(ctx, race, target, mode); err != nil {
 		return nil, "did not start again: " + whyNotReady(ctx, competitor, target, pid), nil
 	}
 	mixed := workload.Mixed
@@ -247,18 +252,25 @@ func partCommand(race Race, workload Workload, target Target, part Part, rate,
 	if part.Body != "" {
 		command.WriteString(" -d " + quote(part.Body) + " -T application/json")
 	}
+	if workload.HTTP2 {
+		fmt.Fprintf(&command, " --http2 -p %d", max(1, workload.Streams))
+	}
+	if workload.TLS {
+		command.WriteString(" --insecure") // the race's own certificate
+	}
 	// rand_regex: the base URL's dots are written as [.], so only the path varies.
-	base := strings.ReplaceAll(baseURL(race, target, plainMode), ".", "[.]")
+	base := strings.ReplaceAll(baseURL(race, target, workload.mode()), ".", "[.]")
 	command.WriteString(" " + quote(base+part.Path))
 	return command.String()
 }
 
 // validateConduit checks a competitor against the contract, from the
 // loader, on the seeded database: "" when it answers as the model says.
-func validateConduit(ctx context.Context, race Race, target Target) string {
+func validateConduit(ctx context.Context, race Race, target Target, mode Mode) string {
 	model := newConduitModel()
-	url := baseURL(race, target, plainMode)
+	url := baseURL(race, target, mode)
 	token := conduitToken(conduitLoadUser)
+	curl := strings.Replace(curlFor(mode), "-m 5", "-m 10", 1)
 	type check struct {
 		name, curl string
 		status     string
@@ -277,16 +289,16 @@ func validateConduit(ctx context.Context, race Race, target Target) string {
 	favorite["favorited"] = true
 	favorite["favoritesCount"] = float64(len(model.articles[free].Favorites) + 1)
 	checks := []check{
-		{"the list", "curl -s -m 10 -w '\\n%{http_code} %{content_type}' '" + url +
+		{"the list", curl + "-w '\\n%{http_code} %{content_type}' '" + url +
 			"/api/articles?limit=20&offset=40'", "200", same(model.list(20, 40))},
-		{"an article", "curl -s -m 10 -w '\\n%{http_code} %{content_type}' " + url +
+		{"an article", curl + "-w '\\n%{http_code} %{content_type}' " + url +
 			"/api/articles/article-0123", "200", same(map[string]any{"article": model.article(123, true)})},
-		{"a missing article", "curl -s -m 10 -o /dev/null -w '\\n%{http_code} -' " + url +
+		{"a missing article", curl + "-o /dev/null -w '\\n%{http_code} -' " + url +
 			"/api/articles/article-9999", "404", nil},
-		{"a comment without a token", "curl -s -m 10 -o /dev/null -w '\\n%{http_code} -' -X POST " +
+		{"a comment without a token", curl + "-o /dev/null -w '\\n%{http_code} -' -X POST " +
 			"-H 'Content-Type: application/json' -d '{\"comment\":{\"body\":\"x\"}}' " + url +
 			"/api/articles/article-0001/comments", "401", nil},
-		{"a comment", "curl -s -m 10 -w '\\n%{http_code} %{content_type}' -X POST " +
+		{"a comment", curl + "-w '\\n%{http_code} %{content_type}' -X POST " +
 			"-H 'Authorization: Token " + token + "' -H 'Content-Type: application/json' " +
 			"-d '{\"comment\":{\"body\":\"Lovely roux.\"}}' " + url + "/api/articles/article-0001/comments",
 			"200", func(got map[string]any) string {
@@ -304,7 +316,7 @@ func validateConduit(ctx context.Context, race Race, target Target) string {
 					"author": model.author(conduitLoadUser)}
 				return same(map[string]any{"comment": want})(got)
 			}},
-		{"a favorite", "curl -s -m 10 -w '\\n%{http_code} %{content_type}' -X POST " +
+		{"a favorite", curl + "-w '\\n%{http_code} %{content_type}' -X POST " +
 			"-H 'Authorization: Token " + token + "' " + url + "/api/articles/" +
 			model.articles[free].Slug + "/favorite", "200", same(map[string]any{"article": favorite})},
 	}

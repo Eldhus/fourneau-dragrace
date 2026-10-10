@@ -17,9 +17,9 @@
 {{/lines}}</svg></div><p class="axis-note">offered requests per second &rarr;</p>
 <ul class="legend" aria-label="Lines">{{#lines}}<li><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/lines}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li></ul></figure>
 {{/open}}{{#h2c}}<section class="h2c"><h3 class="class">HTTP/2 without TLS</h3>
-<p class="intro">Plaintext three ways: HTTP/2 by prior knowledge (h2c) against HTTP/1.1 is what HTTP/2 costs or gives; HTTPS against h2c is what TLS costs. No browser speaks h2c: it takes the protocol apart from TLS.</p>
+<p class="intro">Plaintext three ways: HTTP/2 by prior knowledge (h2c) against HTTP/1.1 is what HTTP/2 costs or gives; HTTP/2 + TLS against h2c is what TLS costs. No browser speaks h2c: it takes the protocol apart from TLS.</p>
 <div class="strips">
-{{#strips}}{{> Strip}}{{/strips}}<div class="table"><table><thead><tr><th>competitor</th><th>HTTP/1.1</th><th>h2c</th><th>HTTPS</th><th>HTTP/2</th><th>TLS</th></tr></thead><tbody>
+{{#strips}}{{> Strip}}{{/strips}}<div class="table"><table><thead><tr><th>competitor</th><th>HTTP/1.1</th><th>h2c</th><th>HTTP/2 + TLS</th><th>HTTP/2</th><th>TLS</th></tr></thead><tbody>
 {{#rows}}<tr><td>{{ competitor }}</td><td>{{ plain }}</td><td>{{ h2c }}</td><td>{{ tls }}</td><td>{{ http2_change }}</td><td>{{ tls_change }}</td></tr>
 {{/rows}}</tbody></table></div></div></section>
 {{/h2c}}{{/classes}}
