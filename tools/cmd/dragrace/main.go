@@ -24,6 +24,9 @@
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
 //	dragrace bundle [-out DIR]      pack a build for a release (build.yml)
+//	dragrace diff [-competitors a,b] [-cases x,y]
+//	                                the same raw requests to each, and where
+//	                                their answers differ (diff.go)
 //
 // The services of self-hosting (docs/self-hosting.md), which run outside
 // a checkout:
@@ -123,6 +126,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		}
 	case "adhoc":
 		return commandAdhoc(ctx, root, args)
+	case "diff":
+		return commandDiff(ctx, root, args)
 	case "sizes":
 		return commandSizes(ctx, root, args)
 	case "reap":

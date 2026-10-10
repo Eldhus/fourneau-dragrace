@@ -179,6 +179,7 @@ the site draws it hollow.
 | `dragrace race local [-quick] [-server-cpus 0-1 -loader-cpus 2-7]` | race here; loopback, so it compares competitors, not deployments |
 | `dragrace race cloud [-quick]` | race on fresh droplets; deletes them however it ends |
 | `dragrace adhoc race [-workloads W] [-rounds N] VARIANT...` | builds at any commits against each other on a warm pair, in under a minute once warm (docs/adhoc.md); `adhoc down` deletes the pair |
+| `dragrace diff [-competitors a,b] [-cases x,y]` | the same raw requests (59 cases: framing, smuggling, limits, forms) to each competitor here, and where their answers differ: status, close, body; a table to stdout and `out/diff.md`. fourneau's docs/differential.md keeps the decisions |
 | `dragrace sizes [-prefix c]` | droplet sizes with prices and the regions offering them |
 | `dragrace reap [-all]` | delete race droplets and keys older than `race.json` allows |
 | `dragrace fingerprint` | the commits a race would race |

@@ -1393,3 +1393,20 @@ under load answered every request (twice), the slowest ~315 ms;
 fourneau-hello binding its own port refused 4,771 in the same test.
 The branch was `http2`, renamed: everything that waits for the race.
 Not done here: running `install-server` on the host (the owner's).
+
+## 2026-10-10: `dragrace diff`: second opinions (fourneau's M11)
+
+A command: build the competitors, start each here, send 59 cases as raw
+bytes (each on a new connection, read to the close or a second's
+silence), parse the answers (interim responses, lengths, chunks, a
+HEAD's head alone) and compare status, close and body (an error's body
+by status only: each stack words its own). A table, stdout and
+`out/diff.md`. Tests: the response parser (lengths, chunks with
+extensions and trailers, 100 before 200, HEAD, garbage) and unique case
+names.
+
+fourneau-zig against Go and axum: 46 of 59 differed; fourneau fixed three
+(its DIARY: HTTP/1.2, garbage refused at once, a small unread body
+skipped), and the competitor routed HEAD as GET, a query no longer
+breaking a route (`Head.path()`), 405 with `Allow` for a wrong method.
+Then 28 differ, each kept in fourneau's docs/differential.md.
