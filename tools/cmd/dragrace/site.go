@@ -65,18 +65,38 @@ var acmeDirectories = map[string]string{
 	"production": "https://acme-v02.api.letsencrypt.org/directory",
 }
 
+// siteSocket is one of the site's listening sockets, systemd's to hold: on
+// every IPv4 address as ROUX_ADDRESS was, named for the site to find it.
+func siteSocket(port int, name string) string {
+	return fmt.Sprintf(`[Unit]
+Description=the dragrace site's port %d, held across its restarts
+[Socket]
+ListenStream=0.0.0.0:%d
+FileDescriptorName=%s
+Backlog=4096
+Service=dragrace-site.service
+[Install]
+WantedBy=sockets.target
+`, port, port, name)
+}
+
 // siteUnits are the site's systemd units and the kernel modules it needs:
 // the site on 443 with its own certificate (ACME, for the host's IP
 // address, Let's Encrypt's six-day profile) and port 80 redirecting; a
 // daily restart, which renews the certificate when a third of its life is
-// left (fourneau's acme.zig); the host agent's timer.
+// left (fourneau's acme.zig); the host agent's timer. systemd holds the
+// two listening sockets (fourneau's listen.zig, by these names), so a
+// restart (a deploy, the daily renewal) refuses no one: a client waits in
+// the socket's queue while the old site drains and the new one starts.
 func siteUnits(host, acmeDirectory string) map[string]string {
 	service := `[Unit]
 Description=the dragrace site (roux)
-After=network-online.target
+After=network-online.target dragrace-site-https.socket dragrace-site-http.socket
 Wants=network-online.target
+Requires=dragrace-site-https.socket dragrace-site-http.socket
 ConditionPathExists={site_home}/current/dragrace-site
 [Service]
+Sockets=dragrace-site-https.socket dragrace-site-http.socket
 User=site
 StateDirectory=dragrace-site
 StateDirectoryMode=0700
@@ -114,7 +134,9 @@ WantedBy=multi-user.target
 	service = strings.NewReplacer("{site_home}", siteHome, "{site_state}", siteState,
 		"{acme_directory}", acmeDirectory, "{host}", host).Replace(service)
 	return map[string]string{
-		"/etc/systemd/system/dragrace-site.service": service,
+		"/etc/systemd/system/dragrace-site.service":      service,
+		"/etc/systemd/system/dragrace-site-https.socket": siteSocket(443, "https"),
+		"/etc/systemd/system/dragrace-site-http.socket":  siteSocket(80, "http"),
 		"/etc/systemd/system/dragrace-site-renew.service": `[Unit]
 Description=Restart the site, which renews its certificate when due
 [Service]
@@ -338,7 +360,13 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
+		// The sockets take ports 80 and 443: a site still binding them
+		// itself (installed before them) stops first, then starts on them
+		// (a host with no site yet skips the start: ConditionPathExists).
+		"sudo systemctl stop dragrace-site.service",
+		"sudo systemctl enable --now dragrace-site-https.socket dragrace-site-http.socket",
 		"sudo systemctl enable dragrace-site.service",
+		"sudo systemctl start dragrace-site.service",
 	), " && ")
 	if _, err := machine.Shell(ctx, setup); err != nil {
 		return err

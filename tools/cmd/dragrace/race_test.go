@@ -59,6 +59,28 @@ func TestSiteUnitEnvironment(t *testing.T) {
 	}
 }
 
+// The site's sockets are systemd's, named as fourneau's listen.zig and
+// roux's host look for them, and the service takes both.
+func TestSiteSockets(t *testing.T) {
+	units := siteUnits("192.0.2.1", "https://acme.example/directory")
+	for _, socket := range []struct{ file, listen, name string }{
+		{"dragrace-site-https.socket", "ListenStream=0.0.0.0:443\n", "FileDescriptorName=https\n"},
+		{"dragrace-site-http.socket", "ListenStream=0.0.0.0:80\n", "FileDescriptorName=http\n"},
+	} {
+		unit := units["/etc/systemd/system/"+socket.file]
+		for _, want := range []string{socket.listen, socket.name, "Service=dragrace-site.service\n"} {
+			if !strings.Contains(unit, want) {
+				t.Fatalf("no %q in %s:\n%s", want, socket.file, unit)
+			}
+		}
+	}
+	service := units["/etc/systemd/system/dragrace-site.service"]
+	want := "Sockets=dragrace-site-https.socket dragrace-site-http.socket\n"
+	if !strings.Contains(service, want) {
+		t.Fatalf("no %q in:\n%s", want, service)
+	}
+}
+
 func TestCheckStream(t *testing.T) {
 	reference := "event: a\ndata: x\n\nevent: b\ndata: y\n\n"
 	head := "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"

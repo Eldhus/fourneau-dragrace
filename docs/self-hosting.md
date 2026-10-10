@@ -61,9 +61,16 @@ lacks, so it is done in the panel.
   ask `/api/health` for 30 s; no answer: point back, restart, log why. A
   schema change makes the new site refuse to open the database (roux has
   no migrations yet), so it rolls back until the owner migrates over SSH.
-- A restart drops the requests in flight; workers retry (below), so a
-  deploy during a race loses nothing. Commits are FULL: on the disk when
-  answered.
+- A restart refuses no one: systemd holds ports 443 and 80
+  (`dragrace-site-https.socket`, `dragrace-site-http.socket`, named for
+  fourneau's listen.zig), so a client connecting while the old site
+  drains (its requests in flight answered, 10 s at most; event streams
+  ended, which browsers reopen) and the new one starts waits in the
+  socket's queue (measured: three restarts under load, every request
+  answered, the slowest ~315 ms; fourneau and roux DIARY 2026-10-10).
+  Workers retry anyway (below). Commits are FULL: on the disk when
+  answered. Moving a host to the sockets is `site install-server` again:
+  it stops the site, starts the sockets, starts the site on them.
 - The host agent and the guard are installed by the owner and never
   update themselves (a broken one would stop the updates, or the budget);
   the racer updates itself from the newest release between races, from
