@@ -67,16 +67,23 @@ const App = struct {
     pub fn handle(app: *App, request: *Server.Request) Response {
         _ = app;
         const head = request.head;
-        if (head.method == .get and std.mem.eql(u8, head.path_and_query, "/plaintext")) {
+        const path = head.path();
+        // HEAD is a GET whose body the server leaves out (RFC 9110 §9.3.2).
+        const get = head.method == .get or head.method == .head;
+        if (std.mem.eql(u8, path, "/plaintext")) {
+            if (!get) return not_allowed(allow_get);
             return .{ .status = 200, .headers = text_plain, .body = "Hello, World!" };
         }
-        if (head.method == .post and std.mem.eql(u8, head.path_and_query, "/echo")) {
+        if (std.mem.eql(u8, path, "/echo")) {
+            if (head.method != .post) return not_allowed(allow_post);
             return echo(request);
         }
-        if (head.method == .get and std.mem.eql(u8, head.path_and_query, "/menu")) {
+        if (std.mem.eql(u8, path, "/menu")) {
+            if (!get) return not_allowed(allow_get);
             return menu(request);
         }
-        if (head.method == .get and std.mem.eql(u8, path_of(head.path_and_query), "/sse")) {
+        if (std.mem.eql(u8, path, "/sse")) {
+            if (!get) return not_allowed(allow_get);
             return sse(request);
         }
         if (shard_db) |*db| {
@@ -85,9 +92,12 @@ const App = struct {
         return .{ .status = 404, .headers = text_plain, .body = "not found" };
     }
 
-    fn path_of(target: []const u8) []const u8 {
-        const query_start = std.mem.indexOfScalar(u8, target, '?') orelse return target;
-        return target[0..query_start];
+    const allow_get: []const Header = &.{.{ .name = "Allow", .value = "GET, HEAD" }};
+    const allow_post: []const Header = &.{.{ .name = "Allow", .value = "POST" }};
+
+    /// 405 names the methods the path takes (RFC 9110 §15.5.6: Allow).
+    fn not_allowed(allow: []const Header) Response {
+        return .{ .status = 405, .headers = allow, .body = "" };
     }
 
     const event_stream: []const Header = &.{
