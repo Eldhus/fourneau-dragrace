@@ -122,9 +122,10 @@
      the same tests; no open loop on SSE; the templates ladder dropped,
      RealWorld's climb in both flavours at 60 s steps (the owner chose
      60 s over 100 s); "HTTPS" labelled "HTTP/2 + TLS"; 5% and 25%
-     added to the shares. Done, uncommitted until checked: echo-4k-tls
-     and conduit-tls added, every TLS title says which HTTP. A quick
-     local race of echo-4k-tls, conduit and conduit-tls: all valid.
+     added to the shares; HTTP/2 + TLS and dedicated-2 the tabs shown
+     first. Done and committed (292cd0e, 883c14c): echo-4k-tls and
+     conduit-tls added, every TLS title says which HTTP. A quick local
+     race of echo-4k-tls, conduit and conduit-tls: all valid.
    - Next, in this order (owner): push fourneau 5739295 (the OOM fix)
      and this, race it; then, alone, build the competitors for speed
      instead of `safe` and race that, to see what it does on its own.
