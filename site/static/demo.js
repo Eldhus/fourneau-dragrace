@@ -50,7 +50,9 @@
 // results in place (Datastar), and the workload you were looking at is put
 // back where it was, so flipping between sizes compares one chart, not two
 // scroll positions. Both sizes list the same workloads in the same order,
-// so the nth chart before is the nth after.
+// so the nth chart before is the nth after. A section switch (HTTP/1.1,
+// HTTP/2 + TLS) lists other workloads: it puts the first chart under the
+// tabs instead, if you had scrolled past it.
 (() => {
   let kept = null;
   document.addEventListener("datastar-fetch", (event) => {
@@ -58,11 +60,15 @@
     if (type === "started") {
       const region = el && el.closest && el.closest("#race-classes, #history-classes");
       if (!region) return;
-      const below = region.querySelector("nav.tabs").getBoundingClientRect().bottom;
+      const below = region.querySelector(".tabbar").getBoundingClientRect().bottom;
       const strips = [...region.querySelectorAll(".strip")];
-      const index = strips.findIndex((strip) => strip.getBoundingClientRect().bottom > below);
-      kept = index < 0 ? null
-        : { region: region.id, index, top: strips[index].getBoundingClientRect().top };
+      let index = strips.findIndex((strip) => strip.getBoundingClientRect().bottom > below);
+      let top = index < 0 ? 0 : strips[index].getBoundingClientRect().top;
+      if (index > 0 && el.closest("nav.protocol")) {
+        index = 0;
+        top = below + 14;
+      }
+      kept = index < 0 ? null : { region: region.id, index, top };
     } else if (type === "finished" && kept) {
       const { region, index, top } = kept;
       kept = null;

@@ -1,10 +1,13 @@
 {{> Top}}<article class="prose">
 <h1>Workloads</h1>
 <p>Each workload is one part of a server&rsquo;s job. Every server must answer the same bytes, checked against a reference before it races (<a href="/method">Method</a>).</p>
-{{?ready}}<div class="workloads">
+{{?ready}}{{#groups}}<h2>{{ heading }}</h2>
+<p>{{ note }}</p>
+<div class="workloads">
 {{#cards}}<section class="card"><h3>{{ title }} <code>{{ route }}</code></h3>
 <p>{{ summary }}</p><span class="spec">{{ spec }}</span></section>
 {{/cards}}</div>
+{{/groups}}
 <p>Each closed-loop workload: {{ warmup }}&nbsp;s warmup, {{ measure }}&nbsp;s measured, {{ rounds }} rounds, the median reported. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/main/race.json"><code>race.json</code></a>.</p>
 {{/ready}}{{^ready}}<p class="pending">No race yet: the workloads show once the first has run.</p>
 {{/ready}}

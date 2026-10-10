@@ -19,6 +19,11 @@ chunk; the ten wait in the send buffer and leave in one write. std.json
 takes a number in quotes (`"1"`) for a `u32`, where Go and serde refuse
 it: the standard library's choice, kept and pinned in a test.
 
+HTTPS (`--tls-cert`, `--tls-key`; RACING.md, TLS): fourneau's own,
+`fourneau.https.context` as roux and fourneau-static use it: tls.zig's
+TLS 1.3 handshake on the connection's fiber, then the keys to the kernel
+(kTLS), HTTP/2 by ALPN. No session resumption (fourneau has none).
+
 `/api/...` (conduit): SQLite as a Zig programmer would add it to a
 fourneau app: the amalgamation (roux's vendored copy, beside this
 repository) compiled in, a connection per shard with its statements

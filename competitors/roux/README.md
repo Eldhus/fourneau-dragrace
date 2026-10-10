@@ -16,6 +16,10 @@ rocstache in it, so it is the ceiling this one is measured against.
 signals, then roux's `Sse` effects, an event a `send!`, on the request's
 fiber.
 
+HTTPS (RACING.md, TLS): roux's own, `ROUX_TLS_CERT` and `ROUX_TLS_KEY`
+(fourneau's TLS: kTLS after the handshake, HTTP/2 by ALPN), as a roux app
+serves browsers with no proxy.
+
 `/api/...` (conduit): roux's SQLite. The statements are in
 `db/Conduit.sql`, typed by roux-db against the workload's schema (the
 build copies `workloads/conduit/schema.sql` to `db/schema.sql`), and

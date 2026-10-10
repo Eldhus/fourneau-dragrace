@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // Versions is versions.json: every pin a race depends on.
@@ -76,24 +77,46 @@ type Workload struct {
 	ContentType string `json:"content_type"`
 	Connections int    `json:"connections"`
 	Keepalive   bool   `json:"keepalive"`
-	// HTTP2, when set, sends over HTTP/2 by prior knowledge (h2c), each
-	// connection carrying Streams requests at once (oha --http2 -p).
+	// HTTP2, when set, sends over HTTP/2, each connection carrying
+	// Streams requests at once (oha --http2 -p): by prior knowledge (h2c),
+	// or by ALPN when TLS is set too.
 	HTTP2   bool `json:"http2,omitempty"`
 	Streams int  `json:"streams,omitempty"`
+	// TLS, when set, races the competitor's HTTPS mode (RACING.md, TLS);
+	// a competitor without one sits the workload out.
+	TLS bool `json:"tls,omitempty"`
+	// Section is where the site shows the workload: "http1" (HTTP/1.1,
+	// the default), "h2c" (HTTP/2 without TLS, beside plaintext), or "tls"
+	// (TLS, HTTP/2 where a browser would: the realistic deployment).
+	Section string `json:"section,omitempty"`
+	// Ladder, when set, climbs the open-loop ladder after the rounds
+	// (open_loop.go).
+	Ladder bool `json:"ladder,omitempty"`
 	// Mixed, when set, makes this an open-loop-only workload of several
 	// parts at once (mixed.go): conduit.
 	Mixed *Mixed `json:"mixed,omitempty"`
 }
 
-// hasHTTP2 says whether a race checks that competitors speak h2c.
-func (race Race) hasHTTP2() bool {
+// hasH2C says whether a race checks that competitors speak h2c.
+func (race Race) hasH2C() bool {
 	for _, workload := range race.Workloads {
-		if workload.HTTP2 {
+		if workload.HTTP2 && !workload.TLS {
 			return true
 		}
 	}
 	return false
 }
+
+// section is the workload's section on the site, "http1" when unset.
+func (workload Workload) section() string {
+	if workload.Section == "" {
+		return "http1"
+	}
+	return workload.Section
+}
+
+// sections are the site's: a workload names one of them.
+var sections = []string{"http1", "h2c", "tls"}
 
 // kind is how the site draws a workload: "closed" (bars of the rounds) or
 // "mixed" (a line, latency against the rate offered).
@@ -162,6 +185,15 @@ type RunSpec struct {
 	Env  map[string]string `json:"env"`
 	// FixedPort: the competitor cannot be told a port (its app names it).
 	FixedPort int `json:"fixed_port"`
+	// TLS is how the competitor serves HTTPS on the same port: arguments
+	// appended and environment added ({cert}, {key}: PEM files). Absent:
+	// it serves no TLS, and sits the TLS workloads out.
+	TLS *RunTLS `json:"tls,omitempty"`
+}
+
+type RunTLS struct {
+	Argv []string          `json:"argv"`
+	Env  map[string]string `json:"env"`
 }
 
 func readJSON(path string, into any) error {
@@ -193,9 +225,17 @@ func loadRace(root string) (Race, error) {
 	if err != nil {
 		return race, err
 	}
-	if race.OpenLoop.enabled() {
-		if _, found := workloadNamed(race, race.OpenLoop.Workload); !found {
-			return race, fmt.Errorf("race.json: open_loop names no workload %q", race.OpenLoop.Workload)
+	for _, workload := range race.Workloads {
+		if !slices.Contains(sections, workload.section()) {
+			return race, fmt.Errorf("race.json: %s: no section %q", workload.Name, workload.Section)
+		}
+		if workload.Ladder && (workload.Mixed != nil || len(race.OpenLoop.Shares) == 0) {
+			return race, fmt.Errorf("race.json: %s: a ladder needs rounds and open_loop's shares",
+				workload.Name)
+		}
+		if workload.HTTP2 && !workload.Keepalive {
+			return race, fmt.Errorf("race.json: %s: oha's HTTP/2 always keeps connections",
+				workload.Name)
 		}
 	}
 	race.Menu = string(menu)
@@ -229,14 +269,11 @@ func checkoutPath(root string, checkout Checkout) string {
 	return filepath.Clean(filepath.Join(root, checkout.Checkout))
 }
 
-// OpenLoop is the race's open-loop test (open_loop.go): one workload, at
-// fixed offered rates, each a share of the server's own closed-loop
-// median, held long enough for a steady state.
+// OpenLoop is the race's open-loop test (open_loop.go): each workload
+// marked `ladder`, at fixed offered rates, each a share of the server's
+// own closed-loop median, held long enough for a steady state.
 type OpenLoop struct {
-	Workload       string    `json:"workload"`
 	Shares         []float64 `json:"shares"`
 	WarmupSeconds  int       `json:"warmup_seconds"`
 	MeasureSeconds int       `json:"measure_seconds"`
 }
-
-func (open OpenLoop) enabled() bool { return open.Workload != "" && len(open.Shares) > 0 }

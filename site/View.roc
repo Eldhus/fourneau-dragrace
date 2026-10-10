@@ -32,7 +32,18 @@ View :: [].{
 	}
 	Strip : { title : Str, summary : Str, rows : List(Row), table : List(TableRow) }
 	Machine : { role : Str, text : Str }
-	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart) }
+	## A class as one section shows it (`intro` says what the section is),
+	## and below, outside the section's toggle, the h2c comparison (one, or
+	## none in a race without it).
+	Class : { name : Str, label : Str, title : Str, machines : List(Machine), intro : Str, strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
+	## Plaintext three ways: HTTP/1.1, HTTP/2 without TLS (h2c), HTTP/2 and
+	## TLS; each step's change is what HTTP/2, then TLS, cost or gave.
+	## `strips`: the h2c workload's bars, one strip (a template's section
+	## over a record is a list).
+	H2c : { strips : List(Strip), rows : List(H2cRow) }
+	H2cRow : { competitor : Str, plain : Str, h2c : Str, tls : Str, http2_change : Str, tls_change : Str }
+	## A section of the race page, toggled beside the class tabs.
+	Section : { name : Str, label : Str }
 	## The open-loop ladder: p99 against the offered rate, a line per
 	## competitor; a hollow point is a step where the loader was the limit.
 	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
@@ -42,7 +53,7 @@ View :: [].{
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note.
 	OpenChart : { title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
-	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), classes : List(Class) }
+	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
 	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str }
@@ -52,8 +63,9 @@ View :: [].{
 	Tick : { line_y : Str, text_y : Str, label : Str }
 	Mark : { x : Str, label : Str }
 	Chart : { title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
-	Charts : { name : Str, label : Str, title : Str, charts : List(Chart) }
-	History : { waiting : Bool, note : Str, competitors : List(Str), classes : List(Charts) }
+	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
+	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
+	History : { waiting : Bool, note : Str, competitors : List(Str), sections : List(Section), section : Str, classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
 
@@ -61,12 +73,16 @@ View :: [].{
 	## 2026-10-07: nothing typed in that race.json decides). `spec`: what
 	## the loader asked, small under the card.
 	WorkloadCard : { title : Str, route : Str, summary : Str, spec : Str }
-	Workloads : { ready : Bool, cards : List(WorkloadCard), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
+	## The cards of one section, under its heading and a sentence on it.
+	WorkloadGroup : { heading : Str, note : Str, cards : List(WorkloadCard) }
+	Workloads : { ready : Bool, groups : List(WorkloadGroup), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
 
 	workloads : List(Pages.WorkloadSpecs), Pages.RaceSettings -> Workloads
 	workloads = |specs, settings| {
 		ready: Bool.True,
-		cards: specs.map(workload_card),
+		groups: workload_groups
+			.map(|g| { heading: g.heading, note: g.note, cards: specs.keep_if(|w| w.section == g.section).map(workload_card) })
+			.keep_if(|g| !g.cards.is_empty()),
 		rounds: settings.rounds.to_str(),
 		warmup: settings.warmup_seconds.to_str(),
 		measure: settings.measure_seconds.to_str(),
@@ -95,47 +111,72 @@ View :: [].{
 			}
 		}
 
-	## A tab per class, linking to `page` with `?class=NAME`. Only names the
-	## race itself has are ever put in a link.
-	tabs : List({ name : Str, label : Str }), Str, Str -> List(Tab)
-	tabs = |classes, current, page|
-		classes.map(|class| {
-			href = "${page}?class=${class.name}"
-			fragment = if page == "/" "/race-classes" else "${page}-classes"
-			{
-				href,
-				label: class.label,
-				current: class.name == current,
-				action: "window.history.replaceState(null, '', '${href}'); @get('${fragment}?class=${class.name}')",
-			}
-		})
+	## A tab per class, linking to `page` with `?class=NAME` and the section
+	## shown (`protocol`), kept across a switch. Only names the race itself
+	## has are ever put in a link.
+	tabs : List({ name : Str, label : Str }), Str, Str, Str -> List(Tab)
+	tabs = |classes, current, section, page|
+		classes.map(|class| tab(page, class.name, section, class.label, class.name == current))
 
-	## The newest race, as the front page shows it.
-	latest : Data.Run -> Latest
-	latest = |run| {
-		id: run.id,
-		started: started(run.started_at),
-		took: took(run.timing),
-		timed: run.timing.seconds > 0.0,
-		commits: commits(run),
-		competitors: run.race.competitors,
-		classes: classes_of(run).map(|class| class_view(run, class)),
+	## A tab per section, beside the class tabs: the same class, the other
+	## section. None when the race has one section only.
+	section_tabs : List(Section), Str, Str, Str -> List(Tab)
+	section_tabs = |sections, current, class, page|
+		if List.len(sections) < 2 {
+			[]
+		} else {
+			sections.map(|s| tab(page, class, s.name, s.label, s.name == current))
+		}
+
+	## The section a page shows: the one asked for when the race has it,
+	## else the first (HTTP/1.1).
+	chosen_section : List(Section), Str -> Str
+	chosen_section = |sections, wanted| chosen(sections.map(|s| s.name), wanted)
+
+	## The sections a race has, in the page's order: HTTP/1.1, then HTTP/2
+	## and TLS. h2c is not one: it is shown below either.
+	sections_of : Data.Run -> List(Section)
+	sections_of = |run|
+		[{ name: "http1", label: "HTTP/1.1" }, { name: "tls", label: "HTTP/2 + TLS" }]
+			.keep_if(|s| run.race.workloads.any(|w| w.section == s.name))
+
+	## The newest race, as the front page shows it: one section.
+	latest : Data.Run, Str -> Latest
+	latest = |run, wanted| {
+		sections = sections_of(run)
+		section = chosen_section(sections, wanted)
+		{
+			id: run.id,
+			started: started(run.started_at),
+			took: took(run.timing),
+			timed: run.timing.seconds > 0.0,
+			commits: commits(run),
+			competitors: run.race.competitors,
+			sections,
+			section,
+			classes: classes_of(run).map(|class| class_view(run, class, section)),
+		}
 	}
 
 	## Every cloud race's medians (local ones only while no cloud race
-	## exists), a chart per server class and workload; two races at least.
-	history : Data.Run, List(Data.Entry) -> History
-	history = |run, entries| {
+	## exists), a chart per server class and workload of one section, and
+	## h2c's below; two races at least.
+	history : Data.Run, List(Data.Entry), Str -> History
+	history = |run, entries, wanted| {
 		cloud = entries.keep_if(|entry| entry.id.ends_with("-cloud"))
 		shown = if cloud.is_empty() entries else cloud
 		note = if cloud.is_empty() "No cloud race yet: these are local races." else ""
+		sections = sections_of(run)
+		section = chosen_section(sections, wanted)
+		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(shown, class.name, workload, run.race.competitors))
 		classes = classes_of(run).map(|class| {
 			name: class.name,
 			label: class.label,
 			title: class.title,
-			charts: closed(run.race.workloads).map(|workload| chart(shown, class.name, workload, run.race.competitors)),
+			charts: charted(section, class),
+			h2c: charted("h2c", class),
 		})
-		{ waiting: List.len(shown) < 2, note, competitors: run.race.competitors, classes }
+		{ waiting: List.len(shown) < 2, note, competitors: run.race.competitors, sections, section, classes }
 	}
 
 	## The pinned versions of the newest race.
@@ -199,17 +240,95 @@ classes_of = |run| {
 		})
 }
 
-class_view : Data.Run, Data.ServerClass -> View.Class
-class_view = |run, class| {
+## A tab: a link to `page` showing `class` in `section`. `action`:
+## Datastar's, on a click: the address updated and only the classes'
+## fragment fetched and swapped in place, so the page does not move;
+## without JavaScript the link loads the page.
+tab : Str, Str, Str, Str, Bool -> View.Tab
+tab = |page, class, section, label, current| {
+	query = "?class=${class}&protocol=${section}"
+	fragment = if page == "/" "/race-classes" else "${page}-classes"
+	{
+		href: "${page}${query}",
+		label,
+		current,
+		action: "window.history.replaceState(null, '', '${page}${query}'); @get('${fragment}${query}')",
+	}
+}
+
+class_view : Data.Run, Data.ServerClass, Str -> View.Class
+class_view = |run, class, section| {
 	# A loader is its class's now; before 2026-10-06 one loader, of class
 	# "loader", raced every class.
 	described = run.machines.keep_if(|machine| machine.class == class.name or machine.class == "loader")
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
 	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)}${memory(m.memory_mib)} · ${m.cpu} · Linux ${m.kernel}" })
-	strips = closed(run.race.workloads).map(|workload| strip(run, class.name, workload))
-	{ name: class.name, label: class.label, title: class.title, machines, strips, open: open_charts(run, class.name) }
+	strips = in_section(closed(run.race.workloads), section).map(|workload| strip(run, class.name, workload))
+	open = open_charts(run, class.name).keep_if(|o| o.section == section).map(|o| o.chart)
+	{ name: class.name, label: class.label, title: class.title, machines, intro: intro(section), strips, open, h2c: h2c_view(run, class.name) }
 }
+
+## The workloads one section shows.
+in_section : List(Data.Workload), Str -> List(Data.Workload)
+in_section = |workloads, section| workloads.keep_if(|w| w.section == section)
+
+## What a section is, one sentence over its results.
+intro : Str -> Str
+intro = |section|
+	if section == "tls" {
+		"The realistic deployment: HTTPS as browsers reach a server with no proxy in front. TLS 1.3, AES-128-GCM, X25519, an ECDSA P-256 certificate, no session resumption; HTTP/2 by ALPN (churn: HTTP/1.1). basic-webserver serves no TLS."
+	} else {
+		"Plain HTTP/1.1, as a server behind a proxy sees it."
+	}
+
+## Plaintext three ways, when the race has h2c: its bars, and each
+## competitor's HTTP/1.1, h2c and HTTPS plaintext side by side.
+h2c_view : Data.Run, Str -> List(View.H2c)
+h2c_view = |run, class|
+	match run.race.workloads.find_first(|w| w.section == "h2c") {
+		Err(_) => []
+		Ok(h2c) => {
+			found = |workload, competitor|
+				match run.results.find_first(|r| r.class == class and r.workload == workload and r.competitor == competitor and r.valid) {
+					Ok(r) => r.median_rps
+					Err(_) => 0.0
+				}
+			bars = strip(run, class, h2c)
+			rows = bars.rows.map(|bar| {
+				plain = found("plaintext", bar.competitor)
+				h2 = found(h2c.name, bar.competitor)
+				secure = found("plaintext-tls", bar.competitor)
+				{
+					competitor: bar.competitor,
+					plain: median_or_dash(plain),
+					h2c: median_or_dash(h2),
+					tls: median_or_dash(secure),
+					http2_change: change(plain, h2),
+					tls_change: change(h2, secure),
+				}
+			})
+			[{ strips: [bars], rows }]
+		}
+	}
+
+## A median, or a dash where there is none (not raced, or did not finish).
+median_or_dash : F64 -> Str
+median_or_dash = |rps| if rps > 0.0 Format.thousands(rps) else "—"
+
+## From `before` to `after` as a signed percentage ("+21%", "−12%").
+change : F64, F64 -> Str
+change = |before, after|
+	if before <= 0.0 or after <= 0.0 {
+		"—"
+	} else {
+		pct = (after / before - 1.0) * 100.0
+		if pct >= 0.0 "+${Format.thousands(pct)}%" else "−${Format.thousands(0.0 - pct)}%"
+	}
+
+expect change(100.0, 121.0) == "+21%"
+expect change(100.0, 88.0) == "−12%"
+expect change(0.0, 88.0) == "—" and median_or_dash(0.0) == "—"
 
 ## The workloads raced in rounds, drawn as bars and in the history; a
 ## mixed one (conduit) is a ladder only, drawn as a line (open_charts).
@@ -409,7 +528,7 @@ import "test/index.json" as index_sample : Str
 expect
 	match Data.run(latest_sample) {
 		Ok(run) => {
-			page = View.latest(run)
+			page = View.latest(run, "")
 			first_strip_ok =
 				match List.first(page.classes) {
 					Ok(class) =>
@@ -419,7 +538,9 @@ expect
 						}
 					Err(_) => Bool.False
 				}
-			List.len(page.classes) == 2 and List.len(page.commits) == 3 and first_strip_ok
+			# A race before HTTP/2 and TLS: one section, no toggle, no h2c.
+			one_section = page.section == "http1" and List.len(page.sections) == 1 and page.classes.all(|c| c.h2c.is_empty())
+			List.len(page.classes) == 2 and List.len(page.commits) == 3 and first_strip_ok and one_section
 		}
 		Err(_) => Bool.False
 	}
@@ -427,7 +548,7 @@ expect
 expect
 	match (Data.run(latest_sample), Data.index(index_sample)) {
 		(Ok(run), Ok(entries)) => {
-			page = View.history(run, entries)
+			page = View.history(run, entries, "tls")
 			List.len(page.classes) == 2 and page.waiting
 		}
 		_ => Bool.False
@@ -437,9 +558,16 @@ expect View.chosen(["smallest", "premium-4"], "premium-4") == "premium-4"
 expect View.chosen(["smallest", "premium-4"], "nope") == "smallest"
 expect View.chosen([], "nope") == ""
 expect {
-	tabs = View.tabs([{ name: "a", label: "A" }, { name: "b", label: "B" }], "b", "/history")
-	tabs.map(|tab| tab.href) == ["/history?class=a", "/history?class=b"] and tabs.map(|tab| tab.current) == [Bool.False, Bool.True]
+	tabs = View.tabs([{ name: "a", label: "A" }, { name: "b", label: "B" }], "b", "tls", "/history")
+	tabs.map(|t| t.href) == ["/history?class=a&protocol=tls", "/history?class=b&protocol=tls"] and tabs.map(|t| t.current) == [Bool.False, Bool.True]
 }
+expect {
+	both = [{ name: "http1", label: "HTTP/1.1" }, { name: "tls", label: "HTTP/2 + TLS" }]
+	tabs = View.section_tabs(both, "tls", "smallest", "/")
+	actions_ok = tabs.map(|t| t.action) == ["window.history.replaceState(null, '', '/?class=smallest&protocol=http1'); @get('/race-classes?class=smallest&protocol=http1')", "window.history.replaceState(null, '', '/?class=smallest&protocol=tls'); @get('/race-classes?class=smallest&protocol=tls')"]
+	actions_ok and tabs.map(|t| t.current) == [Bool.False, Bool.True] and View.section_tabs(List.take_first(both, 1), "http1", "a", "/").is_empty()
+}
+expect View.chosen_section([{ name: "http1", label: "" }], "tls") == "http1"
 
 vcpus : U32 -> Str
 vcpus = |count| if count == 1 "1 vCPU" else "${count.to_str()} vCPUs"
@@ -530,6 +658,13 @@ took = |timing| {
 loader_limit_pct : F64
 loader_limit_pct = 85.0
 
+## The Workloads page's sections, in the race page's order.
+workload_groups = [
+	{ section: "http1", heading: "HTTP/1.1", note: "Plain HTTP/1.1, as a server behind a proxy sees it." },
+	{ section: "h2c", heading: "HTTP/2 without TLS (h2c)", note: "HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section, beside Plaintext over HTTP/1.1 and HTTPS." },
+	{ section: "tls", heading: "HTTP/2 + TLS: the realistic deployment", note: "HTTPS as browsers reach a server with no proxy in front. Every server: TLS 1.3, AES-128-GCM, X25519, the race's ECDSA P-256 certificate, no session resumption. basic-webserver serves no TLS and sits these out." },
+]
+
 ## A workload's card: its route without the query (SSE's carries the
 ## signals), and what the loader asked of it.
 workload_card : Pages.WorkloadSpecs -> View.WorkloadCard
@@ -543,34 +678,38 @@ workload_card = |w| {
 		rates = "${Format.thousands(w.lowest.to_f64())} to ${Format.thousands(w.highest.to_f64())} requests a second"
 		{ title: w.title, route: path, summary: w.summary, spec: "Open loop only: ${w.mix}; ${rates}, the same for every server, each climbing until it falls behind." }
 	} else {
+		streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
 		reuse = if w.keepalive "kept alive" else "a new one per request"
 		body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
-		{ title: w.title, route: "${w.method} ${path}", summary: w.summary, spec: "${w.connections.to_str()} connections, ${reuse}${body}." }
+		secure = if w.tls ", over TLS" else ""
+		{ title: w.title, route: "${w.method} ${path}", summary: w.summary, spec: "${w.connections.to_str()} connections${streams}, ${reuse}${body}${secure}." }
 	}
 }
 
 expect {
-	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
+	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, http2: Bool.False, streams: 0, tls: Bool.False, section: "http1", mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
 	echo = workload_card(spec("closed", "POST", "/echo", 4096, 256, Bool.True))
 	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False))
 	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True))
+	page = workload_card({ ..spec("closed", "GET", "/menu", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls" })
 	echo.spec == "256 connections, kept alive, 4,096-byte body."
 	and sse.route == "GET /sse" and sse.spec == "64 connections, a new one per request."
 	and conduit.route == "/api/articles"
 	and conduit.spec == "Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."
+	and page.spec == "128 connections of 2 HTTP/2 streams, kept alive, over TLS."
 }
 
 ## The class's open-loop charts, a ladder each: the closed workload's
 ## (each server at shares of its own maximum), and each mixed workload's
 ## (at rates the same for every server).
-open_charts : Data.Run, Str -> List(View.OpenChart)
+open_charts : Data.Run, Str -> List({ section : Str, chart : View.OpenChart })
 open_charts = |run, class|
 	run.race.workloads.keep_oks(|workload| {
 		results = run.results.keep_if(|r| r.class == class and r.workload == workload.name and r.valid and !r.open_loop.is_empty())
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok(open_chart({ title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }))
+			Ok({ section: workload.section, chart: open_chart({ title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }) })
 		}
 	})
 

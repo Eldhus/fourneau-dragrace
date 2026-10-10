@@ -107,6 +107,51 @@ fn argument(name: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
+/// HTTPS, as the race asks of every competitor (RACING.md, TLS): TLS 1.3,
+/// X25519, no session resumption, HTTP/2 by ALPN. A task per connection,
+/// TCP_NODELAY as on plain HTTP; the handshake in that task.
+async fn serve_tls(listener: tokio::net::TcpListener, app: Router, cert: &str, key: &str) {
+    use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+    use std::sync::Arc;
+    use tokio_rustls::rustls;
+    let certs = CertificateDer::pem_file_iter(cert)
+        .expect("--tls-cert")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("--tls-cert");
+    let key = PrivateKeyDer::from_pem_file(key).expect("--tls-key");
+    let mut provider = rustls::crypto::aws_lc_rs::default_provider();
+    provider.kx_groups = vec![rustls::crypto::aws_lc_rs::kx_group::X25519];
+    // AES-128-GCM, as Go's server and browsers choose: rustls follows the
+    // client's order, and oha's puts AES-256-GCM first.
+    provider.cipher_suites = vec![
+        rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
+        rustls::crypto::aws_lc_rs::cipher_suite::TLS13_CHACHA20_POLY1305_SHA256,
+    ];
+    let mut config = rustls::ServerConfig::builder_with_provider(Arc::new(provider))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS 1.3")
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .expect("the certificate and key");
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    config.session_storage = Arc::new(rustls::server::NoServerSessionStorage {});
+    config.send_tls13_tickets = 0;
+    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+    let service = hyper_util::service::TowerToHyperService::new(app);
+    loop {
+        let Ok((tcp, _)) = listener.accept().await else { continue };
+        let _ = tcp.set_nodelay(true);
+        let (acceptor, service) = (acceptor.clone(), service.clone());
+        tokio::spawn(async move {
+            let Ok(tls) = acceptor.accept(tcp).await else { return };
+            let builder =
+                hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());
+            let io = hyper_util::rt::TokioIo::new(tls);
+            let _ = builder.serve_connection(io, service).await;
+        });
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let address = argument("--address", "127.0.0.1");
@@ -123,6 +168,12 @@ async fn main() {
         app = app.merge(conduit::routes(conduit));
     }
     let listener = tokio::net::TcpListener::bind((address.as_str(), port)).await.unwrap();
+    let tls_cert = argument("--tls-cert", "");
+    if !tls_cert.is_empty() {
+        println!("axum on https://{address}:{port}");
+        serve_tls(listener, app, &tls_cert, &argument("--tls-key", "")).await;
+        return;
+    }
     println!("axum on http://{address}:{port}");
     let listener = listener.tap_io(|tcp| {
         let _ = tcp.set_nodelay(true);

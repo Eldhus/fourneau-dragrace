@@ -23,6 +23,8 @@
   --flame: #ffa94d;
   --gold: #ffd76e;
   --link: #ffd76e;
+  /* The section toggle's and h2c's: no series is near it. */
+  --cyan: #5fd7ff;
   --series-go: #3987e5;
   --series-axum: #c98500;
   --series-fourneau-zig: #e64fae;
@@ -271,9 +273,27 @@ nav.tabs a + a { border-left: 0; }
    the width of the page, the page's own colour, blurred behind, so the
    bars pass beneath it cleanly; demo.js keeps the same workload in view
    across a switch. */
-nav.tabs { position: sticky; top: 0; z-index: 5; margin: 0 -16px 0; padding: 10px 16px;
+.tabbar { position: sticky; top: 0; z-index: 5; margin: 0 -16px 0; padding: 10px 16px;
   background: rgba(23, 11, 38, .9); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--grid); }
+  border-bottom: 1px solid var(--grid);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.tabbar nav.tabs { padding: 0; }
+/* The section toggle beside the sizes (the owner, 2026-10-10: another
+   layer, plainly another switch): shorter, in a cool cyan the sizes'
+   gold never uses. */
+nav.protocol:empty { display: none; }
+nav.protocol a { font-size: 8px; padding: 6px 10px; color: var(--cyan); border-color: rgba(95,215,255,.45);
+  background: rgba(23, 11, 38, .6); }
+nav.protocol a:hover, nav.protocol a[aria-current="page"] {
+  color: var(--surface); background: var(--cyan); border-color: var(--cyan); }
+@media (max-width: 560px) {
+  nav.protocol a { font-size: 8px; padding: 6px 8px; }
+}
+/* What a section is, over its results; h2c below either, set apart. */
+.intro { font-size: 13px; color: var(--text-2); margin: 0 0 14px; max-width: 760px; }
+.h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
+.h2c .class { color: var(--cyan); }
+.h2c .table { margin-top: 0; }
 /* The racer's news (tonight's race, a race now, a failed run) as an
    arcade banner (the owner, 2026-10-07): pixel type in gold on a lit
    panel, a blinking marker. */

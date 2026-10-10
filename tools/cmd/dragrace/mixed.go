@@ -109,11 +109,11 @@ func freshDatabase(target Target) string {
 // competitor that fails the checks has no steps and says why.
 func climbMixed(ctx context.Context, race Race, workload Workload, competitor Competitor,
 	target Target) ([]OpenStep, string, error) {
-	pid, err := startServer(ctx, race, competitor, target)
+	pid, err := startServer(ctx, race, competitor, target, plainMode)
 	if err != nil {
 		return nil, "", err
 	}
-	if err := waitReady(ctx, race, target); err != nil {
+	if err := waitReady(ctx, race, target, plainMode); err != nil {
 		why := "did not start: " + whyNotReady(ctx, competitor, target, pid)
 		stopServer(context.WithoutCancel(ctx), target, pid)
 		return nil, why, nil
@@ -124,12 +124,12 @@ func climbMixed(ctx context.Context, race Race, workload Workload, competitor Co
 		return nil, why, nil
 	}
 	// The checks wrote: the climb starts from the seed again.
-	pid, err = startServer(ctx, race, competitor, target)
+	pid, err = startServer(ctx, race, competitor, target, plainMode)
 	if err != nil {
 		return nil, "", err
 	}
 	defer stopServer(context.WithoutCancel(ctx), target, pid)
-	if err := waitReady(ctx, race, target); err != nil {
+	if err := waitReady(ctx, race, target, plainMode); err != nil {
 		return nil, "did not start again: " + whyNotReady(ctx, competitor, target, pid), nil
 	}
 	mixed := workload.Mixed
@@ -248,7 +248,7 @@ func partCommand(race Race, workload Workload, target Target, part Part, rate,
 		command.WriteString(" -d " + quote(part.Body) + " -T application/json")
 	}
 	// rand_regex: the base URL's dots are written as [.], so only the path varies.
-	base := strings.ReplaceAll(baseURL(race, target), ".", "[.]")
+	base := strings.ReplaceAll(baseURL(race, target, plainMode), ".", "[.]")
 	command.WriteString(" " + quote(base+part.Path))
 	return command.String()
 }
@@ -257,7 +257,7 @@ func partCommand(race Race, workload Workload, target Target, part Part, rate,
 // loader, on the seeded database: "" when it answers as the model says.
 func validateConduit(ctx context.Context, race Race, target Target) string {
 	model := newConduitModel()
-	url := baseURL(race, target)
+	url := baseURL(race, target, plainMode)
 	token := conduitToken(conduitLoadUser)
 	type check struct {
 		name, curl string

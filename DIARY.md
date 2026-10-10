@@ -1447,3 +1447,52 @@ site's Competitors page. roux's README still said its template was
 compiled to machine code (the templates-comptime branch, not chosen);
 corrected to the VM. The plaintext-h2 summary no longer says it is how
 a browser pays HTTP/2: no browser speaks h2c.
+
+## 2026-10-10: HTTP/2 and TLS, the realistic deployment
+
+The owner asked for a second layer: HTTP/1.1 kept, h2c kept to take
+HTTP/2 apart from TLS, and HTTPS as browsers reach a single binary with
+no proxy. Four workloads (race.json): plaintext-tls (h2c's shape over
+TLS: TLS's cost a request), churn-tls (a full handshake a request,
+HTTP/1.1), templates-tls and sse-tls (HTTP/2 + TLS, 128 connections of 2
+streams), the last two with ladders, as templates has. Orthogonal: each
+differs from a workload already raced in one thing.
+
+- The competitors: an HTTPS mode on the same port, from
+  `competitor.json`'s `run.tls` (Go's `ListenAndServeTLS`; axum through
+  tokio-rustls and hyper-util, as axum's low-level-rustls example;
+  fourneau-zig through `fourneau.https`; roux's `ROUX_TLS_*`).
+  basic-webserver's platform serves no TLS: it sits these out.
+- The same TLS for all (RACING.md, TLS): a race's own ECDSA P-256
+  certificate, TLS 1.3, X25519, AES-128-GCM, no resumption. Found while
+  checking it: oha (rustls) asks for AES-256 first and rustls and
+  fourneau follow the client, where Go chooses AES-128; so axum and
+  fourneau now offer AES-128 and ChaCha20 only (fourneau 9d34a4d). The
+  first check in TLS mode asks as oha does and refuses anything else.
+- The racer: a round starts each competitor once a mode (`raceMode`),
+  checked a mode at a time (`validKey`); ladders per workload
+  (`"ladder"`); workloads carry their section (`http1`, `h2c`, `tls`).
+- The site: the class tabs and, beside them, a smaller cyan toggle,
+  HTTP/1.1 and HTTP/2 + TLS (`?protocol=`), on the race page and the
+  history; below either, h2c's strip and a table of plaintext three ways
+  with HTTP/2's and TLS's change. The Workloads page in the three
+  sections. The schema: run_workloads gains http2, streams, tls,
+  section and ladder; run_settings loses open_loop_workload
+  (`site/migrations/2026-10-10-sections.sql`, which rebuilds the two
+  tables from schema.sql's text: roux compares it).
+
+Checked: a quick local race of plaintext, templates and every new
+workload (`race local -quick`), every competitor valid in both modes
+but basic-webserver (no TLS results, as meant); its results posted to a
+local site (curl, the racer's API), both sections and a phone's width
+looked at; the migration run on a database of the old schema, then
+opened by the new site (schema accepted, the ladder line right). Go
+tests, the site's 101 tests, fourneau's tests pass.
+
+Seen in that quick race (a busy laptop, 1-3 s rounds: not results):
+churn-tls fourneau-zig 1,985 and roux 1,969 a second against axum 5,836
+and Go 3,339 (fourneau's handshake: its TODO); plaintext over HTTPS
+fourneau-zig 254k against its h2c 351k, axum 105k against 121k, Go 29k
+against 32k. The TLS ladders showed p99 ~70 ms at half load for every
+server: each oha run opens its connections with their handshakes at
+once, which a 2 s step cannot dilute (RACING.md, TLS).

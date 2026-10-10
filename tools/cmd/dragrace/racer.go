@@ -92,7 +92,6 @@ type RacePost struct {
 	WarmupSeconds  int    `json:"warmup_seconds"`
 	MeasureSeconds int    `json:"measure_seconds"`
 	OpenLoop       struct {
-		Workload       string    `json:"workload"`
 		Shares         []float64 `json:"shares"`
 		WarmupSeconds  int       `json:"warmup_seconds"`
 		MeasureSeconds int       `json:"measure_seconds"`
@@ -117,6 +116,14 @@ type WorkloadPost struct {
 	ContentType string `json:"content_type"`
 	Connections int    `json:"connections"`
 	Keepalive   bool   `json:"keepalive"`
+	// How it was sent (config.go, Workload): HTTP/2's streams a connection
+	// (0 for HTTP/1.1), TLS, the site's section, and a ladder after the
+	// rounds.
+	HTTP2   bool   `json:"http2"`
+	Streams int    `json:"streams"`
+	TLS     bool   `json:"tls"`
+	Section string `json:"section"`
+	Ladder  bool   `json:"ladder"`
 }
 
 type NameVersion struct {
@@ -492,13 +499,19 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 		MeasureSeconds: race.MeasureSeconds, RaceJSON: string(raceJSON),
 		VersionsJSON: string(versionsJSON)}
 	for _, workload := range race.Workloads {
+		streams := 0
+		if workload.HTTP2 {
+			streams = max(1, workload.Streams)
+		}
 		post.Workloads = append(post.Workloads, WorkloadPost{Name: workload.Name,
 			Kind: workload.kind(), Title: workload.Title, Summary: workload.Summary,
 			Method: workload.Method, Path: workload.Path, BodyBytes: workload.BodyBytes,
 			ContentType: workload.ContentType, Connections: workload.Connections,
-			Keepalive: workload.Keepalive})
+			Keepalive: workload.Keepalive, HTTP2: workload.HTTP2, Streams: streams,
+			TLS: workload.TLS, Section: workload.section(),
+			Ladder: workload.Ladder && len(race.OpenLoop.Shares) > 0})
 	}
-	post.OpenLoop.Workload, post.OpenLoop.Shares = race.OpenLoop.Workload, race.OpenLoop.Shares
+	post.OpenLoop.Shares = race.OpenLoop.Shares
 	post.OpenLoop.WarmupSeconds = race.OpenLoop.WarmupSeconds
 	post.OpenLoop.MeasureSeconds = race.OpenLoop.MeasureSeconds
 	if post.OpenLoop.Shares == nil {

@@ -103,7 +103,17 @@
    plaintext, plaintext-h2 and plaintext-tls side by side (HTTP/2's
    cost, then TLS's). Push all of it and run a manual race (the owner
    asked for both).
-   - Where it stands (2026-10-10): started; the plan above.
+   - Where it stands (2026-10-10): built and checked locally (a quick
+     local race of every new workload, each competitor valid in TLS mode
+     but basic-webserver, which sits out; the site's pages from it, both
+     sections and a phone's width; the migration on a database of the
+     old schema, opened by the new site). Left: commit, push, the
+     migration on the site host (`site/migrations/2026-10-10-sections.sql`,
+     SECURITY.md), then the manual race, then read it.
+   - Open: an open loop over TLS starts each oha run with every
+     connection's handshake at once, which weighs on short steps' tail
+     (RACING.md, TLS); see what the 10 s steps show before trusting the
+     TLS ladders' p99.9.
 
 ## Chores
 

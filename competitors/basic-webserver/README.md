@@ -26,6 +26,9 @@ a stream, so this uses the stream.
 
 Address and port come from `DRAGRACE_ADDRESS` and `DRAGRACE_PORT`.
 
+No HTTPS: the platform's server is plain HTTP (its rustls is for its
+HTTP client), so it sits the TLS workloads out (RACING.md, TLS).
+
 Started with SIGPIPE ignored (`trap '' PIPE; exec`), as systemd starts
 every service (`IgnoreSIGPIPE=yes`, its default). The host leaves SIGPIPE
 at its default: its Rust code runs under Roc's entry point, not Rust's

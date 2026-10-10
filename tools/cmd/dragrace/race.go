@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +64,13 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 	if err != nil {
 		return err
 	}
-	valid := map[string]string{} // competitor -> why it is not valid ("" if valid)
+	if race.hasTLS() {
+		if err := putCertificate(ctx, target); err != nil {
+			return err
+		}
+	}
+	// validKey(competitor, mode) -> why it is not valid ("" if valid).
+	valid := map[string]string{}
 	for round := 1; round <= race.Rounds; round++ {
 		order := shuffled(competitors, run.Seed+int64(round))
 		for _, competitor := range order {
@@ -77,41 +85,91 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 			}
 		}
 	}
-	if race.OpenLoop.enabled() {
-		if err := openLoop(ctx, race, competitors, target, bodies, valid, run); err != nil {
-			return err
-		}
+	if err := openLoop(ctx, race, competitors, target, bodies, valid, run); err != nil {
+		return err
 	}
 	return mixedLoop(ctx, race, competitors, target, valid, run)
 }
 
+// Mode is how a competitor is started: plain HTTP (HTTP/1.1 and h2c), or
+// its HTTPS mode, on the same port. A round starts it once in each mode
+// its workloads need, in a seeded order.
+type Mode bool
+
+const (
+	plainMode Mode = false
+	tlsMode   Mode = true
+)
+
+func (workload Workload) mode() Mode { return Mode(workload.TLS) }
+
+// validKey is a competitor's entry in the valid map: each mode is checked
+// on its own, so one that fails TLS still races plain HTTP.
+func validKey(competitor string, mode Mode) string {
+	if mode == tlsMode {
+		return competitor + " (TLS)"
+	}
+	return competitor
+}
+
+// offers says whether a competitor races a workload: one with no HTTPS
+// mode sits the TLS workloads out, with no result.
+func (competitor Competitor) offers(workload Workload) bool {
+	return workload.mode() == plainMode || competitor.Run.TLS != nil
+}
+
+func (race Race) hasTLS() bool {
+	return slices.ContainsFunc(race.Workloads, func(w Workload) bool { return w.TLS })
+}
+
 func raceCompetitor(ctx context.Context, race Race, competitor Competitor, target Target,
 	bodies map[int]string, round int, valid map[string]string, run *Run) error {
-	pid, err := startServer(ctx, race, competitor, target)
-	if err != nil {
-		return err
-	}
-	defer stopServer(context.WithoutCancel(ctx), target, pid)
-	if err := waitReady(ctx, race, target); err != nil {
-		valid[competitor.Name] = "did not start: " + whyNotReady(ctx, competitor, target, pid)
-	}
-	if round == 1 && valid[competitor.Name] == "" {
-		valid[competitor.Name] = validate(ctx, race, target, bodies)
-	}
 	// Each round and competitor its own order of workloads: in one order
 	// always, a server process's drift (memory grown, churn's TIME_WAIT
 	// left behind) landed on the same workloads every time. From the seed,
 	// so a run replays.
 	name := fnv.New64a()
 	name.Write([]byte(competitor.Name))
-	order := shuffled(race.Workloads, run.Seed+int64(round)*7919+int64(name.Sum64()>>1))
-	for _, workload := range order {
-		if workload.Mixed != nil {
-			continue // open loop only, after the rounds (mixedLoop)
+	seed := run.Seed + int64(round)*7919 + int64(name.Sum64()>>1)
+	for _, mode := range shuffled([]Mode{plainMode, tlsMode}, seed+1) {
+		var workloads []Workload
+		for _, workload := range shuffled(race.Workloads, seed) {
+			// A mixed workload is open loop only, after the rounds (mixedLoop).
+			if workload.Mixed == nil && workload.mode() == mode && competitor.offers(workload) {
+				workloads = append(workloads, workload)
+			}
 		}
+		if len(workloads) == 0 {
+			continue
+		}
+		err := raceMode(ctx, race, competitor, target, bodies, round, valid, run, mode, workloads)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// raceMode starts the competitor in one mode and races its workloads.
+func raceMode(ctx context.Context, race Race, competitor Competitor, target Target,
+	bodies map[int]string, round int, valid map[string]string, run *Run, mode Mode,
+	workloads []Workload) error {
+	key := validKey(competitor.Name, mode)
+	pid, err := startServer(ctx, race, competitor, target, mode)
+	if err != nil {
+		return err
+	}
+	defer stopServer(context.WithoutCancel(ctx), target, pid)
+	if err := waitReady(ctx, race, target, mode); err != nil {
+		valid[key] = "did not start: " + whyNotReady(ctx, competitor, target, pid)
+	}
+	if round == 1 && valid[key] == "" {
+		valid[key] = validate(ctx, race, target, bodies, mode)
+	}
+	for _, workload := range workloads {
 		result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
-		result.Valid = valid[competitor.Name] == ""
-		result.Note = valid[competitor.Name]
+		result.Valid = valid[key] == ""
+		result.Note = valid[key]
 		if !result.Valid {
 			continue
 		}
@@ -176,27 +234,42 @@ func putBodies(ctx context.Context, race Race, target Target, seed int64) (map[i
 	return bodies, nil
 }
 
-func startServer(ctx context.Context, race Race, competitor Competitor, target Target) (string, error) {
+func startServer(ctx context.Context, race Race, competitor Competitor, target Target,
+	mode Mode) (string, error) {
 	values := map[string]string{
 		"bin":     target.ServerHome + "/bin/" + competitor.Name,
 		"address": target.Address,
 		"port":    strconv.Itoa(race.Port),
 		"db":      target.ServerHome + "/" + conduitDatabaseName,
+		"cert":    target.ServerHome + "/" + certificateName,
+		"key":     target.ServerHome + "/" + keyName,
 	}
 	if race.hasMixed() {
 		if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
 			return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
 		}
 	}
+	env, argv := competitor.Run.Env, competitor.Run.Argv
+	if mode == tlsMode {
+		if competitor.Run.TLS == nil {
+			return "", fmt.Errorf("%s serves no TLS", competitor.Name)
+		}
+		env = maps.Clone(env)
+		if env == nil {
+			env = map[string]string{}
+		}
+		maps.Copy(env, competitor.Run.TLS.Env)
+		argv = slices.Concat(argv, competitor.Run.TLS.Argv)
+	}
 	var command strings.Builder
 	command.WriteString("cd " + quote(target.ServerHome) + " && ")
 	command.WriteString("ulimit -n $(ulimit -Hn); ")
 	command.WriteString("env")
-	for key, value := range competitor.Run.Env {
+	for key, value := range env {
 		command.WriteString(" " + quote(key+"="+expand(value, values)))
 	}
 	command.WriteString(" nohup " + target.taskset(target.ServerCPUs))
-	for _, arg := range competitor.Run.Argv {
+	for _, arg := range argv {
 		command.WriteString(quote(expand(arg, values)) + " ")
 	}
 	command.WriteString("> " + quote(competitor.Name+".log") + " 2>&1 < /dev/null & echo $!")
@@ -236,53 +309,77 @@ func whyNotReady(ctx context.Context, competitor Competitor, target Target, pid 
 	return "no answer in 10 s: " + strings.Join(strings.Fields(why), " ")
 }
 
-func baseURL(race Race, target Target) string {
-	return fmt.Sprintf("http://%s:%d", target.Address, race.Port)
+func baseURL(race Race, target Target, mode Mode) string {
+	scheme := "http"
+	if mode == tlsMode {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s:%d", scheme, target.Address, race.Port)
 }
 
-func waitReady(ctx context.Context, race Race, target Target) error {
+// curlFor is curl as the checks run it: over TLS it takes the race's own
+// certificate (-k) and offers oha's ciphers in oha's order (rustls's:
+// AES-256-GCM first), so the cipher a check sees is the one the race uses.
+func curlFor(mode Mode) string {
+	if mode == tlsMode {
+		return "curl -s -m 5 -k --tls13-ciphers " +
+			"TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256 "
+	}
+	return "curl -s -m 5 "
+}
+
+func waitReady(ctx context.Context, race Race, target Target, mode Mode) error {
+	curl := strings.Replace(curlFor(mode), "-m 5", "-m 1", 1)
 	script := fmt.Sprintf("for i in $(seq 100); do "+
-		"[ \"$(curl -s -m 1 -o /dev/null -w '%%{http_code}' %s/plaintext)\" = 200 ] && exit 0; "+
-		"sleep 0.1; done; exit 1", baseURL(race, target))
+		"[ \"$(%s-o /dev/null -w '%%{http_code}' %s/plaintext)\" = 200 ] && exit 0; "+
+		"sleep 0.1; done; exit 1", curl, baseURL(race, target, mode))
 	_, err := target.Loader.Shell(ctx, script)
 	return err
 }
 
 // validate checks that a competitor does the work: the exact plaintext,
-// the echoed body byte for byte, a 404. "" when it does.
-func validate(ctx context.Context, race Race, target Target, bodies map[int]string) string {
-	url := baseURL(race, target)
-	got, err := target.Loader.Shell(ctx, "curl -s -m 5 "+url+"/plaintext")
+// the echoed body byte for byte, a 404. "" when it does. In TLS mode, the
+// same over HTTPS, HTTP/2 by ALPN, and what TLS was agreed (validateTLS).
+func validate(ctx context.Context, race Race, target Target, bodies map[int]string,
+	mode Mode) string {
+	url := baseURL(race, target, mode)
+	curl := curlFor(mode)
+	got, err := target.Loader.Shell(ctx, curl+url+"/plaintext")
 	if err != nil || got != "Hello, World!" {
 		return fmt.Sprintf("/plaintext answered %q", got)
+	}
+	if mode == tlsMode {
+		if why := validateTLS(ctx, target, url); why != "" {
+			return why
+		}
 	}
 	for _, body := range bodies {
 		want, err := target.Loader.Shell(ctx, "sha256sum < "+quote(body)+" | cut -c1-64")
 		if err != nil {
 			return err.Error()
 		}
-		got, err := target.Loader.Shell(ctx, "curl -s -m 5 -X POST --data-binary @"+quote(body)+
+		got, err := target.Loader.Shell(ctx, curl+"-X POST --data-binary @"+quote(body)+
 			" -H 'Content-Type: application/octet-stream' "+url+"/echo | sha256sum | cut -c1-64")
 		if err != nil || got != want {
 			return "/echo did not answer the body it was sent"
 		}
 	}
-	got, err = target.Loader.Shell(ctx, "curl -s -m 5 "+url+"/menu")
+	got, err = target.Loader.Shell(ctx, curl+url+"/menu")
 	// Shell trims trailing newlines from what it returns; so is the reference.
 	want := strings.TrimRight(canonicalEntities(race.Menu), "\n")
 	if err != nil || canonicalEntities(got) != want {
 		return "/menu did not render the menu (workloads/menu.html)"
 	}
-	if why := validateStream(ctx, race, target); why != "" {
+	if why := validateStream(ctx, race, target, mode); why != "" {
 		return why
 	}
-	if race.hasHTTP2() {
-		got, err = target.Loader.Shell(ctx, "curl -s -m 5 --http2-prior-knowledge "+url+"/plaintext")
+	if mode == plainMode && race.hasH2C() {
+		got, err = target.Loader.Shell(ctx, curl+"--http2-prior-knowledge "+url+"/plaintext")
 		if err != nil || got != "Hello, World!" {
 			return fmt.Sprintf("/plaintext over HTTP/2 (h2c) answered %q", got)
 		}
 	}
-	got, err = target.Loader.Shell(ctx, "curl -s -m 5 -o /dev/null -w '%{http_code}' "+url+"/nope")
+	got, err = target.Loader.Shell(ctx, curl+"-o /dev/null -w '%{http_code}' "+url+"/nope")
 	if err != nil || got != "404" {
 		return fmt.Sprintf("/nope answered %s, not 404", got)
 	}
@@ -325,6 +422,11 @@ func ohaCommand(race Race, workload Workload, target Target, bodies map[int]stri
 	if workload.HTTP2 {
 		fmt.Fprintf(&command, " --http2 -p %d", max(1, workload.Streams))
 	}
+	if workload.TLS {
+		// The race's own certificate. oha offers HTTP/2 by ALPN only with
+		// --http2; churn-tls, without it, is HTTP/1.1 over TLS.
+		command.WriteString(" --insecure")
+	}
 	if workload.Method != "GET" {
 		command.WriteString(" -m " + workload.Method)
 	}
@@ -332,7 +434,7 @@ func ohaCommand(race Race, workload Workload, target Target, bodies map[int]stri
 		command.WriteString(" -D " + quote(bodies[workload.BodyBytes]))
 		command.WriteString(" -T " + quote(workload.ContentType))
 	}
-	command.WriteString(" " + baseURL(race, target) + workload.Path)
+	command.WriteString(" " + baseURL(race, target, workload.mode()) + workload.Path)
 	return command.String()
 }
 
@@ -600,7 +702,8 @@ func canonicalEntities(page string) string { return entitySpellings.Replace(page
 // validateStream checks the SSE workload's route when the race runs it:
 // the stream, sent a chunk per event (checkStream), and 400 for a request
 // without signals. Raw bytes cross the shell as base64: it trims newlines.
-func validateStream(ctx context.Context, race Race, target Target) string {
+// Over TLS too in HTTP/1.1, whose chunks show how the events were sent.
+func validateStream(ctx context.Context, race Race, target Target, mode Mode) string {
 	var workload *Workload
 	for i := range race.Workloads {
 		if race.Workloads[i].Name == "sse" {
@@ -610,8 +713,9 @@ func validateStream(ctx context.Context, race Race, target Target) string {
 	if workload == nil {
 		return ""
 	}
-	url := baseURL(race, target)
-	encoded, err := target.Loader.Shell(ctx, "curl -s -m 5 --include --raw "+
+	url := baseURL(race, target, mode)
+	curl := curlFor(mode)
+	encoded, err := target.Loader.Shell(ctx, curl+"--http1.1 --include --raw "+
 		quote(url+workload.Path)+" | base64 -w0")
 	if err != nil {
 		return "/sse: " + err.Error()
@@ -624,7 +728,7 @@ func validateStream(ctx context.Context, race Race, target Target) string {
 		return "/sse: " + why
 	}
 	path, _, _ := strings.Cut(workload.Path, "?")
-	got, err := target.Loader.Shell(ctx, "curl -s -m 5 -o /dev/null -w '%{http_code}' "+url+path)
+	got, err := target.Loader.Shell(ctx, curl+"-o /dev/null -w '%{http_code}' "+url+path)
 	if err != nil || got != "400" {
 		return fmt.Sprintf("%s without signals answered %s, not 400", path, got)
 	}

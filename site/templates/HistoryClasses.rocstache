@@ -1,15 +1,8 @@
 <div id="history-classes">
-<nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav>
+<div class="tabbar"><nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav><nav class="tabs protocol" aria-label="Protocol">{{#sections}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/sections}}</nav></div>
 {{#classes}}<h2 class="class">{{ title }}</h2>
 <div class="strips">
-{{#charts}}<figure class="strip"><figcaption><b>{{ title }}</b>median req/s, race by race</figcaption>
-{{?empty}}<p class="pending">no results yet</p>{{/empty}}{{^empty}}<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: median requests per second by race">
-{{#ticks}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
-{{/ticks}}{{#dates}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>
-{{/dates}}{{#lines}}{{?drawn}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
-{{#dots}}<circle class="point s-{{ ../competitor }}" cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}"><title>{{ title }}</title></circle>
-{{/dots}}<text class="end" x="{{ label_x }}" y="{{ label_y }}">{{ competitor }}</text>
-{{/drawn}}{{/lines}}</svg></div>{{/empty}}</figure>
-{{/charts}}</div>
-{{/classes}}
+{{#charts}}{{> HistoryChart}}{{/charts}}</div>
+{{#h2c}}<div class="h2c">{{> HistoryChart}}</div>
+{{/h2c}}{{/classes}}
 </div>

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -46,6 +47,8 @@ func main() {
 	address := flag.String("address", "127.0.0.1", "address to listen on")
 	port := flag.String("port", "8080", "port to listen on")
 	database := flag.String("database", "", "the conduit workload's SQLite database")
+	tlsCert := flag.String("tls-cert", "", "serve HTTPS with this certificate (PEM)")
+	tlsKey := flag.String("tls-key", "", "and this key (PEM)")
 	flag.Parse()
 
 	mux := http.NewServeMux()
@@ -74,9 +77,21 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       30 * time.Second,
 	}
-	// HTTP/2 by prior knowledge (h2c) beside HTTP/1.1, as net/http offers it.
 	server.Protocols = new(http.Protocols)
 	server.Protocols.SetHTTP1(true)
+	if *tlsCert != "" {
+		// HTTPS, as the race asks of every competitor (RACING.md, TLS):
+		// TLS 1.3, X25519, no session resumption, HTTP/2 by ALPN.
+		server.Protocols.SetHTTP2(true)
+		server.TLSConfig = &tls.Config{
+			MinVersion:             tls.VersionTLS13,
+			CurvePreferences:       []tls.CurveID{tls.X25519},
+			SessionTicketsDisabled: true,
+		}
+		log.Printf("go on https://%s", server.Addr)
+		log.Fatal(server.ListenAndServeTLS(*tlsCert, *tlsKey))
+	}
+	// HTTP/2 by prior knowledge (h2c) beside HTTP/1.1, as net/http offers it.
 	server.Protocols.SetUnencryptedHTTP2(true)
 	log.Printf("go on http://%s", server.Addr)
 	log.Fatal(server.ListenAndServe())

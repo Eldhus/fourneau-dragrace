@@ -56,7 +56,9 @@ Err : [BadRequest(Str), DbErr(Sqlite.Err), SseErr(Sse.SseErr), EncodeErr(Str)]
 respond! : Server.Request, Context => Try(Server.Response(_), Err)
 respond! = |request, { db, tokens }| {
 	path = path_of(request.target)
-	wanted = query_value(request.target, "class")
+	# The class and the section (HTTP/1.1, HTTP/2 + TLS) asked for; the
+	# pages show only names the race has.
+	wanted = { class: query_value(request.target, "class"), protocol: query_value(request.target, "protocol") }
 	if path.starts_with("/api/") {
 		Api.respond!(request, db, tokens, path)
 	} else {
@@ -93,19 +95,23 @@ about = Rocstache.html(AboutPage.template(frame("About", "/about")))
 
 # --- the pages that read the races ------------------------------------------
 
+## What a page was asked to show: a server class and a section.
+Wanted : { class : Str, protocol : Str }
+
 ## The newest race, one server class at a time (`?class=NAME`), with a tab
-## per class.
-index! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
+## per class, and one section (`&protocol=http1` or `tls`) with a tab per
+## section beside them.
+index! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
 index! = |db, request, wanted| {
 	base = frame("FOURNEAU HTTP DRAG RACE", "/")
 	{ ready, latest } =
 		match Store.latest!(db, request) {
-			Ok(run) => { ready: Bool.True, latest: View.latest(run) }
+			Ok(run) => { ready: Bool.True, latest: View.latest(run, wanted.protocol) }
 			Err(NotFound) => { ready: Bool.False, latest: no_race }
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	current = View.chosen(latest.classes.map(|class| class.name), wanted)
 	racer = Store.status(Store.racer!(db, request)?)
+	shown = race_tabs(latest, wanted)
 	Ok(Rocstache.html(IndexPage.template({
 		title: base.title,
 		home: Bool.True,
@@ -118,16 +124,27 @@ index! = |db, request, wanted| {
 		timed: latest.timed,
 		commits: latest.commits,
 		competitors: latest.competitors,
-		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, "/"),
-		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
+		tabs: shown.tabs,
+		sections: shown.sections,
+		classes: shown.classes,
 	})))
 }
 
-history! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
+## The race page's tabs, its section tabs and the class they show.
+race_tabs = |latest, wanted| {
+	current = View.chosen(latest.classes.map(|class| class.name), wanted.class)
+	{
+		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, latest.section, "/"),
+		sections: View.section_tabs(latest.sections, latest.section, current, "/"),
+		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
+	}
+}
+
+history! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
 history! = |db, request, wanted| {
 	base = frame("History", "/history")
-	view = history_view!(db, request)?
-	current = View.chosen(view.classes.map(|class| class.name), wanted)
+	view = history_view!(db, request, wanted.protocol)?
+	shown = history_tabs(view, wanted)
 	Ok(Rocstache.html(HistoryPage.template({
 		title: base.title,
 		home: base.home,
@@ -135,9 +152,20 @@ history! = |db, request, wanted| {
 		waiting: view.waiting,
 		note: view.note,
 		competitors: view.competitors,
-		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),
-		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
+		tabs: shown.tabs,
+		sections: shown.sections,
+		classes: shown.classes,
 	})))
+}
+
+## The history page's tabs, its section tabs and the class they show.
+history_tabs = |view, wanted| {
+	current = View.chosen(view.classes.map(|class| class.name), wanted.class)
+	{
+		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, view.section, "/history"),
+		sections: View.section_tabs(view.sections, view.section, current, "/history"),
+		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
+	}
 }
 
 competitors! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
@@ -159,7 +187,7 @@ workloads! = |db, request| {
 	view =
 		match Store.workloads!(db, request) {
 			Ok({ specs, settings }) => View.workloads(specs, settings)
-			Err(NotFound) => { ready: Bool.False, cards: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
+			Err(NotFound) => { ready: Bool.False, groups: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	Ok(Rocstache.html(WorkloadsPage.template({
@@ -167,7 +195,7 @@ workloads! = |db, request| {
 		home: base.home,
 		nav: base.nav,
 		ready: view.ready,
-		cards: view.cards,
+		groups: view.groups,
 		rounds: view.rounds,
 		warmup: view.warmup,
 		measure: view.measure,
@@ -177,28 +205,28 @@ workloads! = |db, request| {
 	})))
 }
 
-history_view! : Sqlite.Db, Server.Request => Try(View.History, [DbErr(Sqlite.Err)])
-history_view! = |db, request|
+history_view! : Sqlite.Db, Server.Request, Str => Try(View.History, [DbErr(Sqlite.Err)])
+history_view! = |db, request, section|
 	match Store.latest!(db, request) {
-		Ok(run) => Ok(View.history(run, Store.history!(db, request)?))
+		Ok(run) => Ok(View.history(run, Store.history!(db, request)?, section))
 		Err(NotFound) => Ok(no_history)
 		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
 ## Before the first race: the pages say so.
 no_history : View.History
-no_history = { waiting: Bool.True, note: "", competitors: [], classes: [] }
+no_history = { waiting: Bool.True, note: "", competitors: [], sections: [], section: "", classes: [] }
 
 no_race : View.Latest
-no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], classes: [] }
+no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], sections: [], section: "", classes: [] }
 
 ## A server class as the race's templates read it: without its tab's
 ## label (the tabs have it), since a template's contract is exactly what
 ## it reads.
-race_class = |class| { name: class.name, title: class.title, machines: class.machines, strips: class.strips, open: class.open }
+race_class = |class| { name: class.name, title: class.title, machines: class.machines, intro: class.intro, strips: class.strips, open: class.open, h2c: class.h2c }
 
 ## A server class's history charts as their template reads them.
-history_class = |class| { title: class.title, charts: class.charts }
+history_class = |class| { title: class.title, charts: class.charts, h2c: class.h2c }
 
 # --- the raw data -------------------------------------------------------------
 
@@ -350,30 +378,23 @@ expect !is_name("..") and !is_name("a/b") and !is_name("")
 
 ## The race page's tabs and class, alone: what a tab's click swaps in
 ## (Datastar patches #race-classes in place, so the page does not move).
-race_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
+race_classes! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
 race_classes! = |db, request, wanted| {
 	latest =
 		match Store.latest!(db, request) {
-			Ok(run) => View.latest(run)
+			Ok(run) => View.latest(run, wanted.protocol)
 			Err(NotFound) => no_race
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	current = View.chosen(latest.classes.map(|class| class.name), wanted)
-	patch!(request, RaceClasses.template({
-		id: latest.id,
-		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, "/"),
-		classes: latest.classes.keep_if(|class| class.name == current).map(race_class),
-	}))
+	shown = race_tabs(latest, wanted)
+	patch!(request, RaceClasses.template({ id: latest.id, tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
 }
 
-history_classes! : Sqlite.Db, Server.Request, Str => Try(Server.Response(_), Err)
+history_classes! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
 history_classes! = |db, request, wanted| {
-	view = history_view!(db, request)?
-	current = View.chosen(view.classes.map(|class| class.name), wanted)
-	patch!(request, HistoryClasses.template({
-		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, "/history"),
-		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
-	}))
+	view = history_view!(db, request, wanted.protocol)?
+	shown = history_tabs(view, wanted)
+	patch!(request, HistoryClasses.template({ tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
 }
 
 ## A Datastar patch: one event, the template's HTML a line per `elements`

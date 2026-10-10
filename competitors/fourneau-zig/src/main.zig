@@ -216,6 +216,11 @@ const Options = struct {
     port: u16 = 8080,
     /// The conduit workload's database; "" for none.
     database: [:0]const u8 = "",
+    /// HTTPS (`--tls-cert`, `--tls-key`): fourneau's TLS 1.3, its keys to
+    /// the kernel (kTLS), HTTP/2 by ALPN. No session resumption: fourneau
+    /// has none.
+    https: fourneau.https.Options = .{},
+    tls: ?*const fourneau.tls.Context = null,
 };
 
 pub fn main(init: std.process.Init.Minimal) !void {
@@ -231,14 +236,22 @@ pub fn main(init: std.process.Init.Minimal) !void {
             options.port = try std.fmt.parseInt(u16, value, 10);
         } else if (std.mem.eql(u8, arg, "--database")) {
             options.database = value;
+        } else if (std.mem.eql(u8, arg, "--tls-cert")) {
+            options.https.cert = value;
+        } else if (std.mem.eql(u8, arg, "--tls-key")) {
+            options.https.key = value;
         } else return error.Usage;
     }
+    try options.https.check();
+    const startup_io = std.Io.Threaded.global_single_threaded.io();
+    options.tls = try fourneau.https.context(std.heap.page_allocator, startup_io, options.https);
     const shards = cpu_count();
     var threads: [shards_max]std.Thread = undefined;
     for (threads[1..shards]) |*thread| {
         thread.* = try std.Thread.spawn(.{}, run_shard, .{ options, shards });
     }
-    std.debug.print("fourneau-zig on http://{s}:{d} ({d} shards)\n", .{
+    std.debug.print("fourneau-zig on {s}://{s}:{d} ({d} shards)\n", .{
+        if (options.tls != null) "https" else "http",
         options.address,
         options.port,
         shards,
@@ -272,6 +285,7 @@ fn run_shard_or_fail(options: Options, shards: u32) !void {
         // per connection slot, a stream slot each) is touched only by an
         // HTTP/2 client.
         .http2 = .{},
+        .tls = options.tls,
     };
     var runtime: Evented = undefined;
     try runtime.init(gpa, .{

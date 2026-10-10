@@ -862,7 +862,7 @@ type openRow struct {
 // from when each request was due, so a variant that stalls shows it.
 func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target Target,
 	run *Run, labelOf map[string]string, ev *events) ([]openRow, error) {
-	if !race.OpenLoop.enabled() {
+	if len(race.OpenLoop.Shares) == 0 {
 		return nil, errors.New("-open: race.json has no open_loop ladder")
 	}
 	bodies, err := putBodies(ctx, race, target, run.Seed)
@@ -876,6 +876,9 @@ func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target 
 			continue
 		}
 		for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+1) {
+			if !competitor.offers(workload) {
+				continue
+			}
 			log.Printf("[%s] open loop: %s at the first's rates", target.Class.Name, competitor.Name)
 			steps, err := climb(ctx, race, workload, competitor, target, bodies, median)
 			if err != nil {
@@ -937,8 +940,9 @@ func rerunUnsaturated(ctx context.Context, race Race, competitors []Competitor, 
 	}
 	valid := map[string]string{}
 	for _, result := range run.Results {
+		workload, _ := workloadNamed(race, result.Workload)
 		if !result.Valid {
-			valid[result.Competitor] = result.Note
+			valid[validKey(result.Competitor, workload.mode())] = result.Note
 		}
 	}
 	// The saturated rounds a competitor still lacks, on its worst workload.

@@ -179,7 +179,10 @@ serving HTTPS.
 roux opens only a database that holds exactly the schema the site was
 built with (no migrations yet), so a schema change does not deploy itself:
 the new site does not answer, the host agent puts the old one back and
-marks that build failed. Then, as cook on the site host:
+marks that build failed. The migrations are in `site/migrations/`, one
+file a change, named by its date; each rebuilds a changed table from
+schema.sql's own text, since the comparison is of that text. Copy the
+file to the host (`scp`), then, as cook on the site host:
 
 ```
 sudo systemctl stop dragrace-host-agent.timer dragrace-site

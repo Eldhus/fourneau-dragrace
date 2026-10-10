@@ -24,7 +24,8 @@ SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;
 
 -- name: workloads :many(64)
 -- @param run_id : Str
-SELECT name, kind, title, summary FROM run_workloads WHERE run_id = :run_id ORDER BY position;
+SELECT name, kind, title, summary, section FROM run_workloads WHERE run_id = :run_id
+ORDER BY position;
 
 -- name: classes :many(32)
 -- @param run_id : Str
@@ -91,11 +92,13 @@ SELECT count(*) AS results FROM results WHERE run_id = :run_id;
 -- name: workload_specs :many(64)
 -- @param run_id : Str
 -- @column keepalive : Bool
+-- @column http2 : Bool
+-- @column tls : Bool
 -- @column mix : Str
 -- @column lowest : I64
 -- @column highest : I64
 SELECT w.name, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes, w.connections,
-  w.keepalive,
+  w.keepalive, w.http2, w.streams, w.tls, w.section,
   coalesce((SELECT group_concat(json_extract(p.value, '$.name') || ' '
       || CAST(round(json_extract(p.value, '$.share') * 100) AS INTEGER) || '%', ', ')
     FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
@@ -109,15 +112,16 @@ SELECT w.name, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes, w.con
     WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), 0) AS highest
 FROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;
 
--- The rounds and the ladder of a run: `shares`, the ladder's steps as
--- percentages ("50%, 75%, ..."); `ladder`, the workload it climbs.
+-- The rounds and the ladders of a run: `shares`, the ladder's steps as
+-- percentages ("50%, 75%, ..."); `ladder`, the workloads that climb it.
 -- name: race_settings :one
 -- @param run_id : Str
 -- @column shares : Str
 -- @column ladder : Str
 SELECT s.rounds, s.warmup_seconds, s.measure_seconds,
-  (SELECT group_concat(CAST(round(j.value * 100) AS INTEGER) || '%', ', ')
-    FROM json_each(s.open_loop_shares) AS j) AS shares,
-  coalesce((SELECT w.title FROM run_workloads w
-    WHERE w.run_id = s.run_id AND w.name = s.open_loop_workload), s.open_loop_workload) AS ladder
+  coalesce((SELECT group_concat(CAST(round(j.value * 100) AS INTEGER) || '%', ', ')
+    FROM json_each(s.open_loop_shares) AS j), '') AS shares,
+  coalesce((SELECT group_concat(w.title, ', ') FROM
+    (SELECT title FROM run_workloads WHERE run_id = s.run_id AND ladder = 1 ORDER BY position) AS w),
+    '') AS ladder
 FROM run_settings s WHERE s.run_id = :run_id;

@@ -34,8 +34,10 @@ Data :: [].{
 	}
 
 	## `kind`: "closed" (rounds, bars) or "mixed" (an open-loop ladder of
-	## several requests at once, a line).
-	Workload : { name : Str, kind : Str, title : Str, summary : Str }
+	## several requests at once, a line). `section`: where the race page
+	## shows it: "http1", "h2c" (HTTP/2 without TLS) or "tls" (the
+	## realistic deployment).
+	Workload : { name : Str, kind : Str, title : Str, summary : Str, section : Str }
 	ServerClass : { name : Str, label : Str, title : Str }
 	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str, memory_mib : U32 }
 	Fingerprint : { dragrace : Str, fourneau : Str, roux : Str }

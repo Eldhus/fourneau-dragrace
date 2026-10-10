@@ -58,6 +58,12 @@
       "ROUX_ADDRESS": "{address}",
       "ROUX_DATABASE": "{db}"
     },
-    "fixed_port": 8080
+    "fixed_port": 8080,
+    "tls": {
+      "env": {
+        "ROUX_TLS_CERT": "{cert}",
+        "ROUX_TLS_KEY": "{key}"
+      }
+    }
   }
 }

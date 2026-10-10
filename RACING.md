@@ -52,7 +52,9 @@ Every competitor listens where it is told (`{address}`, `{port}` in its
 - anything else: 404
 
 The race checks all of them before a competitor runs (`/sse` when the
-race has the SSE workload); one that fails is DNF.
+race has the SSE workload); one that fails is DNF. A competitor that
+serves HTTPS answers the same over TLS when started in its TLS mode
+(below, TLS), and is checked again in it.
 
 ### Conduit: reads and writes on SQLite
 
@@ -122,14 +124,53 @@ oha runs with `--disable-compression` (it asks for gzip and brotli
 otherwise, which a server that compresses honours and the checks never
 see) and `--worker-threads` at the loader's CPUs.
 
-A workload with `"http2": true` sends over HTTP/2 by prior knowledge
-(h2c: oha `--http2`), each of its `connections` carrying `streams`
-requests at once (oha `-p`). A race with one checks first that every
-competitor answers `/plaintext` over h2c (`curl --http2-prior-knowledge`);
-each speaks it as its stack offers: net/http's `Protocols`, axum's
-`http2` feature, hyper's own in basic-webserver, `Config.http2` in
-fourneau and roux. Plain h2c, not TLS: the race measures the servers,
-and every competitor's TLS would be another race.
+A workload with `"http2": true` sends over HTTP/2 (oha `--http2`), each
+of its `connections` carrying `streams` requests at once (oha `-p`): by
+prior knowledge (h2c) without TLS, by ALPN with it. A race with h2c
+checks first that every competitor answers `/plaintext` over it (`curl
+--http2-prior-knowledge`); each speaks it as its stack offers: net/http's
+`Protocols`, axum's `http2` feature, hyper's own in basic-webserver,
+`Config.http2` in fourneau and roux.
+
+### TLS: the realistic deployment
+
+A workload with `"tls": true` races the competitor's HTTPS mode, on the
+same port: its `competitor.json`'s `run.tls` adds arguments or
+environment, `{cert}` and `{key}` naming the race's certificate. A round
+starts each competitor once in each mode its workloads need (plain, then
+TLS, or the other way, from the seed). A competitor with no `run.tls`
+sits the TLS workloads out with no result (basic-webserver: its platform
+serves no TLS). The site shows these workloads in their own section,
+`"section": "tls"`, beside HTTP/1.1; h2c (`"section": "h2c"`) sits below
+either, plaintext three ways (HTTP/1.1, h2c, HTTPS), so HTTP/2's cost and
+TLS's are apart (the owner, 2026-10-10).
+
+The same TLS for everyone, so the race measures the engines, not their
+settings:
+
+- One certificate a race, ECDSA P-256, self-signed (`tls.go`), on the
+  server's disk; oha takes it with `--insecure` (verifying a chain is
+  the client's cost).
+- TLS 1.3, X25519, AES-128-GCM. oha (rustls) offers AES-256-GCM first,
+  and fourneau and rustls follow the client, where Go's server and
+  browsers choose AES-128; so rustls (axum) and fourneau offer AES-128
+  and ChaCha20 only (fourneau's `tls.zig`; every TLS 1.3 client has
+  AES-128-GCM). Each competitor's first check in TLS mode asks as oha
+  does and refuses any other outcome, and logs what was agreed.
+- No session resumption: Go's tickets and rustls's cache and tickets are
+  off (fourneau has none), so churn-tls is a full handshake each time,
+  what a new visitor costs.
+- HTTP/2 by ALPN; churn-tls is HTTP/1.1 (oha keeps HTTP/2 connections
+  open always).
+- fourneau and roux hand the keys to the kernel after the handshake
+  (kTLS): their encryption is system time, which the race charges them
+  as any other.
+
+An open loop over TLS starts each oha run with its connections'
+handshakes, all at once: in short steps that weighs on the tail (seen
+in a local quick race, 2026-10-10: p99 ~70 ms at half load for the
+servers with slower handshakes). The 10 s steps dilute it; the ladders'
+p99.9 is read with it in mind.
 
 What limited each result, as the site says it: the server's CPU (at least
 90% busy: the case the race is for), the loader's (at least 90%), the
@@ -161,8 +202,9 @@ heading: what it is for); each run keeps its classes as raced.
 
 ## Under load: the open loop
 
-After the rounds, each server climbs a ladder on one workload
-(`race.json`'s `open_loop`: templates): fixed offered rates at 50, 75, 90,
+After the rounds, each server climbs a ladder on each workload marked
+`"ladder": true` (templates, templates-tls, sse-tls; `race.json`'s
+`open_loop` sets the steps): fixed offered rates at 50, 75, 90,
 100 and 120% of its own closed-loop median, 3 s of warmup and 10 s
 measured each, latency from when each request was due (oha `-q`,
 `--latency-correction`; `open_loop.go` says why steps and not a ramp).
