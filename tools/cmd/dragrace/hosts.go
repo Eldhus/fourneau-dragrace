@@ -108,7 +108,8 @@ func hostWants(root, site, racer, key string) ([]hostWant, error) {
 	}
 	wants := []hostWant{{name: "site " + site, machine: ownerMachine(root, site, key, "site-known-hosts"),
 		files: siteFiles, ports: []string{"22", "80", "443"},
-		units: []string{"dragrace-site.service", "dragrace-host-agent.timer",
+		units: []string{"dragrace-site.service", "dragrace-site-https.socket",
+			"dragrace-site-http.socket", "dragrace-host-agent.timer",
 			"dragrace-site-renew.timer", "apt-daily-upgrade.timer"},
 		siteDeploy: true}}
 	if racer == "" {
