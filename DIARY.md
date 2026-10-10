@@ -1410,3 +1410,26 @@ fourneau-zig against Go and axum: 46 of 59 differed; fourneau fixed three
 skipped), and the competitor routed HEAD as GET, a query no longer
 breaking a route (`Head.path()`), 405 with `Allow` for a wrong method.
 Then 28 differ, each kept in fourneau's docs/differential.md.
+
+## 2026-10-10: the 05:00 run never built; two causes, both fixed
+
+The run failed: "the build: no build after 45m0s". Two causes.
+
+1. roux on GitHub (`333e773`) carried half of fourneau's fiber pool
+   (another session's blanket add), the other half unpushed: roux's
+   host did not compile (`no field ... 'fibers_max'`). Repaired by
+   pushing roux's `race-safe` (`158cfe5`) at 11:22 UTC.
+2. Every build since `748fe02` (2026-10-09 20:17 UTC) had already
+   failed at the bundle: "a checkout has changes not committed". roux
+   build rewrote the committed `Templates.roc` files, since their
+   `layouts` key hashes the path roc is installed at, and a runner's
+   differs from the laptop's. Found by reproducing CI's steps on the
+   laptop (clean there) and reading CI's log ("modules changed" there,
+   not here). Fixed by not committing those generated files (`fd2996d`,
+   pushed; roux's TODO has the real fix: key them by the layouts). The
+   build then passed in CI, the first since 2026-10-09.
+
+A manual race of the old code was asked for (request 6; request 5,
+asked before the second cause was found, waits out its 45 minutes for a
+build that cannot come). Then this repository's main, roux's and
+fourneau's, with the night's work, for the next nightly.
