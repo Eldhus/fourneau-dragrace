@@ -1374,3 +1374,22 @@ competitor finished every one (no DNF; HTTP/1.1's unchanged by
 speaking HTTP/2 too). plaintext-h2, requests/s: fourneau-zig 323k, roux
 285k, axum 120k, basic-webserver 43k, Go 35k. `site build`: its 96
 tests pass with the new workload in race.json.
+
+## 2026-10-10: the site restarts without refusing anyone (branch `after-race`)
+
+fourneau's graceful restart (M10) is systemd's socket activation
+(fourneau DIARY, listen.zig): the site's units now hold its ports,
+`dragrace-site-https.socket` (443, named `https`) and
+`dragrace-site-http.socket` (80, `http`, which ACME's http-01 responder
+uses too: it no longer binds 80 itself, which would fail under the
+socket). The service takes them (`Sockets=`); `site install-server`
+stops a site that binds its own ports, starts the sockets, starts the
+site on them; the host check wants the sockets active. A test checks the
+names, the ports and the service's `Sockets=`.
+
+Measured on the laptop with transient units (`systemd-run --user`, the
+same socket properties): the roux competitor through three restarts
+under load answered every request (twice), the slowest ~315 ms;
+fourneau-hello binding its own port refused 4,771 in the same test.
+The branch was `http2`, renamed: everything that waits for the race.
+Not done here: running `install-server` on the host (the owner's).
