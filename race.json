@@ -53,7 +53,7 @@
     {
       "name": "plaintext-h2",
       "title": "Plaintext, HTTP/2",
-      "summary": "GET /plaintext over HTTP/2 (h2c): 32 connections of 8 streams each, the same 256 requests in flight as Plaintext's 256 connections: the cost of HTTP/2's frames, HPACK and multiplexing, as a browser's one connection to a site pays it.",
+      "summary": "GET /plaintext over HTTP/2 (h2c): 32 connections of 8 streams each, the same 256 requests in flight as Plaintext's 256 connections: the cost of HTTP/2's frames, HPACK and multiplexing, without TLS (browsers always add it).",
       "method": "GET",
       "path": "/plaintext",
       "connections": 32,

@@ -6,6 +6,11 @@ Built against the fourneau checkout beside this repository, so the nightly
 races fourneau's newest commit.
 
 `GET /menu`: `src/template.zig`, a template split into parts and holes at comptime, rendered into the connection's scratch memory.
+Pure Zig, about 80 lines; it shares no code with rocstache. That makes
+it roux's ceiling: once roux's rocstache matches it, there is little
+left to gain in the Roc integration. On 2026-10-10 they were even
+(templates, smallest class: 44,219 against roux's 43,145 req/s, inside
+roux's 12.8% spread between rounds).
 
 `GET /sse`: the signals with `std.json` (`src/datastar.zig`, bounded,
 with its tests: `zig build test`), then fourneau's streamed responses,

@@ -1433,3 +1433,17 @@ A manual race of the old code was asked for (request 6; request 5,
 asked before the second cause was found, waits out its 45 minutes for a
 build that cannot come). Then this repository's main, roux's and
 fourneau's, with the night's work, for the next nightly.
+
+## 2026-10-10: fourneau-zig's template is roux's ceiling
+
+Templates on the smallest class (manual run 6): fourneau-zig 44,219
+req/s, roux 43,145, inside roux's 12.8% spread between rounds. The two
+templates are separate: fourneau-zig's is about 80 lines of pure Zig,
+split at comptime, with no rocstache; roux's is rocstache bytecode run
+by its host's VM. So the pure-Zig one is the ceiling, and roux being
+even with it means the Roc integration is near the most it can give
+(the owner's reading). Written into both competitors' READMEs and the
+site's Competitors page. roux's README still said its template was
+compiled to machine code (the templates-comptime branch, not chosen);
+corrected to the VM. The plaintext-h2 summary no longer says it is how
+a browser pays HTTP/2: no browser speaks h2c.
