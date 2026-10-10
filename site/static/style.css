@@ -240,10 +240,8 @@ nav.tabs a + a { border-left: 0; }
 .legend a:hover { color: var(--gold); }
 
 /* Each bar's whisker spans its slowest to its fastest round: the bar is
-   the median, the whisker how much the rounds agreed. `reach` keeps the
-   value clear of a whisker that runs past the bar. */
+   the best round, the whisker how far noise took the others below it. */
 .drag .track { position: relative; }
-.drag .reach { flex: none; width: calc(var(--reach) * var(--bar-max)); margin-left: -4px; }
 .drag .whisker {
   position: absolute; top: calc(50% - 5px); height: 10px;
   left: calc(var(--low) * var(--bar-max)); width: calc((var(--high) - var(--low)) * var(--bar-max));

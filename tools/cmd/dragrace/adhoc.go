@@ -667,7 +667,7 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	workloads := flags.String("workloads", workloadNames(root), "comma-separated")
 	rounds := flags.Int("rounds", 3, "rounds, each variant once a round in a new order")
 	open := flags.Bool("open", false, "then race.json's open-loop ladder on each workload, "+
-		"every variant at the same offered rates (shares of the first variant's median)")
+		"every variant at the same offered rates (shares of the first variant's best)")
 	flags.Parse(args)
 	ev := &events{start: time.Now()}
 	if flags.NArg() < 1 {
@@ -679,7 +679,7 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	race.Rounds, race.WarmupSeconds, race.MeasureSeconds = *rounds, adhocWarmup, adhocMeasure
-	// The nightly's ladder is each server's own (a share of its own median),
+	// The nightly's ladder is each server's own (a share of its own best),
 	// which suits a league table; an A/B wants every variant at the same
 	// rates, so the ladder is climbed here after the rounds (`-open`).
 	ladder := race.OpenLoop
@@ -855,7 +855,7 @@ type openRow struct {
 
 // adhocOpen climbs the ladder (open_loop.go's `climb`) for every variant
 // on each workload, in a seeded order, at the same offered rates: the
-// shares of the first variant's closed-loop median. Latency is counted
+// shares of the first variant's closed-loop best. Latency is counted
 // from when each request was due, so a variant that stalls shows it.
 func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target Target,
 	run *Run, labelOf map[string]string, ev *events) ([]openRow, error) {
@@ -868,8 +868,8 @@ func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target 
 	}
 	var rows []openRow
 	for _, workload := range race.Workloads {
-		median := resultFor(run, target.Class.Name, workload.Name, competitors[0].Name).MedianRPS
-		if median <= 0 {
+		best := resultFor(run, target.Class.Name, workload.Name, competitors[0].Name).BestRPS
+		if best <= 0 {
 			continue
 		}
 		for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+1) {
@@ -877,7 +877,7 @@ func adhocOpen(ctx context.Context, race Race, competitors []Competitor, target 
 				continue
 			}
 			log.Printf("[%s] open loop: %s at the first's rates", target.Class.Name, competitor.Name)
-			steps, err := climb(ctx, race, workload, competitor, target, bodies, median)
+			steps, err := climb(ctx, race, workload, competitor, target, bodies, best)
 			if err != nil {
 				return nil, fmt.Errorf("%s open loop: %w", competitor.Name, err)
 			}
@@ -909,7 +909,7 @@ func openTable(rows []openRow) string {
 		return int(a.OfferedRPS - b.OfferedRPS)
 	})
 	var text strings.Builder
-	fmt.Fprintf(&text, "\nopen loop, the same rates for every variant (shares of the first's median)\n")
+	fmt.Fprintf(&text, "\nopen loop, the same rates for every variant (shares of the first's best)\n")
 	fmt.Fprintf(&text, "%-10s %5s %9s  %-48s %9s %9s %9s %6s\n", "workload", "share", "offered",
 		"variant", "good/s", "p99 ms", "p99.9 ms", "cpu %")
 	for _, row := range sorted {
@@ -1043,10 +1043,10 @@ type comparisonRow struct {
 	Workload    string    `json:"workload"`
 	Variant     string    `json:"variant"`
 	Valid       bool      `json:"valid"`
-	MedianRPS   float64   `json:"median_rps"`
+	BestRPS     float64   `json:"best_rps"`
 	RPS         []float64 `json:"rps"` // every round
 	MedianP99Ms float64   `json:"median_p99_ms"`
-	// Against the first variant: the medians' difference, and whether the
+	// Against the first variant: the best rounds' difference, and whether the
 	// rounds' ranges are apart (every round of one above every round of
 	// the other) or overlap (within this race's noise).
 	DeltaPct float64 `json:"delta_pct"`
@@ -1060,7 +1060,7 @@ func compare(run Run, class string, variants []*variant, labelOf map[string]stri
 		for _, v := range variants {
 			result := resultFor(&run, class, workload.Name, v.name())
 			row := comparisonRow{Workload: workload.Name, Variant: labelOf[v.name()],
-				Valid: result.Valid, MedianRPS: round2(result.MedianRPS),
+				Valid: result.Valid, BestRPS: round2(result.BestRPS),
 				MedianP99Ms: result.MedianP99Ms}
 			for _, r := range result.Rounds {
 				row.RPS = append(row.RPS, round2(r.RPS))
@@ -1070,8 +1070,8 @@ func compare(run Run, class string, variants []*variant, labelOf map[string]stri
 				base = &rows[len(rows)-1]
 				continue
 			}
-			if base.MedianRPS > 0 {
-				row.DeltaPct = round2(100 * (row.MedianRPS - base.MedianRPS) / base.MedianRPS)
+			if base.BestRPS > 0 {
+				row.DeltaPct = round2(100 * (row.BestRPS - base.BestRPS) / base.BestRPS)
 			}
 			if len(row.RPS) > 0 && len(base.RPS) > 0 {
 				row.Apart = slices.Min(row.RPS) > slices.Max(base.RPS) ||
@@ -1105,7 +1105,7 @@ func comparisonTable(rows []comparisonRow) string {
 			rounds[i] = strconv.FormatFloat(value, 'f', 0, 64)
 		}
 		fmt.Fprintf(&text, "%-10s %-48s %10.0f %8s %9.2f  %s\n", row.Workload, row.Variant,
-			row.MedianRPS, delta, row.MedianP99Ms, strings.Join(rounds, " "))
+			row.BestRPS, delta, row.MedianP99Ms, strings.Join(rounds, " "))
 	}
 	if overlap {
 		text.WriteString("(~: the rounds' ranges overlap, within this race's noise)\n")

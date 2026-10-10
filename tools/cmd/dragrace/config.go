@@ -271,7 +271,7 @@ func checkoutPath(root string, checkout Checkout) string {
 
 // OpenLoop is the race's open-loop test (open_loop.go): each workload
 // marked `ladder`, at fixed offered rates, each a share of the server's
-// own closed-loop median, held long enough for a steady state.
+// own closed-loop best, held long enough for a steady state.
 type OpenLoop struct {
 	Shares         []float64 `json:"shares"`
 	WarmupSeconds  int       `json:"warmup_seconds"`

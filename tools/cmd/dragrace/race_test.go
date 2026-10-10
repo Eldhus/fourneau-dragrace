@@ -237,17 +237,18 @@ func TestParseOhaKeepsTheTail(t *testing.T) {
 	}
 }
 
-// Runs stored before p95 and p99.9 had medians get them on publish, from
-// their rounds.
-func TestNormalizeTakesTheMedians(t *testing.T) {
+// A result is summarized on publish from its rounds: the best round's rate,
+// the rounds' median percentiles, a round that answered nothing left out of
+// the latencies.
+func TestNormalizeTakesTheBestRateAndMedianLatency(t *testing.T) {
 	run := Run{Results: []Result{{Rounds: []Round{
 		{RPS: 3, P95Ms: 30, P999Ms: 300}, {RPS: 1, P95Ms: 10, P999Ms: 100},
-		{RPS: 2, P95Ms: 20, P999Ms: 200},
+		{RPS: 2, P95Ms: 20, P999Ms: 200}, {RPS: 0, P95Ms: 0, P999Ms: 0},
 	}}}}
 	run.normalize()
 	got := run.Results[0]
-	if got.MedianRPS != 2 || got.MedianP95Ms != 20 || got.MedianP999Ms != 200 {
-		t.Fatalf("medians: %+v", got)
+	if got.BestRPS != 3 || got.MedianP95Ms != 20 || got.MedianP999Ms != 200 {
+		t.Fatalf("summary: %+v", got)
 	}
 }
 

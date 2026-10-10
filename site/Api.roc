@@ -103,6 +103,8 @@ Api :: [].{
 	}
 
 	## A result, as results.go's Result: the rounds and open-loop steps whole.
+	## The racer's own summary of the rounds (`best_*`; `median_*` before
+	## 2026-10-11) is not read: the pages take theirs from the rounds.
 	ResultPost : {
 		class : Str,
 		workload : Str,
@@ -110,11 +112,6 @@ Api :: [].{
 		valid : Bool,
 		note : Str,
 		rounds : List(RoundPost),
-		median_rps : F64,
-		median_p50_ms : F64,
-		median_p95_ms : F64,
-		median_p99_ms : F64,
-		median_p999_ms : F64,
 		open_loop : List(StepPost),
 	}
 
@@ -559,11 +556,6 @@ Api :: [].{
 			competitor: r.competitor,
 			valid: r.valid,
 			note: r.note,
-			median_rps: r.median_rps,
-			median_p50_ms: r.median_p50_ms,
-			median_p95_ms: r.median_p95_ms,
-			median_p99_ms: r.median_p99_ms,
-			median_p999_ms: r.median_p999_ms,
 		})?
 		Results.clear_rounds!(tx, key)?
 		Results.clear_parts!(tx, key)?
@@ -798,6 +790,17 @@ expect {
 				Err(Missing) => run.commits.len() == 1
 				Ok(_) => Bool.False
 			}
+		Err(_) => Bool.False
+	}
+}
+
+# A racer from before 2026-10-11 posts its medians: still a result, the
+# medians skipped (the pages take the rounds' best).
+expect {
+	parsed : Try(Api.ResultPost, _)
+	parsed = Json.parse("{\"class\":\"smallest\",\"workload\":\"plaintext\",\"competitor\":\"go\",\"valid\":true,\"note\":\"\",\"rounds\":[],\"median_rps\":41863.2,\"median_p50_ms\":1.0,\"median_p95_ms\":2.0,\"median_p99_ms\":3.0,\"median_p999_ms\":4.0,\"open_loop\":[]}")
+	match parsed {
+		Ok(result) => result.competitor == "go" and result.valid
 		Err(_) => Bool.False
 	}
 }

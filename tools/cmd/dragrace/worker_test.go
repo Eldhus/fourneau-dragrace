@@ -59,7 +59,7 @@ func TestPosterSendsTheNewestOfEachResult(t *testing.T) {
 		t.Fatalf("kept %v %v", kept, err)
 	}
 	for _, result := range kept {
-		if result.Competitor == "go" && (len(result.Rounds) != 1 || result.MedianRPS != 100) {
+		if result.Competitor == "go" && (len(result.Rounds) != 1 || result.BestRPS != 100) {
 			t.Fatalf("the newest go result was not kept: %+v", result)
 		}
 	}

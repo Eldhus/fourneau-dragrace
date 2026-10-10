@@ -14,7 +14,6 @@ Strip :: [].{
 				hollow : Bool,
 				low : Str,
 				ranged : Bool,
-				reach : Str,
 				share : Str,
 				tip : Str,
 				valid : Bool,

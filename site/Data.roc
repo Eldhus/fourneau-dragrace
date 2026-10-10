@@ -1,4 +1,11 @@
-## The races as the pages model them: a run whole, and every run's medians.
+## The races as the pages model them: a run whole, and every run's best
+## rounds. A result (Store.roc makes it from its rounds):
+## `best_rps`, the most requests a second of any round, as a benchmark
+## takes the fastest of its repeats: a server can do no more than it did,
+## and a round short of it met noise. The latency percentiles are each the
+## median of the rounds: a tail is the server's rare stalls, real
+## behaviour, so the least would report the round that missed them and
+## the most the round a neighbour hit.
 ## Store.roc reads them from the database; the JSON parsers here read the
 ## tests' fixtures (test/: a run, and an index, as the site served them).
 Data :: [].{
@@ -11,7 +18,7 @@ Data :: [].{
 		valid : Bool,
 		note : Str,
 		rounds : List(Round),
-		median_rps : F64,
+		best_rps : F64,
 		median_p95_ms : F64,
 		median_p99_ms : F64,
 		median_p999_ms : F64,
@@ -29,8 +36,6 @@ Data :: [].{
 		p999_ms : F64,
 		cpu_busy_pct : F64,
 		loader_cpu_busy_pct : F64,
-		## A mixed workload's step: the mean over every request.
-		mean_ms : F64,
 	}
 
 	## `kind`: "closed" (rounds, bars) or "mixed" (an open-loop ladder of
@@ -73,7 +78,7 @@ Data :: [].{
 		timing : { seconds : F64, cost_usd : F64 },
 	}
 
-	Summary : { class : Str, workload : Str, competitor : Str, valid : Bool, median_rps : F64 }
+	Summary : { class : Str, workload : Str, competitor : Str, valid : Bool, best_rps : F64 }
 	Entry : { id : Str, started_at : Str, results : List(Summary) }
 
 	run : Str -> Try(Run, [BadData(Str)])

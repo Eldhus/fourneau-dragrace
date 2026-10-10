@@ -8,19 +8,10 @@
 -- @param competitor : Str
 -- @param valid : Bool
 -- @param note : Str
--- @param median_rps : F64
--- @param median_p50_ms : F64
--- @param median_p95_ms : F64
--- @param median_p99_ms : F64
--- @param median_p999_ms : F64
-INSERT INTO results (run_id, class, workload, competitor, valid, note, median_rps,
-  median_p50_ms, median_p95_ms, median_p99_ms, median_p999_ms)
-VALUES (:run_id, :class, :workload, :competitor, :valid, :note, :median_rps,
-  :median_p50_ms, :median_p95_ms, :median_p99_ms, :median_p999_ms)
+INSERT INTO results (run_id, class, workload, competitor, valid, note)
+VALUES (:run_id, :class, :workload, :competitor, :valid, :note)
 ON CONFLICT (run_id, class, workload, competitor) DO UPDATE SET valid = excluded.valid,
-  note = excluded.note, median_rps = excluded.median_rps,
-  median_p50_ms = excluded.median_p50_ms, median_p95_ms = excluded.median_p95_ms,
-  median_p99_ms = excluded.median_p99_ms, median_p999_ms = excluded.median_p999_ms,
+  note = excluded.note,
   updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
 
 -- name: clear_rounds :exec

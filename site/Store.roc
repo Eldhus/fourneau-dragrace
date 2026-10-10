@@ -6,7 +6,7 @@ import db/Requests
 import Data
 
 ## The races as the pages model them (Data.roc), read from the database:
-## a run whole for the race page, every run's medians for the history,
+## a run whole for the race page, every run's best rounds for the history,
 ## and what the racer is doing for the line above them.
 Store :: [].{
 	## The newest finished run, or `NotFound` before the first.
@@ -76,13 +76,16 @@ Store :: [].{
 			}),
 			results: results.map(|r| {
 				same = |x| x.class == r.class and x.workload == r.workload and x.competitor == r.competitor
+				own = rounds.keep_if(same)
+				# A round that answered nothing has no latency.
+				answered = own.keep_if(|x| x.rps > 0.0)
 				{
 					class: r.class,
 					workload: r.workload,
 					competitor: r.competitor,
 					valid: r.valid,
 					note: r.note,
-					rounds: rounds.keep_if(same).map(|x| {
+					rounds: own.map(|x| {
 						rps: x.rps,
 						p99_ms: x.p99_ms,
 						cpu_busy_pct: x.cpu_busy_pct,
@@ -94,10 +97,10 @@ Store :: [].{
 						tcp_retransmits: x.tcp_retransmits,
 						load_seconds: x.load_seconds,
 					}),
-					median_rps: r.median_rps,
-					median_p95_ms: r.median_p95_ms,
-					median_p99_ms: r.median_p99_ms,
-					median_p999_ms: r.median_p999_ms,
+					best_rps: own.fold(0.0, |most, x| if x.rps > most x.rps else most),
+					median_p95_ms: median(answered.map(|x| x.p95_ms)),
+					median_p99_ms: median(answered.map(|x| x.p99_ms)),
+					median_p999_ms: median(answered.map(|x| x.p999_ms)),
 					open_loop: steps.keep_if(same).map(|x| {
 						share: x.share,
 						offered_rps: x.offered_rps,
@@ -106,7 +109,6 @@ Store :: [].{
 						p999_ms: x.p999_ms,
 						cpu_busy_pct: x.cpu_busy_pct,
 						loader_cpu_busy_pct: x.loader_cpu_busy_pct,
-						mean_ms: x.mean_ms,
 					}),
 				}
 			}),
@@ -114,7 +116,23 @@ Store :: [].{
 		})
 	}
 
-	## Every finished run's medians, oldest first (Data.Entry), from rows
+	## The middle of the values (the mean of the two middle ones for an even
+	## count), 0 for none: a latency percentile across rounds, one round's
+	## luck or one round's neighbour left out either way (Data.Result).
+	median : List(F64) -> F64
+	median = |values| {
+		sorted = values.sort_with(|a, b| if a < b Before else if a > b After else Same)
+		count = List.len(sorted)
+		if count == 0 {
+			0.0
+		} else {
+			middle = count // 2
+			upper = List.get(sorted, middle) ?? 0.0
+			if count % 2 == 1 upper else (upper + (List.get(sorted, middle - 1) ?? 0.0)) / 2.0
+		}
+	}
+
+	## Every finished run's best rounds, oldest first (Data.Entry), from rows
 	## ordered by run.
 	history! : Sqlite.Db, Server.Request => Try(List(Data.Entry), [DbErr(Sqlite.Err)])
 	history! = |db, request| {
@@ -137,7 +155,7 @@ Store :: [].{
 				$started_at = row.started_at
 				$results = []
 			}
-			$results = $results.append({ class: row.class, workload: row.workload, competitor: row.competitor, valid: row.valid, median_rps: row.median_rps })
+			$results = $results.append({ class: row.class, workload: row.workload, competitor: row.competitor, valid: row.valid, best_rps: row.best_rps })
 		}
 		if $id.is_empty() $entries else $entries.append({ id: $id, started_at: $started_at, results: $results })
 	}
@@ -236,12 +254,18 @@ Store :: [].{
 }
 
 expect {
-	row = |id, competitor| { id, started_at: "t-${id}", class: "c", workload: "w", competitor, valid: Bool.True, median_rps: 1.0 }
+	row = |id, competitor| { id, started_at: "t-${id}", class: "c", workload: "w", competitor, valid: Bool.True, best_rps: 1.0 }
 	entries = Store.entries_of([row("a", "go"), row("a", "roux"), row("b", "go")])
 	entries.len() == 2 and entries.map(|e| e.results.len()) == [2, 1] and entries.map(|e| e.id) == ["a", "b"]
 }
 
 expect Store.entries_of([]).is_empty()
+
+expect Store.median([3.0, 1.0, 2.0]) == 2.0
+expect Store.median([4.0, 1.0, 3.0, 2.0]) == 2.5
+expect Store.median([]) == 0.0
+# Three real rounds: the odd round out is left out.
+expect Store.median([20.73, 20.40, 13.45]) == 20.40
 
 expect {
 	head = |repository, commit_sha| { repository, commit_sha, seen_at: "" }

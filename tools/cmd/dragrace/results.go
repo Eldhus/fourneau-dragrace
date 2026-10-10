@@ -50,9 +50,10 @@ type Result struct {
 	Valid      bool    `json:"valid"`
 	Note       string  `json:"note"` // always present: the site reads it as a field
 	Rounds     []Round `json:"rounds"`
-	// The medians of the rounds (summarize). A run published before a
-	// percentile was recorded shows it as 0.
-	MedianRPS    float64 `json:"median_rps"`
+	// The rounds summarized (summarize), as the site's pages do: the best
+	// round's rate, the rounds' median percentiles. A run published before
+	// a percentile was recorded shows it as 0.
+	BestRPS      float64 `json:"best_rps"`
 	MedianP50Ms  float64 `json:"median_p50_ms"`
 	MedianP95Ms  float64 `json:"median_p95_ms"`
 	MedianP99Ms  float64 `json:"median_p99_ms"`
@@ -115,20 +116,34 @@ type Round struct {
 	Seconds float64 `json:"seconds"`
 }
 
-// summarize fills the medians: the middle round, so one noisy round of
-// three moves nothing.
+// summarize, as the site's Data.Result: the rate is the
+// best round's, as a benchmark takes the fastest of its repeats (a server
+// can do no more than it did; a round short of it met noise). Each latency
+// percentile is the rounds' median: a tail is the server's own rare stalls,
+// so the least would report the round that missed them, the most the round
+// a neighbour hit. A round that answered nothing has no latency.
 func (result *Result) summarize() {
 	if len(result.Rounds) == 0 {
 		return
 	}
+	answered := []Round{}
+	result.BestRPS = 0
+	for _, round := range result.Rounds {
+		result.BestRPS = math.Max(result.BestRPS, round.RPS)
+		if round.RPS > 0 {
+			answered = append(answered, round)
+		}
+	}
+	if len(answered) == 0 {
+		return
+	}
 	of := func(field func(Round) float64) float64 {
-		values := make([]float64, len(result.Rounds))
-		for i, round := range result.Rounds {
+		values := make([]float64, len(answered))
+		for i, round := range answered {
 			values[i] = field(round)
 		}
 		return median(values)
 	}
-	result.MedianRPS = of(func(round Round) float64 { return round.RPS })
 	result.MedianP50Ms = of(func(round Round) float64 { return round.P50Ms })
 	result.MedianP95Ms = of(func(round Round) float64 { return round.P95Ms })
 	result.MedianP99Ms = of(func(round Round) float64 { return round.P99Ms })

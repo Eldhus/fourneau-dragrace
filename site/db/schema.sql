@@ -170,8 +170,9 @@ CREATE TABLE droplets (
   PRIMARY KEY (run_id, position)
 ) STRICT, WITHOUT ROWID;
 
--- One competitor on one workload on one server class: the medians of its
--- rounds, and whether it answered as the workload asks.
+-- One competitor on one workload on one server class: whether it answered
+-- as the workload asks. Its figures are its rounds', summarized as the
+-- pages read them (Data.Result), never a summary stored beside them.
 CREATE TABLE results (
   run_id TEXT NOT NULL REFERENCES runs (id),
   class TEXT NOT NULL,
@@ -179,11 +180,6 @@ CREATE TABLE results (
   competitor TEXT NOT NULL,
   valid INTEGER NOT NULL CHECK (valid IN (0, 1)),
   note TEXT NOT NULL,
-  median_rps REAL NOT NULL,
-  median_p50_ms REAL NOT NULL,
-  median_p95_ms REAL NOT NULL,
-  median_p99_ms REAL NOT NULL,
-  median_p999_ms REAL NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   PRIMARY KEY (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;

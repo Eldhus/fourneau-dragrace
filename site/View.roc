@@ -10,9 +10,10 @@ View :: [].{
 	## `hollow`: something besides the server's CPU limited the result (the
 	## tip and the table say what), drawn as an outline, as the open loop's
 	## hollow points are.
-	## `low`, `high`: the slowest and fastest rounds as shares, the whisker's
-	## ends; `reach`, how far the whisker runs past the bar (median).
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, reach : Str, value : Str, ranged : Bool, hollow : Bool, tip : Str }
+	## `share`: the best round's; `low`, `high`: the slowest and fastest
+	## rounds as shares, the whisker's ends (the fastest is the bar's end:
+	## the whisker shows how far noise took the other rounds below it).
+	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, ranged : Bool, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -165,7 +166,7 @@ View :: [].{
 		}
 	}
 
-	## Every cloud race's medians (local ones only while no cloud race
+	## Every cloud race's best rounds (local ones only while no cloud race
 	## exists), a chart per server class and workload of one section, and
 	## h2c's below; two races at least.
 	history : Data.Run, List(Data.Entry), Str -> History
@@ -298,7 +299,7 @@ h2c_view = |run, class|
 		Ok(h2c) => {
 			found = |workload, competitor|
 				match run.results.find_first(|r| r.class == class and r.workload == workload and r.competitor == competitor and r.valid) {
-					Ok(r) => r.median_rps
+					Ok(r) => r.best_rps
 					Err(_) => 0.0
 				}
 			bars = strip(run, class, h2c)
@@ -308,9 +309,9 @@ h2c_view = |run, class|
 				secure = found("plaintext-tls", bar.competitor)
 				{
 					competitor: bar.competitor,
-					plain: median_or_dash(plain),
-					h2c: median_or_dash(h2),
-					tls: median_or_dash(secure),
+					plain: rate_or_dash(plain),
+					h2c: rate_or_dash(h2),
+					tls: rate_or_dash(secure),
 					http2_change: change(plain, h2),
 					tls_change: change(h2, secure),
 				}
@@ -319,9 +320,9 @@ h2c_view = |run, class|
 		}
 	}
 
-## A median, or a dash where there is none (not raced, or did not finish).
-median_or_dash : F64 -> Str
-median_or_dash = |rps| if rps > 0.0 Format.thousands(rps) else "—"
+## A rate, or a dash where there is none (not raced, or did not finish).
+rate_or_dash : F64 -> Str
+rate_or_dash = |rps| if rps > 0.0 Format.thousands(rps) else "—"
 
 ## From `before` to `after` as a signed percentage ("+21%", "−12%").
 change : F64, F64 -> Str
@@ -335,7 +336,7 @@ change = |before, after|
 
 expect change(100.0, 121.0) == "+21%"
 expect change(100.0, 88.0) == "−12%"
-expect change(0.0, 88.0) == "—" and median_or_dash(0.0) == "—"
+expect change(0.0, 88.0) == "—" and rate_or_dash(0.0) == "—"
 
 ## The workloads raced in rounds, drawn as bars and in the history; a
 ## mixed one (conduit) is a ladder only, drawn as a line (open_charts).
@@ -347,7 +348,7 @@ strip : Data.Run, Str, Data.Workload -> View.Strip
 strip = |run, class, workload| {
 	results = run.results
 		.keep_if(|r| r.class == class and r.workload == workload.name)
-		.sort_with(|a, b| if a.median_rps > b.median_rps Before else if a.median_rps < b.median_rps After else Same)
+		.sort_with(|a, b| if a.best_rps > b.best_rps Before else if a.best_rps < b.best_rps After else Same)
 	# The scale ends at the fastest round, so every whisker fits.
 	most = results.fold(0.0, |best, r| if r.valid and round_range(r).fastest > best round_range(r).fastest else best)
 	# A local race's traffic is loopback: no network limit applies.
@@ -359,60 +360,58 @@ strip = |run, class, workload| {
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", reach: "0", value: "DNF", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
-		value = Format.thousands(result.median_rps)
+		value = Format.thousands(result.best_rps)
 		rounds = List.len(result.rounds).to_str()
 		{ slowest, fastest } = round_range(result)
 		spread = spread_pct(result)
 		{
 			competitor: result.competitor,
 			valid: Bool.True,
-			share: Format.two_decimals(result.median_rps / most),
+			share: Format.two_decimals(result.best_rps / most),
 			low: Format.two_decimals(slowest / most),
 			high: Format.two_decimals(fastest / most),
-			reach: Format.two_decimals((fastest - result.median_rps) / most),
 			value,
 			ranged: (fastest - slowest) / most >= whisker_share_min,
 			hollow: !saturated(result, local),
-			tip: "${result.competitor}: ${value} req/s, median of ${rounds} rounds (${Format.thousands(slowest)} to ${Format.thousands(fastest)}, ${Format.thousands(spread)}% apart), limited by ${limited_by(result, local)}; p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
+			tip: "${result.competitor}: ${value} req/s, the best of ${rounds} rounds (the slowest ${Format.thousands(slowest)}, ${Format.thousands(spread)}% below), limited by ${limited_by(result, local)}; the rounds' median p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
 		}
 	}
 
+## The table: the rate the bar's (the best round), the percentiles the
+## rounds' medians (Data.Result says why); what the machines did is the
+## fastest round's, the one the bar shows.
 table_row : Data.Result, Bool -> View.TableRow
 table_row = |result, local| {
 	rounds = result.rounds
 	rss = rounds.fold(0.0, |top, r| if r.rss_kib > top r.rss_kib else top)
+	best = best_round(result)
 	{
 		competitor: result.competitor,
 		valid: result.valid,
 		note: result.note,
-		rps: Format.thousands(result.median_rps),
+		rps: Format.thousands(result.best_rps),
 		p95: Format.latency(result.median_p95_ms),
 		p99: Format.latency(result.median_p99_ms),
 		p999: Format.latency(result.median_p999_ms),
 		rounds: Str.join_with(rounds.map(|r| Format.thousands(r.rps)), " · "),
-		cpu: Format.one_decimal(median(rounds.map(|r| r.cpu_busy_pct))),
-		loader: Format.one_decimal(median(rounds.map(|r| r.loader_cpu_busy_pct))),
-		net: "${Format.thousands(median(rounds.map(|r| r.net_rx_mbps)))} / ${Format.thousands(median(rounds.map(|r| r.net_tx_mbps)))}",
+		cpu: Format.one_decimal(best.cpu_busy_pct),
+		loader: Format.one_decimal(best.loader_cpu_busy_pct),
+		net: "${Format.thousands(best.net_rx_mbps)} / ${Format.thousands(best.net_tx_mbps)}",
 		limit: limited_by(result, local),
 		spread: Format.one_decimal(spread_pct(result)),
-		steal: Format.one_decimal(median(rounds.map(|r| r.steal_pct))),
+		steal: Format.one_decimal(best.steal_pct),
 		rss: "${Format.one_decimal(rss / 1024.0)} MiB",
 	}
 }
 
-median : List(F64) -> F64
-median = |values| {
-	sorted = values.sort_with(|a, b| if a < b Before else if a > b After else Same)
-	count = List.len(sorted)
-	if count == 0 {
-		0.0
-	} else {
-		middle = count // 2
-		upper = List.get(sorted, middle) ?? 0.0
-		if count % 2 == 1 upper else (upper + (List.get(sorted, middle - 1) ?? 0.0)) / 2.0
-	}
+## The round with the most requests a second (the first of equals), or
+## one of zeros where there is none.
+best_round : Data.Result -> Data.Round
+best_round = |result| {
+	none = { rps: 0.0, p99_ms: 0.0, cpu_busy_pct: 0.0, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: 0.0, net_rx_mbps: 0.0, net_tx_mbps: 0.0, tcp_retransmits: 0.0, load_seconds: 0.0 }
+	result.rounds.fold(none, |best, r| if r.rps > best.rps r else best)
 }
 
 # The history chart's geometry: race.js's, so the CSS still fits.
@@ -427,7 +426,7 @@ chart : List(Data.Entry), Str, Data.Workload, List(Str) -> View.Chart
 chart = |entries, class, workload, competitors| {
 	value = |entry, competitor|
 		match entry.results.find_first(|r| r.class == class and r.workload == workload.name and r.competitor == competitor and r.valid) {
-			Ok(found) => Ok(found.median_rps)
+			Ok(found) => Ok(found.best_rps)
 			Err(_) => Err(Missing)
 		}
 	most = entries.fold(0.0, |top_value, entry|
@@ -457,7 +456,7 @@ chart = |entries, class, workload, competitors| {
 	}
 }
 
-## A competitor's medians as an SVG path, lifting the pen over races it
+## A competitor's best rounds as an SVG path, lifting the pen over races it
 ## did not finish; its name at its last point.
 line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.DraftLine
 line = |entries, competitor, value, x, y| {
@@ -526,8 +525,6 @@ expect started("2026-10-06T13:58:49.000800103Z") == "2026-10-06 13:58 UTC"
 expect day("2026-10-06T13:58:49Z") == "Oct 6"
 expect nice_ceiling(167971.0) == 200000.0
 expect nice_ceiling(45620.0) == 50000.0
-expect median([3.0, 1.0, 2.0]) == 2.0
-expect median([4.0, 1.0, 3.0, 2.0]) == 2.5
 
 import "test/latest.json" as latest_sample : Str
 import "test/index.json" as index_sample : Str
@@ -786,7 +783,7 @@ step_title = |competitor, s, mixed| {
 	rates = "${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered"
 	cpu = "server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"
 	if mixed {
-		"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, mean ${Format.latency(s.mean_ms)} ms; ${cpu}"
+		"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
 	} else {
 		share = Format.thousands(s.share * 100.0)
 		"${competitor} at ${share}% of its max: ${rates}; p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
@@ -855,19 +852,19 @@ expect took({ seconds: 600.0, cost_usd: 0.0 }) == "took 10 min"
 expect F64.abs(log10(1000.0) - 3.0) < 0.000001 and F64.abs(log10(0.1) + 1.0) < 0.000001 and F64.abs(log10(2.0) - 0.30103) < 0.00001
 expect F64.abs(log10(7.0) - 0.8450980400142568) < 0.0000000001 and F64.abs(log10(123456.0) - 5.091512201627772) < 0.0000000001
 
-## What limited a result, from its rounds' medians: the server's CPU, the
-## loader's, the network. At least 90% busy is a CPU at its limit; at
+## What limited a result, from its fastest round (the bar's): the server's
+## CPU, the loader's, the network. At least 90% busy is a CPU at its limit; at
 ## least 1,400 Mbit/s either way is the network's, 70% of the 2 Gbit/s
 ## DigitalOcean documents for these droplets (where retransmits began).
 ## None of them: the closed loop's connections and their
 ## round trips were the limit (the server was under-driven).
 limits : Data.Result, Bool -> List(Str)
 limits = |result, local| {
-	rounds = result.rounds
-	cpu = median(rounds.map(|r| r.cpu_busy_pct))
-	loader = median(rounds.map(|r| r.loader_cpu_busy_pct))
-	net = median(rounds.map(|r| if r.net_rx_mbps > r.net_tx_mbps r.net_rx_mbps else r.net_tx_mbps))
-	drops = median(rounds.map(|r| if r.rps > 0.0 and r.load_seconds > 0.0 r.tcp_retransmits / (r.rps * r.load_seconds) else 0.0))
+	r = best_round(result)
+	cpu = r.cpu_busy_pct
+	loader = r.loader_cpu_busy_pct
+	net = if r.net_rx_mbps > r.net_tx_mbps r.net_rx_mbps else r.net_tx_mbps
+	drops = if r.rps > 0.0 and r.load_seconds > 0.0 r.tcp_retransmits / (r.rps * r.load_seconds) else 0.0
 	# A link enforcing its limit drops packets: a gigabit and more with a
 	# retransmit every hundred requests is the link (1.3 Gbit/s and 45,000
 	# retransmits a round gave a p99 of 205 ms), as is 1.4 Gbit/s alone.
@@ -892,7 +889,7 @@ network_limit_mbps = 1400.0
 
 expect {
 	round = |cpu, loader, net| { rps: 1.0, p99_ms: 1.0, cpu_busy_pct: cpu, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: loader, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: 0.0, load_seconds: 20.0 }
-	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, median_rps: 1.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
+	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, best_rps: 1.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
 	limited_by(result([round(99.0, 98.0, 240.0)]), Bool.False) == "server CPU, loader"
 	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.False) == "network"
 	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.True) == "connections (nothing saturated)"
@@ -916,23 +913,22 @@ saturated = |result, local| limits(result, local).any(|limit| limit == "server C
 round_range : Data.Result -> { slowest : F64, fastest : F64 }
 round_range = |result| {
 	rates = result.rounds.map(|r| r.rps)
-	fastest = rates.fold(result.median_rps, |best, rate| if rate > best rate else best)
+	fastest = rates.fold(result.best_rps, |best, rate| if rate > best rate else best)
 	slowest = rates.fold(fastest, |low, rate| if rate < low rate else low)
 	{ slowest, fastest }
 }
 
-## How far apart the rounds were, as a share of the median: with three
-## rounds the range, not a confidence interval, which two degrees of
-## freedom would make four times as wide as the rounds themselves.
+## How far the slowest round fell below the best, as a share of the best:
+## the noise the best of the rounds leaves out.
 spread_pct : Data.Result -> F64
 spread_pct = |result| {
 	{ slowest, fastest } = round_range(result)
-	if result.median_rps <= 0.0 0.0 else 100.0 * (fastest - slowest) / result.median_rps
+	if fastest <= 0.0 0.0 else 100.0 * (fastest - slowest) / fastest
 }
 
 expect {
 	at = |net, retransmits| { rps: 35000.0, p99_ms: 200.0, cpu_busy_pct: 93.0, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: 26.0, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: retransmits, load_seconds: 20.0 }
-	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, median_rps: 35000.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
+	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, best_rps: 35000.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
 	limited_by(result([at(1322.0, 47363.0)]), Bool.False) == "server CPU, network"
 	and saturated(result([at(1322.0, 47363.0)]), Bool.False)
 	and limited_by(result([at(1322.0, 100.0)]), Bool.False) == "server CPU"

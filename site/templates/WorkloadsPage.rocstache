@@ -8,7 +8,7 @@
 <p>{{ summary }}</p><span class="spec">{{ spec }}</span></section>
 {{/cards}}</div>
 {{/groups}}
-<p>Each closed-loop workload: {{ warmup }}&nbsp;s warmup, {{ measure }}&nbsp;s measured, {{ rounds }} rounds, the median reported. Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
+<p>Each closed-loop workload: {{ warmup }}&nbsp;s warmup, {{ measure }}&nbsp;s measured, {{ rounds }} rounds, the best round&rsquo;s throughput and the rounds&rsquo; median latencies reported (<a href="/method">Method</a>). Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
 {{/ready}}{{^ready}}<p class="pending">No race yet: the workloads show once the first has run.</p>
 {{/ready}}
 <h2>Closed loop</h2>
@@ -20,7 +20,7 @@
 </ul>
 
 <h2>Open loop</h2>
-<p>So each server then climbs a ladder{{?ready}} on {{ ladder }}{{/ready}}: fixed offered rates{{?ready}} at {{ shares }}{{/ready}} of its own closed-loop median, latency counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each percentile belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed. The top step is past saturation on purpose: the queue grows for the whole step.</p>
+<p>So each server then climbs a ladder{{?ready}} on {{ ladder }}{{/ready}}: fixed offered rates{{?ready}} at {{ shares }}{{/ready}} of its own closed-loop best, latency counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each percentile belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed. The top step is past saturation on purpose: the queue grows for the whole step.</p>
 <p>Pacing costs oha about half again the CPU of its closed loop, so at the fastest servers&rsquo; rates the loader can bind. A step with the loader {{ loader_limit }}% busy or more is drawn hollow.</p>
 
 <h2>Caveats</h2>

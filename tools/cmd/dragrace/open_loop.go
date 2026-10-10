@@ -15,7 +15,7 @@ import (
 // stalls is sent less, and its stall never shows in the percentiles
 // (coordinated omission). Real users arrive whatever the server does. So,
 // after the rounds, one workload again at fixed offered rates: a ladder of
-// steps, each a share of the server's own closed-loop median (half, three
+// steps, each a share of the server's own closed-loop best (half, three
 // quarters, ..., and past it), held long enough to settle, with latency
 // counted from when each request was due (oha -q, --latency-correction).
 // Steps rather than a continuous ramp: a ramp never holds a rate long
@@ -25,7 +25,7 @@ import (
 
 // OpenStep is one rate of the ladder.
 type OpenStep struct {
-	// The share of the closed-loop median this step offered, and the rate.
+	// The share of the closed-loop best this step offered, and the rate.
 	Share      float64 `json:"share"`
 	OfferedRPS float64 `json:"offered_rps"`
 	// Good (2xx) answers a second: below the offered rate, the server (or
@@ -74,11 +74,11 @@ func openLoopOf(ctx context.Context, race Race, workload Workload, competitors [
 			continue
 		}
 		result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
-		if result.MedianRPS <= 0 {
+		if result.BestRPS <= 0 {
 			continue
 		}
 		log.Printf("[%s] open loop, %s: %s", target.Class.Name, workload.Name, competitor.Name)
-		steps, err := climb(ctx, race, workload, competitor, target, bodies, result.MedianRPS)
+		steps, err := climb(ctx, race, workload, competitor, target, bodies, result.BestRPS)
 		if err != nil {
 			return fmt.Errorf("%s open loop: %w", competitor.Name, err)
 		}
@@ -89,7 +89,7 @@ func openLoopOf(ctx context.Context, race Race, workload Workload, competitors [
 }
 
 func climb(ctx context.Context, race Race, workload Workload, competitor Competitor,
-	target Target, bodies map[int]string, median float64) ([]OpenStep, error) {
+	target Target, bodies map[int]string, best float64) ([]OpenStep, error) {
 	pid, err := startServer(ctx, race, competitor, target, workload.mode())
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func climb(ctx context.Context, race Race, workload Workload, competitor Competi
 	local := net.ParseIP(target.Address).IsLoopback()
 	steps := []OpenStep{}
 	for _, share := range race.OpenLoop.Shares {
-		rate := int(math.Round(share * median))
+		rate := int(math.Round(share * best))
 		if rate < 1 {
 			continue
 		}

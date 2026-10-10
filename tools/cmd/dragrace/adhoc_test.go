@@ -45,7 +45,8 @@ func TestCompare(t *testing.T) {
 	}
 	labels := map[string]string{a.name(): "a", b.name(): "b"}
 	rows := compare(run, "c", []*variant{a, b}, labels)
-	if len(rows) != 2 || rows[1].DeltaPct != -9.9 && rows[1].DeltaPct != -9.89 || !rows[1].Apart {
+	// The best rounds' difference: 92 against 102.
+	if len(rows) != 2 || rows[1].DeltaPct != -9.8 && rows[1].DeltaPct != -9.79 || !rows[1].Apart {
 		t.Fatalf("rows %+v", rows)
 	}
 	run.Results[1].Rounds = rounds(99, 103, 100)

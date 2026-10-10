@@ -679,7 +679,7 @@ func summaryTable(run Run) string {
 			continue
 		}
 		fmt.Fprintf(&text, "%-12s %-10s %-14s %12.0f req/s  p99 %7.2f ms%s\n", result.Class,
-			result.Workload, result.Competitor, result.MedianRPS, result.MedianP99Ms, mark)
+			result.Workload, result.Competitor, result.BestRPS, result.MedianP99Ms, mark)
 	}
 	return text.String()
 }

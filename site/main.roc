@@ -239,7 +239,7 @@ latest_file! = |db, request|
 		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
-## Every finished run's medians.
+## Every finished run's best rounds.
 index_file! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 index_file! = |db, request| json(Json.to_str_try(Store.history!(db, request)?))
 

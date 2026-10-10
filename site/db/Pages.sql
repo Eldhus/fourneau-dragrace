@@ -38,16 +38,16 @@ FROM machines WHERE run_id = :run_id ORDER BY class, role;
 
 -- name: results :many(2000)
 -- @param run_id : Str
+-- Its figures are its rounds' (Store.roc summarizes them).
 -- @column valid : Bool
-SELECT class, workload, competitor, valid, note, median_rps, median_p95_ms,
-  median_p99_ms, median_p999_ms
+SELECT class, workload, competitor, valid, note
 FROM results WHERE run_id = :run_id ORDER BY class, workload, competitor;
 
 -- name: rounds :many(10000)
 -- @param run_id : Str
 -- @column rss_kib : F64
 -- @column tcp_retransmits : F64
-SELECT class, workload, competitor, rps, p99_ms, cpu_busy_pct, steal_pct,
+SELECT class, workload, competitor, rps, p95_ms, p99_ms, p999_ms, cpu_busy_pct, steal_pct,
   CAST(rss_kib AS REAL) AS rss_kib, loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps,
   CAST(tcp_retransmits AS REAL) AS tcp_retransmits, load_seconds
 FROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;
@@ -55,14 +55,17 @@ FROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;
 -- name: steps :many(5000)
 -- @param run_id : Str
 SELECT class, workload, competitor, share, offered_rps, achieved_rps, p99_ms, p999_ms,
-  cpu_busy_pct, loader_cpu_busy_pct, mean_ms
+  cpu_busy_pct, loader_cpu_busy_pct
 FROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;
 
--- Every finished run's medians, oldest first: the history's lines (the
--- newest 400 runs).
+-- Every finished run's best rounds (as `results`), oldest first: the
+-- history's lines (the newest 400 runs).
 -- name: history :many(40000)
 -- @column valid : Bool
-SELECT r.id, r.started_at, s.class, s.workload, s.competitor, s.valid, s.median_rps
+-- @column best_rps : F64
+SELECT r.id, r.started_at, s.class, s.workload, s.competitor, s.valid,
+  coalesce((SELECT max(x.rps) FROM rounds x WHERE x.run_id = s.run_id AND x.class = s.class
+    AND x.workload = s.workload AND x.competitor = s.competitor), 0.0) AS best_rps
 FROM (SELECT id, started_at FROM runs WHERE status = 'finished'
       ORDER BY started_at DESC LIMIT 400) AS r
 JOIN results s ON s.run_id = r.id
