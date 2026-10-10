@@ -8,3 +8,10 @@ tools/dragrace
 site/site.db*
 site/backups/
 site/secrets/
+# roux build writes these, and their layouts key hashes the path roc is
+# installed at: a CI runner's differs from the laptop's, so a committed
+# copy left every build's checkout changed and the bundle refused it
+# (2026-10-09 to 10-10). Generated, so not committed, until roux keys
+# them by what roc laid out (roux TODO).
+site/templates/Templates.roc
+competitors/roux/templates/Templates.roc
