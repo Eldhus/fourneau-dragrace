@@ -98,18 +98,26 @@ View :: [].{
 	## move; without JavaScript the link loads the page.
 	Tab : { href : Str, label : Str, current : Bool, action : Str }
 
-	## The class a page shows: the one asked for when the race has it,
-	## else the first.
-	chosen : List(Str), Str -> Str
-	chosen = |names, wanted|
+	## The tab a page shows: the one asked for when the race has it, else
+	## the default when it has that, else the first. The tabs keep their
+	## order either way.
+	chosen : List(Str), Str, Str -> Str
+	chosen = |names, wanted, default|
 		if names.contains(wanted) {
 			wanted
+		} else if names.contains(default) {
+			default
 		} else {
 			match List.first(names) {
 				Ok(first) => first
 				Err(_) => ""
 			}
 		}
+
+	## The class shown when none is asked for (owner, 2026-10-10): the
+	## dedicated cores, whose numbers are the engines'.
+	default_class : Str
+	default_class = "dedicated-2"
 
 	## A tab per class, linking to `page` with `?class=NAME` and the section
 	## shown (`protocol`), kept across a switch. Only names the race itself
@@ -129,9 +137,9 @@ View :: [].{
 		}
 
 	## The section a page shows: the one asked for when the race has it,
-	## else the first (HTTP/1.1).
+	## else HTTP/2 + TLS, the realistic deployment (owner, 2026-10-10).
 	chosen_section : List(Section), Str -> Str
-	chosen_section = |sections, wanted| chosen(sections.map(|s| s.name), wanted)
+	chosen_section = |sections, wanted| chosen(sections.map(|s| s.name), wanted, "tls")
 
 	## The sections a race has, in the page's order: HTTP/1.1, then HTTP/2
 	## and TLS. h2c is not one: it is shown below either.
@@ -554,9 +562,12 @@ expect
 		_ => Bool.False
 	}
 
-expect View.chosen(["smallest", "premium-4"], "premium-4") == "premium-4"
-expect View.chosen(["smallest", "premium-4"], "nope") == "smallest"
-expect View.chosen([], "nope") == ""
+expect View.chosen(["smallest", "premium-4"], "premium-4", "smallest") == "premium-4"
+expect View.chosen(["smallest", "dedicated-2"], "", View.default_class) == "dedicated-2"
+expect View.chosen(["smallest", "premium-4"], "nope", View.default_class) == "smallest"
+expect View.chosen([], "nope", View.default_class) == ""
+expect View.chosen_section([{ name: "http1", label: "" }, { name: "tls", label: "" }], "") == "tls"
+expect View.chosen_section([{ name: "http1", label: "" }, { name: "tls", label: "" }], "http1") == "http1"
 expect {
 	tabs = View.tabs([{ name: "a", label: "A" }, { name: "b", label: "B" }], "b", "tls", "/history")
 	tabs.map(|t| t.href) == ["/history?class=a&protocol=tls", "/history?class=b&protocol=tls"] and tabs.map(|t| t.current) == [Bool.False, Bool.True]

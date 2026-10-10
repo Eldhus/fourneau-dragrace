@@ -132,7 +132,7 @@ index! = |db, request, wanted| {
 
 ## The race page's tabs, its section tabs and the class they show.
 race_tabs = |latest, wanted| {
-	current = View.chosen(latest.classes.map(|class| class.name), wanted.class)
+	current = View.chosen(latest.classes.map(|class| class.name), wanted.class, View.default_class)
 	{
 		tabs: View.tabs(latest.classes.map(|class| { name: class.name, label: class.label }), current, latest.section, "/"),
 		sections: View.section_tabs(latest.sections, latest.section, current, "/"),
@@ -160,7 +160,7 @@ history! = |db, request, wanted| {
 
 ## The history page's tabs, its section tabs and the class they show.
 history_tabs = |view, wanted| {
-	current = View.chosen(view.classes.map(|class| class.name), wanted.class)
+	current = View.chosen(view.classes.map(|class| class.name), wanted.class, View.default_class)
 	{
 		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, view.section, "/history"),
 		sections: View.section_tabs(view.sections, view.section, current, "/history"),
