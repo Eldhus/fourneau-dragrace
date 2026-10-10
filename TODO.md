@@ -90,6 +90,20 @@
      version, for roux dev to take up (roux docs/dev-server.md): a failed
      build shown over the page, requests held while the app restarts,
      `roc test` after each build.
+3. **HTTP/2 and TLS: the realistic deployment.** (owner, 2026-10-10)
+   Add plaintext-tls (HTTP/2 + TLS, plaintext-h2's shape: TLS's cost per
+   request), churn-tls (a new TLS connection a request: the handshake),
+   templates-tls and sse-tls (HTTP/2 + TLS, 128 connections of 2
+   streams: a page and a Datastar action served with no proxy), and an
+   open-loop ladder for each of the two realistic ones. One certificate
+   for all (ECDSA P-256, self-signed), the negotiated parameters
+   recorded. The site: an inner toggle beside the class tabs, smaller
+   and another colour, "HTTP/1.1" and "HTTP/2 + TLS" (the realistic
+   deployment); below it, outside the toggle, a small h2c section:
+   plaintext, plaintext-h2 and plaintext-tls side by side (HTTP/2's
+   cost, then TLS's). Push all of it and run a manual race (the owner
+   asked for both).
+   - Where it stands (2026-10-10): started; the plan above.
 
 ## Chores
 
