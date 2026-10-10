@@ -107,9 +107,14 @@
      local race of every new workload, each competitor valid in TLS mode
      but basic-webserver, which sits out; the site's pages from it, both
      sections and a phone's width; the migration on a database of the
-     old schema, opened by the new site). Left: commit, push, the
-     migration on the site host (`site/migrations/2026-10-10-sections.sql`,
-     SECURITY.md), then the manual race, then read it.
+     old schema, opened by the new site). Pushed (fourneau 9d34a4d,
+     dragrace 24d5198), CI green; the new site was tried and rolled back
+     as SECURITY.md says, then migrated on the host at 17:14 UTC (a copy
+     first: `/var/lib/dragrace-site/site-before-sections.db`; 5 runs, 30
+     workload rows, integrity ok) and deployed itself. The racer at
+     24d5198. Manual race `2026-10-10T171748Z-cloud` (request 7) racing.
+     Left: read it. `site install-server` (the socket units, from the
+     graceful restart) is still the owner's to run: the agent may not.
    - Open: an open loop over TLS starts each oha run with every
      connection's handshake at once, which weighs on short steps' tail
      (RACING.md, TLS); see what the 10 s steps show before trusting the
