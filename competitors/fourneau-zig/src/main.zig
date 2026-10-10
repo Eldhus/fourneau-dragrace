@@ -253,19 +253,24 @@ fn run_shard(options: Options, shards: u32) void {
 
 fn run_shard_or_fail(options: Options, shards: u32) !void {
     const gpa = std.heap.page_allocator;
+    const config: fourneau.server.Config = .{
+        // 1,024 for the machine, as roux and fourneau-static: each slot
+        // takes ~100 KiB at startup, and 4,096 of them (one shard) did not
+        // fit the smallest droplet's 512 MiB (first cloud race, 2026-10-06).
+        .connections_max = @max(64, 1024 / shards),
+    };
     var runtime: Evented = undefined;
-    try runtime.init(gpa, .{ .thread_limit = 0, .log2_ring_entries = 12 });
+    try runtime.init(gpa, .{
+        .thread_limit = 0,
+        .log2_ring_entries = 12,
+        .fibers_max = config.fibers_max(), // reserved now, its server's own
+    });
     defer runtime.deinit();
     const io = runtime.io();
     if (options.database.len > 0) shard_db = try conduit.Db.open(options.database);
     const address = try std.Io.net.IpAddress.parse(options.address, options.port);
     const listener = try address.listen(io, .{ .reuse_address = true, .kernel_backlog = 4096 });
     var app: App = .{};
-    var server = try Server.init(gpa, io, &app, listener, .{
-        // 1,024 for the machine, as roux and fourneau-static: each slot
-        // takes ~100 KiB at startup, and 4,096 of them (one shard) did not
-        // fit the smallest droplet's 512 MiB (first cloud race, 2026-10-06).
-        .connections_max = @max(64, 1024 / shards),
-    });
+    var server = try Server.init(gpa, io, &app, listener, config);
     try server.run();
 }
