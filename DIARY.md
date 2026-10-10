@@ -1368,3 +1368,9 @@ every shape tried by hand too (32x1, 32x8, 256x1): its own.
 The first local race crashed roux (fourneau's stream scratch was not
 aligned: fixed there, `111d996`). A smoke test that finds a crash is
 worth its minute.
+
+Then the whole race, `race local -quick`, every workload: every
+competitor finished every one (no DNF; HTTP/1.1's unchanged by
+speaking HTTP/2 too). plaintext-h2, requests/s: fourneau-zig 323k, roux
+285k, axum 120k, basic-webserver 43k, Go 35k. `site build`: its 96
+tests pass with the new workload in race.json.
