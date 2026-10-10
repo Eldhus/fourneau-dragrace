@@ -122,6 +122,15 @@
 
 ## Todo
 
+- [ ] A static-file workload, proposed (fourneau session, 2026-10-10): the
+  stylesheet, `Accept-Encoding: gzip, br`, requests a second and bytes on
+  the wire. fourneau and roux now precompress at load (gzip, and brotli by
+  fourneau's own encoder: the site's index 6,273 bytes against gzip's
+  7,973, within 0.6-3.4% of `brotli -q 11`); Go's `FileServer` does not
+  compress, axum's tower-http compresses each response (or serves `.br`
+  files made beforehand). Each server's configuration is a choice for the
+  owner: its defaults, or each at its best. Not built: the owner decides.
+  (2026-10-10)
 - [ ] **Did the c-4 loader fix dedicated-2?** Read the race of 2026-10-08
   against 2026-10-07's (RACING.md, Cost): the closed loop should reach the
   ladder's numbers (fourneau-zig ~89k templates, roux ~90k) with the
