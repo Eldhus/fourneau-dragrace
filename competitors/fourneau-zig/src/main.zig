@@ -258,6 +258,10 @@ fn run_shard_or_fail(options: Options, shards: u32) !void {
         // takes ~100 KiB at startup, and 4,096 of them (one shard) did not
         // fit the smallest droplet's 512 MiB (first cloud race, 2026-10-06).
         .connections_max = @max(64, 1024 / shards),
+        // HTTP/2 by prior knowledge beside HTTP/1.1. Its memory (a machine
+        // per connection slot, a stream slot each) is touched only by an
+        // HTTP/2 client.
+        .http2 = .{},
     };
     var runtime: Evented = undefined;
     try runtime.init(gpa, .{

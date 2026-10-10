@@ -1342,3 +1342,29 @@ there (`git mv`, imports `templates/IndexPage`, …). Checked after each
 change: the full `dragrace build`, `site build` (96 tests), the site's
 22 routes identical (bodies and headers) to the build before, the
 competitor's `/menu` workloads/menu.html byte for byte.
+
+## 2026-10-10: HTTP/2, a workload (branch `http2`, not main)
+
+fourneau speaks HTTP/2 now (its DIARY, 2026-10-10). A workload,
+`plaintext-h2`: GET /plaintext over h2c, 32 connections of 8 streams,
+the 256 requests in flight of Plaintext's 256 connections. The racer
+sends it with oha `--http2 -p` (`http2`, `streams` in race.json) and,
+when a race has one, checks every competitor answers over h2c first
+(RACING.md). Each competitor speaks it as its stack offers: Go's
+net/http `Protocols` (SetUnencryptedHTTP2), axum's `http2` feature
+(the lock gains h2 0.4.16, fnv, tokio-util; built offline from the
+cache), fourneau-zig's and roux's `Config.http2` (roux on its own branch
+`http2`), basic-webserver as it was (hyper's server speaks h2c).
+
+On a branch because main may be pushed for tonight's race, which should
+run as it is: this changes what each competitor serves.
+
+The local race (`race local -quick`, server CPUs 0-1, the desktop busy:
+a smoke test, not a result), requests/s, HTTP/1.1 plaintext then h2c:
+fourneau-zig 271k, 303k; roux 235k, 254k; axum 100k, 84k;
+basic-webserver 35k, 44k; Go 49k, 27k. Go's h2c is half its HTTP/1.1 in
+every shape tried by hand too (32x1, 32x8, 256x1): its own.
+
+The first local race crashed roux (fourneau's stream scratch was not
+aligned: fixed there, `111d996`). A smoke test that finds a crash is
+worth its minute.

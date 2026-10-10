@@ -276,6 +276,12 @@ func validate(ctx context.Context, race Race, target Target, bodies map[int]stri
 	if why := validateStream(ctx, race, target); why != "" {
 		return why
 	}
+	if race.hasHTTP2() {
+		got, err = target.Loader.Shell(ctx, "curl -s -m 5 --http2-prior-knowledge "+url+"/plaintext")
+		if err != nil || got != "Hello, World!" {
+			return fmt.Sprintf("/plaintext over HTTP/2 (h2c) answered %q", got)
+		}
+	}
 	got, err = target.Loader.Shell(ctx, "curl -s -m 5 -o /dev/null -w '%{http_code}' "+url+"/nope")
 	if err != nil || got != "404" {
 		return fmt.Sprintf("/nope answered %s, not 404", got)
@@ -315,6 +321,9 @@ func ohaCommand(race Race, workload Workload, target Target, bodies map[int]stri
 	}
 	if !workload.Keepalive {
 		command.WriteString(" --disable-keepalive")
+	}
+	if workload.HTTP2 {
+		fmt.Fprintf(&command, " --http2 -p %d", max(1, workload.Streams))
 	}
 	if workload.Method != "GET" {
 		command.WriteString(" -m " + workload.Method)

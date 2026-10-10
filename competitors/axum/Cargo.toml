@@ -6,7 +6,8 @@ edition = "2021"
 # axum as its users write it: axum::serve on tokio's multi-threaded runtime
 # (one worker per core). Versions are locked in Cargo.lock.
 [dependencies]
-axum = "0.8"
+# http2: axum::serve then speaks HTTP/2 by prior knowledge beside HTTP/1.1.
+axum = { version = "0.8", features = ["http2"] }
 # The templates workload: askama compiles templates/menu.html into Rust.
 askama = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }

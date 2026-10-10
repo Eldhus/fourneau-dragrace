@@ -122,6 +122,15 @@ oha runs with `--disable-compression` (it asks for gzip and brotli
 otherwise, which a server that compresses honours and the checks never
 see) and `--worker-threads` at the loader's CPUs.
 
+A workload with `"http2": true` sends over HTTP/2 by prior knowledge
+(h2c: oha `--http2`), each of its `connections` carrying `streams`
+requests at once (oha `-p`). A race with one checks first that every
+competitor answers `/plaintext` over h2c (`curl --http2-prior-knowledge`);
+each speaks it as its stack offers: net/http's `Protocols`, axum's
+`http2` feature, hyper's own in basic-webserver, `Config.http2` in
+fourneau and roux. Plain h2c, not TLS: the race measures the servers,
+and every competitor's TLS would be another race.
+
 What limited each result, as the site says it: the server's CPU (at least
 90% busy: the case the race is for), the loader's (at least 90%), the
 network (at least 1,400 Mbit/s either way, 70% of the 2 Gbit/s

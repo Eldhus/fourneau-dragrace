@@ -74,6 +74,10 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       30 * time.Second,
 	}
+	// HTTP/2 by prior knowledge (h2c) beside HTTP/1.1, as net/http offers it.
+	server.Protocols = new(http.Protocols)
+	server.Protocols.SetHTTP1(true)
+	server.Protocols.SetUnencryptedHTTP2(true)
 	log.Printf("go on http://%s", server.Addr)
 	log.Fatal(server.ListenAndServe())
 }
