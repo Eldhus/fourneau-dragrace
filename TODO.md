@@ -112,13 +112,19 @@
      as SECURITY.md says, then migrated on the host at 17:14 UTC (a copy
      first: `/var/lib/dragrace-site/site-before-sections.db`; 5 runs, 30
      workload rows, integrity ok) and deployed itself. The racer at
-     24d5198. Manual race `2026-10-10T171748Z-cloud` (request 7) racing.
-     Left: read it. `site install-server` (the socket units, from the
-     graceful restart) is still the owner's to run: the agent may not.
-   - Open: an open loop over TLS starts each oha run with every
-     connection's handshake at once, which weighs on short steps' tail
-     (RACING.md, TLS); see what the 10 s steps show before trusting the
-     TLS ladders' p99.9.
+     24d5198. Manual race `2026-10-10T171748Z-cloud` raced (DIARY): all
+     valid on dedicated-2; on smallest fourneau-zig and roux were killed
+     for memory, fixed in fourneau 5739295 (committed, not pushed: the
+     owner's push, which the 05:00 check then races). `site
+     install-server` (the socket units, from the graceful restart) is
+     still the owner's to run: the agent may not.
+   - Open, the owner's choice: the TLS ladders' p99 is the handshake
+     again (each 10 s step a new oha run, all 128 connections opened at
+     once: ~1% of the step queues behind them; DIARY). Ways: open the
+     connections in a run that is not measured and keep them (oha
+     cannot: another loader, or our own), or steps long enough to dilute
+     it under 0.1% (100 s: ten times the ladders' time). Until then the
+     TLS ladders' tails are not results.
 
 ## Chores
 

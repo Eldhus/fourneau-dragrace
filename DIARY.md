@@ -1496,3 +1496,34 @@ fourneau-zig 254k against its h2c 351k, axum 105k against 121k, Go 29k
 against 32k. The TLS ladders showed p99 ~70 ms at half load for every
 server: each oha run opens its connections with their handshakes at
 once, which a 2 s step cannot dilute (RACING.md, TLS).
+
+## 2026-10-10: the first race with HTTPS
+
+Manual race `2026-10-10T171748Z-cloud` (fourneau 9d34a4d, roux 771769e,
+dragrace 24d5198): 82 minutes, $0.36. Every competitor valid in TLS mode
+on dedicated-2 (basic-webserver sits out, as meant). Medians a second,
+dedicated-2:
+
+| | plaintext | plaintext-h2 | plaintext-tls | churn-tls | templates-tls | sse-tls |
+|---|---|---|---|---|---|---|
+| fourneau-zig | 168,380 | 250,956 | 202,861 | 1,732 | 69,712 | 64,617 |
+| roux | 159,183 | 236,767 | 187,859 | 1,718 | 66,267 | 36,895 |
+| axum | 70,463 | 85,210 | 78,674 | 5,103 | 45,406 | 30,573 |
+| Go | 41,097 | 23,284 | 22,770 | 2,736 | 11,283 | 5,475 |
+
+- TLS a request (plaintext-h2 to plaintext-tls): fourneau-zig −19%,
+  roux −21%, axum −8%, Go −2%. A full handshake (churn-tls) is
+  fourneau's weak spot, a third of axum's (fourneau's TODO).
+- On smallest, fourneau-zig and roux did not start: the OOM killer took
+  them at ~290 MB. fourneau's slabs were written whole at startup in a
+  safe build (`alloc` fills with 0xAA): 412 MB on dedicated-2, where the
+  race before held 117 MB. Fixed in fourneau 5739295
+  (`stdx.alloc_untouched`): 38 MB for one shard. Not pushed.
+- The TLS ladders' p99 at half load: fourneau-zig 72 ms and roux 66 ms
+  on templates-tls, axum 18 ms, Go 46 ms. About 128 handshakes at each
+  server's churn-tls rate (128 / 1,732 a second is 74 ms): each 10 s step
+  is a new oha run, which opens all its connections at once, and the
+  queue behind them is ~1% of the step. The ladders' tails measure the
+  handshake again (TODO).
+- The loader is near its limit for fourneau-zig (95% of its CPUs on sse,
+  89% on plaintext-h2).
