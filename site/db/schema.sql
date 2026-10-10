@@ -62,8 +62,8 @@ CREATE TABLE run_settings (
   rounds INTEGER NOT NULL,
   warmup_seconds INTEGER NOT NULL,
   measure_seconds INTEGER NOT NULL,
-  open_loop_workload TEXT NOT NULL,
-  -- A JSON array of numbers: the shares of the closed-loop median offered.
+  -- A JSON array of numbers: the shares of the closed-loop median offered
+  -- by each ladder (run_workloads.ladder).
   open_loop_shares TEXT NOT NULL,
   open_loop_warmup_seconds INTEGER NOT NULL,
   open_loop_measure_seconds INTEGER NOT NULL,
@@ -105,6 +105,15 @@ CREATE TABLE run_workloads (
   content_type TEXT NOT NULL,
   connections INTEGER NOT NULL,
   keepalive INTEGER NOT NULL CHECK (keepalive IN (0, 1)),
+  -- HTTP/2 (its streams a connection; 0 for HTTP/1.1), over TLS or not.
+  http2 INTEGER NOT NULL CHECK (http2 IN (0, 1)),
+  streams INTEGER NOT NULL,
+  tls INTEGER NOT NULL CHECK (tls IN (0, 1)),
+  -- Where the race page shows it: HTTP/1.1, h2c (HTTP/2 without TLS,
+  -- beside plaintext), or tls (the realistic deployment).
+  section TEXT NOT NULL CHECK (section IN ('http1', 'h2c', 'tls')),
+  -- It climbed the open-loop ladder after the rounds.
+  ladder INTEGER NOT NULL CHECK (ladder IN (0, 1)),
   PRIMARY KEY (run_id, name)
 ) STRICT, WITHOUT ROWID;
 

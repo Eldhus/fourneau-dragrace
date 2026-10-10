@@ -34,17 +34,16 @@ ON CONFLICT DO NOTHING;
 -- @param rounds : I64
 -- @param warmup_seconds : I64
 -- @param measure_seconds : I64
--- @param open_loop_workload : Str
 -- @param open_loop_shares : Str
 -- @param open_loop_warmup_seconds : I64
 -- @param open_loop_measure_seconds : I64
 -- @param race_json : Str
 -- @param versions_json : Str
 INSERT INTO run_settings (run_id, seed, region, image, port, rounds, warmup_seconds,
-  measure_seconds, open_loop_workload, open_loop_shares, open_loop_warmup_seconds,
+  measure_seconds, open_loop_shares, open_loop_warmup_seconds,
   open_loop_measure_seconds, race_json, versions_json)
 VALUES (:run_id, :seed, :region, :image, :port, :rounds, :warmup_seconds,
-  :measure_seconds, :open_loop_workload, :open_loop_shares, :open_loop_warmup_seconds,
+  :measure_seconds, :open_loop_shares, :open_loop_warmup_seconds,
   :open_loop_measure_seconds, :race_json, :versions_json)
 ON CONFLICT DO NOTHING;
 
@@ -79,10 +78,16 @@ ON CONFLICT DO NOTHING;
 -- @param content_type : Str
 -- @param connections : I64
 -- @param keepalive : Bool
+-- @param http2 : Bool
+-- @param streams : I64
+-- @param tls : Bool
+-- @param section : Str
+-- @param ladder : Bool
 INSERT INTO run_workloads (run_id, name, position, kind, title, summary, method, path,
-  body_bytes, content_type, connections, keepalive)
+  body_bytes, content_type, connections, keepalive, http2, streams, tls, section, ladder)
 VALUES (:run_id, :name, :position, :kind, :title, :summary, :method, :path,
-  :body_bytes, :content_type, :connections, :keepalive)
+  :body_bytes, :content_type, :connections, :keepalive, :http2, :streams, :tls, :section,
+  :ladder)
 ON CONFLICT DO NOTHING;
 
 -- name: add_class :exec

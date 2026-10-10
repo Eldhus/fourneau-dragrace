@@ -9,6 +9,60 @@ IndexPage :: [].{
 	Ctx : {
 		classes : List(
 			{
+				h2c : List(
+					{
+						rows : List(
+							{
+								competitor : Str,
+								h2c : Str,
+								http2_change : Str,
+								plain : Str,
+								tls : Str,
+								tls_change : Str,
+							},
+						),
+						strips : List(
+							{
+								rows : List(
+									{
+										competitor : Str,
+										high : Str,
+										hollow : Bool,
+										low : Str,
+										ranged : Bool,
+										reach : Str,
+										share : Str,
+										tip : Str,
+										valid : Bool,
+										value : Str,
+									},
+								),
+								summary : Str,
+								table : List(
+									{
+										competitor : Str,
+										cpu : Str,
+										limit : Str,
+										loader : Str,
+										net : Str,
+										note : Str,
+										p95 : Str,
+										p99 : Str,
+										p999 : Str,
+										rounds : Str,
+										rps : Str,
+										rss : Str,
+										spread : Str,
+										steal : Str,
+										valid : Bool,
+									},
+								),
+								title : Str,
+							},
+						),
+					},
+				),
+				intro : Str,
 				machines : List({ role : Str, text : Str }),
 				name : Str,
 				open : List(
@@ -87,6 +141,7 @@ IndexPage :: [].{
 		nav : List({ current : Bool, href : Str, label : Str }),
 		racer : List({ items : List(Str), text : Str }),
 		ready : Bool,
+		sections : List({ action : Str, current : Bool, href : Str, label : Str }),
 		started : Str,
 		tabs : List({ action : Str, current : Bool, href : Str, label : Str }),
 		timed : Bool,

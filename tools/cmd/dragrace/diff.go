@@ -390,12 +390,12 @@ func selectCases(only string) []DiffCase {
 
 func diffCompetitor(ctx context.Context, race Race, competitor Competitor, target Target,
 	cases []DiffCase) (map[string]DiffAnswer, error) {
-	pid, err := startServer(ctx, race, competitor, target)
+	pid, err := startServer(ctx, race, competitor, target, plainMode)
 	if err != nil {
 		return nil, err
 	}
 	defer stopServer(ctx, target, pid)
-	if err := waitReady(ctx, race, target); err != nil {
+	if err := waitReady(ctx, race, target, plainMode); err != nil {
 		return nil, fmt.Errorf("%s: %s", competitor.Name, whyNotReady(ctx, competitor, target, pid))
 	}
 	address := fmt.Sprintf("%s:%d", target.Address, race.Port)

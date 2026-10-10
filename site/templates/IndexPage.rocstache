@@ -12,6 +12,7 @@
 <li>Each server class gets fresh DigitalOcean droplets: the server on one, the load generator (<a href="https://github.com/hatoo/oha">oha</a>) on a bigger one, over the private network.</li>
 <li>Workloads raced flat out, each a part of a server&rsquo;s job, in rounds of random order; the median counts, of throughput and of each latency percentile.</li>
 <li>And one with a database: RealWorld&rsquo;s Conduit API on SQLite, reads and writes at once, offered at the same rising rates to every server.</li>
+<li>Each over plain HTTP/1.1, as behind a proxy; the realistic ones again over HTTP/2 and TLS, as browsers reach a server with no proxy (the tabs beside the sizes).</li>
 </ul>
 <p>Details: <a href="/workloads">Workloads</a>, <a href="/method">Method</a>. To make a server faster or add one: <a href="/contribute">Contribute</a>.</p>
 </article>

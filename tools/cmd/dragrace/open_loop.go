@@ -48,24 +48,36 @@ type OpenStep struct {
 	Parts  []OpenPart `json:"parts"`
 }
 
-// openLoop climbs the ladder for every valid competitor, after the rounds,
-// in a seeded order of its own.
+// openLoop climbs each ladder workload's ladder for every valid competitor,
+// after the rounds, in a seeded order of its own.
 func openLoop(ctx context.Context, race Race, competitors []Competitor, target Target,
 	bodies map[int]string, valid map[string]string, run *Run) error {
-	workload, found := workloadNamed(race, race.OpenLoop.Workload)
-	if !found {
-		// Narrowed away (-workloads); race.json itself is checked on load.
-		return nil
+	if len(race.OpenLoop.Shares) == 0 {
+		return nil // adhoc climbs its own (-open)
 	}
+	for _, workload := range race.Workloads {
+		if !workload.Ladder {
+			continue
+		}
+		if err := openLoopOf(ctx, race, workload, competitors, target, bodies, valid,
+			run); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func openLoopOf(ctx context.Context, race Race, workload Workload, competitors []Competitor,
+	target Target, bodies map[int]string, valid map[string]string, run *Run) error {
 	for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+1) {
-		if valid[competitor.Name] != "" {
+		if !competitor.offers(workload) || valid[validKey(competitor.Name, workload.mode())] != "" {
 			continue
 		}
 		result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
 		if result.MedianRPS <= 0 {
 			continue
 		}
-		log.Printf("[%s] open loop: %s", target.Class.Name, competitor.Name)
+		log.Printf("[%s] open loop, %s: %s", target.Class.Name, workload.Name, competitor.Name)
 		steps, err := climb(ctx, race, workload, competitor, target, bodies, result.MedianRPS)
 		if err != nil {
 			return fmt.Errorf("%s open loop: %w", competitor.Name, err)
@@ -78,12 +90,12 @@ func openLoop(ctx context.Context, race Race, competitors []Competitor, target T
 
 func climb(ctx context.Context, race Race, workload Workload, competitor Competitor,
 	target Target, bodies map[int]string, median float64) ([]OpenStep, error) {
-	pid, err := startServer(ctx, race, competitor, target)
+	pid, err := startServer(ctx, race, competitor, target, workload.mode())
 	if err != nil {
 		return nil, err
 	}
 	defer stopServer(context.WithoutCancel(ctx), target, pid)
-	if err := waitReady(ctx, race, target); err != nil {
+	if err := waitReady(ctx, race, target, workload.mode()); err != nil {
 		return nil, fmt.Errorf("did not start")
 	}
 	local := net.ParseIP(target.Address).IsLoopback()

@@ -19,6 +19,12 @@ futures-util = { version = "0.3", default-features = false }
 # The conduit workload: sqlx's SQLite (bundled), its timestamps with chrono.
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# HTTPS (--tls-cert): rustls through tokio-rustls, each connection served
+# by hyper-util's HTTP/1.1-or-HTTP/2 builder, as axum's low-level-rustls
+# example does (axum::serve speaks no TLS).
+tokio-rustls = "0.26"
+rustls-pki-types = "1"
+hyper-util = { version = "0.1", features = ["server-auto", "service", "tokio"] }
 
 [profile.release]
 codegen-units = 1

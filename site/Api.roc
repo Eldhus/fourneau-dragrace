@@ -46,7 +46,7 @@ Api :: [].{
 		rounds : I64,
 		warmup_seconds : I64,
 		measure_seconds : I64,
-		open_loop : { workload : Str, shares : List(F64), warmup_seconds : I64, measure_seconds : I64 },
+		open_loop : { shares : List(F64), warmup_seconds : I64, measure_seconds : I64 },
 		race_json : Str,
 		versions_json : Str,
 		versions : List({ name : Str, version : Str }),
@@ -66,6 +66,13 @@ Api :: [].{
 		content_type : Str,
 		connections : I64,
 		keepalive : Bool,
+		## HTTP/2 (`streams` a connection; 0 for HTTP/1.1), over TLS or not;
+		## the race page's section ("http1", "h2c", "tls"); a ladder climbed.
+		http2 : Bool,
+		streams : I64,
+		tls : Bool,
+		section : Str,
+		ladder : Bool,
 	}
 
 	## A run's end: its status, and its timing and droplets (timing.go).
@@ -406,7 +413,6 @@ Api :: [].{
 			rounds: race.rounds,
 			warmup_seconds: race.warmup_seconds,
 			measure_seconds: race.measure_seconds,
-			open_loop_workload: race.open_loop.workload,
 			open_loop_shares: json_numbers(race.open_loop.shares),
 			open_loop_warmup_seconds: race.open_loop.warmup_seconds,
 			open_loop_measure_seconds: race.open_loop.measure_seconds,
@@ -436,6 +442,11 @@ Api :: [].{
 				content_type: w.content_type,
 				connections: w.connections,
 				keepalive: w.keepalive,
+				http2: w.http2,
+				streams: w.streams,
+				tls: w.tls,
+				section: w.section,
+				ladder: w.ladder,
 			})?
 			$position = $position + 1
 		}

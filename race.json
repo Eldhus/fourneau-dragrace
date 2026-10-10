@@ -39,7 +39,8 @@
       "method": "GET",
       "path": "/menu",
       "connections": 256,
-      "keepalive": true
+      "keepalive": true,
+      "ladder": true
     },
     {
       "name": "sse",
@@ -51,17 +52,6 @@
       "keepalive": true
     },
     {
-      "name": "plaintext-h2",
-      "title": "Plaintext, HTTP/2",
-      "summary": "GET /plaintext over HTTP/2 (h2c): 32 connections of 8 streams each, the same 256 requests in flight as Plaintext's 256 connections: the cost of HTTP/2's frames, HPACK and multiplexing, without TLS (browsers always add it).",
-      "method": "GET",
-      "path": "/plaintext",
-      "connections": 32,
-      "keepalive": true,
-      "http2": true,
-      "streams": 8
-    },
-    {
       "name": "churn",
       "title": "Connection churn",
       "summary": "GET /plaintext on a new connection every request: accepting, and closing, as fast as possible.",
@@ -69,6 +59,70 @@
       "path": "/plaintext",
       "connections": 64,
       "keepalive": false
+    },
+    {
+      "name": "plaintext-h2",
+      "title": "Plaintext, HTTP/2 (h2c)",
+      "summary": "GET /plaintext over HTTP/2 without TLS: 32 connections of 8 streams each, the same 256 requests in flight as Plaintext's 256 connections: the cost of HTTP/2's frames, HPACK and multiplexing, without TLS (browsers always add it).",
+      "method": "GET",
+      "path": "/plaintext",
+      "connections": 32,
+      "keepalive": true,
+      "http2": true,
+      "streams": 8,
+      "section": "h2c"
+    },
+    {
+      "name": "plaintext-tls",
+      "title": "Plaintext, HTTPS",
+      "summary": "Plaintext, HTTP/2's shape, over TLS: against Plaintext, HTTP/2 (h2c), the cost of TLS a request.",
+      "method": "GET",
+      "path": "/plaintext",
+      "connections": 32,
+      "keepalive": true,
+      "http2": true,
+      "streams": 8,
+      "tls": true,
+      "section": "tls"
+    },
+    {
+      "name": "templates-tls",
+      "title": "Templates, HTTPS",
+      "summary": "GET /menu over HTTP/2 and TLS, 128 connections of 2 streams: a server-rendered page as browsers fetch it, with no proxy in front.",
+      "method": "GET",
+      "path": "/menu",
+      "connections": 128,
+      "keepalive": true,
+      "http2": true,
+      "streams": 2,
+      "tls": true,
+      "section": "tls",
+      "ladder": true
+    },
+    {
+      "name": "sse-tls",
+      "title": "SSE (Datastar), HTTPS",
+      "summary": "The Datastar action over HTTP/2 and TLS, 128 connections of 2 streams: as browsers send it, with no proxy in front.",
+      "method": "GET",
+      "path": "/sse?datastar=%7B%22count%22%3A41%7D",
+      "connections": 128,
+      "keepalive": true,
+      "http2": true,
+      "streams": 2,
+      "tls": true,
+      "section": "tls",
+      "ladder": true
+    },
+    {
+      "name": "churn-tls",
+      "title": "Connection churn, HTTPS",
+      "summary": "A new TLS connection every request, a full handshake each (no resumption), HTTP/1.1: what a new visitor costs.",
+      "method": "GET",
+      "path": "/plaintext",
+      "connections": 64,
+      "keepalive": false,
+      "tls": true,
+      "section": "tls"
     },
     {
       "name": "conduit",
@@ -151,7 +205,7 @@
     "loader_cpus": "2-7"
   },
   "open_loop": {
-    "workload": "templates",
+    "comment": "The ladder each workload marked \"ladder\" climbs after the rounds.",
     "shares": [
       0.5,
       0.75,

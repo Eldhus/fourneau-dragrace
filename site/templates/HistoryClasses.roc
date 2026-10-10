@@ -36,9 +36,37 @@ HistoryClasses :: [].{
 						title : Str,
 					},
 				),
+				h2c : List(
+					{
+						dates : List({ label : Str, x : Str }),
+						empty : Bool,
+						lines : List(
+							{
+								competitor : Str,
+								dots : List(
+									{
+										cx : Str,
+										cy : Str,
+										r : Str,
+										title : Str,
+									},
+								),
+								drawn : Bool,
+								label_x : Str,
+								label_y : Str,
+								path : Str,
+							},
+						),
+						ticks : List(
+							{ label : Str, line_y : Str, text_y : Str },
+						),
+						title : Str,
+					},
+				),
 				title : Str,
 			},
 		),
+		sections : List({ action : Str, current : Bool, href : Str, label : Str }),
 		tabs : List({ action : Str, current : Bool, href : Str, label : Str }),
 	}
 

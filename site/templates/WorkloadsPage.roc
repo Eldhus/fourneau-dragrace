@@ -7,7 +7,20 @@ WorkloadsPage :: [].{
 
 	## What `WorkloadsPage.rocstache` reads, inferred from its tags.
 	Ctx : {
-		cards : List({ route : Str, spec : Str, summary : Str, title : Str }),
+		groups : List(
+			{
+				cards : List(
+					{
+						route : Str,
+						spec : Str,
+						summary : Str,
+						title : Str,
+					},
+				),
+				heading : Str,
+				note : Str,
+			},
+		),
 		home : Bool,
 		ladder : Str,
 		loader_limit : Str,

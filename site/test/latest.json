@@ -87,7 +87,8 @@
         "content_type": "",
         "connections": 256,
         "keepalive": true,
-        "kind": "closed"
+        "kind": "closed",
+        "section": "http1"
       },
       {
         "name": "echo-4k",
@@ -99,7 +100,8 @@
         "content_type": "application/octet-stream",
         "connections": 256,
         "keepalive": true,
-        "kind": "closed"
+        "kind": "closed",
+        "section": "http1"
       },
       {
         "name": "templates",
@@ -111,7 +113,8 @@
         "content_type": "",
         "connections": 256,
         "keepalive": true,
-        "kind": "closed"
+        "kind": "closed",
+        "section": "http1"
       },
       {
         "name": "churn",
@@ -123,7 +126,8 @@
         "content_type": "",
         "connections": 64,
         "keepalive": false,
-        "kind": "closed"
+        "kind": "closed",
+        "section": "http1"
       }
     ],
     "cloud": {
