@@ -140,8 +140,15 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; flex: none; }
 .strips { display: grid; gap: 22px; }
 .strip { min-width: 0; margin: 0; padding: 14px 16px 10px; background: rgba(33,18,53,.85); border: 1px solid var(--grid); }
-.strip figcaption { font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
-.strip figcaption b { font-family: var(--pixel); font-size: 11px; color: var(--text); font-weight: normal; margin-right: 8px; }
+/* A chart's words are its header, the bars the thing: the title on a line of its own, the summary small and
+   quieter under it. */
+.strip figcaption { font-size: 12px; line-height: 1.45; color: var(--text-3); margin-bottom: 10px; }
+.strip figcaption b { display: block; font-family: var(--pixel); font-size: 10px; line-height: 1.6;
+  color: var(--text); font-weight: normal; margin: 0 0 3px; }
+@media (max-width: 560px) {
+  .strip figcaption { font-size: 11px; margin-bottom: 8px; }
+  .strip figcaption b { font-size: 9px; }
+}
 
 /* The drag strip: a name, then a bar from one baseline, its value at the tip. */
 /* The longest bar (the fastest round) takes this share of its track; the
@@ -210,10 +217,13 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
    on Workloads, thin small text in the protocol tabs' cyan, quieter than
    the tabs, bullets between. The protocol first, at full cyan; on a
    test's card every item is a protocol. */
-.variant { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 6px 0 0; font-family: var(--mono);
-  font-size: 11px; line-height: 1.5; letter-spacing: .02em; color: rgba(95,215,255,.62); }
-.variant > span:first-child, .variant.protocols > span { color: var(--cyan); }
-.variant > span + span::before { content: "•"; margin: 0 7px; color: var(--text-3); }
+.variant { display: flex; flex-wrap: wrap; gap: 0; margin: 4px 0 0; font-family: var(--mono);
+  font-size: 10.5px; line-height: 1.5; letter-spacing: .01em; color: rgba(95,215,255,.45); }
+.variant > span { white-space: nowrap; }
+.variant > span:first-child, .variant.protocols > span { color: rgba(95,215,255,.8); }
+/* The bullet ends the item before it: a wrap leaves none at a line's start. */
+.variant > span:not(:last-child)::after { content: "•"; margin: 0 6px; color: var(--text-3); opacity: .7; }
+.strip .variant { font-size: 10px; }
 .workloads .card p.variant { margin-top: 10px; }
 .prose h3.variant-name { font-family: var(--pixel); font-size: 10px; font-weight: normal; color: var(--cyan); margin: 22px 0 6px; }
 .variant-rows { list-style: none; padding: 0; margin: 8px 0 0; }

@@ -394,12 +394,15 @@ expect {
 
 ## How a variant is sent, the protocol first: what the line under a chart,
 ## and on Workloads under a test, says (thin text
-## in the protocol tabs' colour, bullets between).
+## in the protocol tabs' colour, bullets between). Short enough for one
+## line on a phone: kept alive goes unsaid, the usual case (the bars first, the words quieter).
 variant_line : Str, Bool, I64, I64, Bool -> List(Str)
 variant_line = |protocol, http2, connections, streams, keepalive| {
-	carried = if http2 "${connections.to_str()} connections × ${streams.to_str()} streams" else "${connections.to_str()} connections"
-	reuse = if keepalive "kept alive" else "a new connection a request"
-	[protocol_label(protocol, http2), carried, reuse]
+	carried =
+		if http2 "${connections.to_str()} connections × ${streams.to_str()} streams"
+		else if keepalive "${connections.to_str()} connections"
+		else "${connections.to_str()} connections, one request each"
+	[protocol_label(protocol, http2), carried]
 }
 
 workload_variant : Data.Workload -> List(Str)
@@ -416,9 +419,9 @@ protocol_label = |protocol, http2|
 	else if protocol == "tls" "HTTP/1.1+TLS"
 	else "HTTP/1.1"
 
-expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2+TLS", "128 connections × 2 streams", "kept alive"]
-expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 connections", "a new connection a request"]
-expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections", "kept alive"]
+expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2+TLS", "128 connections × 2 streams"]
+expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 connections, one request each"]
+expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections"]
 
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
@@ -796,8 +799,8 @@ expect {
 	and open.route == "/sse"
 	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
 	and variant_groups(specs).map(|g| g.rows) == [
-		[{ line: ["256 connections", "kept alive"], tests: "sse, conduit" }, { line: ["64 connections", "a new connection a request"], tests: "churn" }],
-		[{ line: ["128 connections × 2 streams", "kept alive"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 connections", "a new connection a request"], tests: "churn" }],
+		[{ line: ["256 connections"], tests: "sse, conduit" }, { line: ["64 connections, one request each"], tests: "churn" }],
+		[{ line: ["128 connections × 2 streams"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 connections, one request each"], tests: "churn" }],
 	]
 }
 
