@@ -11,7 +11,7 @@ HistoryPage :: [].{
 			{
 				charts : List(
 					{
-						dates : List({ label : Str, x : Str }),
+						dates : List({ day : Str, time : Str, x : Str }),
 						empty : Bool,
 						key : Str,
 						lines : List(
@@ -26,8 +26,6 @@ HistoryPage :: [].{
 									},
 								),
 								drawn : Bool,
-								label_x : Str,
-								label_y : Str,
 								path : Str,
 							},
 						),
@@ -39,7 +37,7 @@ HistoryPage :: [].{
 				),
 				h2c : List(
 					{
-						dates : List({ label : Str, x : Str }),
+						dates : List({ day : Str, time : Str, x : Str }),
 						empty : Bool,
 						key : Str,
 						lines : List(
@@ -54,8 +52,6 @@ HistoryPage :: [].{
 									},
 								),
 								drawn : Bool,
-								label_x : Str,
-								label_y : Str,
 								path : Str,
 							},
 						),
@@ -68,7 +64,6 @@ HistoryPage :: [].{
 				title : Str,
 			},
 		),
-		competitors : List(Str),
 		home : Bool,
 		nav : List({ current : Bool, href : Str, label : Str }),
 		note : Str,

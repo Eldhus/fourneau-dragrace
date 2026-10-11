@@ -151,7 +151,6 @@ history! = |db, request, wanted| {
 		nav: base.nav,
 		waiting: view.waiting,
 		note: view.note,
-		competitors: view.competitors,
 		tabs: shown.tabs,
 		sections: shown.sections,
 		classes: shown.classes,
@@ -215,7 +214,7 @@ history_view! = |db, request, section|
 
 ## Before the first race: the pages say so.
 no_history : View.History
-no_history = { waiting: Bool.True, note: "", competitors: [], sections: [], section: "", classes: [] }
+no_history = { waiting: Bool.True, note: "", sections: [], section: "", classes: [] }
 
 no_race : View.Latest
 no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], sections: [], section: "", classes: [] }

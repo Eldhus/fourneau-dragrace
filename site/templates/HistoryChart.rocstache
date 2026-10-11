@@ -1,8 +1,8 @@
 <figure class="strip" data-chart="{{ key }}"><figcaption><b>{{ title }}</b>best round&rsquo;s req/s, race by race</figcaption>
-{{?empty}}<p class="pending">no results yet</p>{{/empty}}{{^empty}}<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: the best round's requests per second by race">
-{{#ticks}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
-{{/ticks}}{{#dates}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>
+{{?empty}}<p class="pending">no results yet</p>{{/empty}}{{^empty}}<ul class="legend chart-legend" aria-label="Competitors">{{#lines}}{{?drawn}}<li><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/drawn}}{{/lines}}</ul>
+<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 280" role="img" aria-label="{{ title }}: the best round's requests per second by race">
+{{#ticks}}<line class="grid" x1="72" x2="680" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
+{{/ticks}}{{#dates}}<text class="date" x="{{ x }}" y="248">{{ day }}<tspan x="{{ x }}" dy="1.15em">{{ time }}</tspan></text>
 {{/dates}}{{#lines}}{{?drawn}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
 {{#dots}}<circle class="point s-{{ ../competitor }}" cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}"><title>{{ title }}</title></circle>
-{{/dots}}<text class="end" x="{{ label_x }}" y="{{ label_y }}">{{ competitor }}</text>
-{{/drawn}}{{/lines}}</svg></div>{{/empty}}</figure>
+{{/dots}}{{/drawn}}{{/lines}}</svg></div>{{/empty}}</figure>

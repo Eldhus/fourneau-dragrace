@@ -60,16 +60,20 @@ View :: [].{
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
-	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str }
-	## A line before its label is placed: `end_x`, `end_y` are where it
-	## ends, for spreading the labels apart (`spread_labels`).
-	DraftLine : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
+	## A history line; the chart's own legend names it, not a label at its
+	## end (on a phone the end labels are hidden, and a legend for the page
+	## scrolls away, so no chart would say which line is which).
+	Line : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot) }
 	Tick : { line_y : Str, text_y : Str, label : Str }
 	Mark : { x : Str, label : Str }
-	Chart : { key : Str, title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
+	## A race on the history's x axis: its day, and under it its time when
+	## another race shares the day (one line, "Oct 10 12:26", overlapped
+	## its neighbours on a phone).
+	DateMark : { x : Str, day : Str, time : Str }
+	Chart : { key : Str, title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
 	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
 	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
-	History : { waiting : Bool, note : Str, competitors : List(Str), sections : List(Section), section : Str, classes : List(Charts) }
+	History : { waiting : Bool, note : Str, sections : List(Section), section : Str, classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
 
@@ -187,7 +191,7 @@ View :: [].{
 			charts: charted(section, class),
 			h2c: charted("h2c", class),
 		})
-		{ waiting: List.len(shown) < 2, note, competitors: run.race.competitors, sections, section, classes }
+		{ waiting: List.len(shown) < 2, note, sections, section, classes }
 	}
 
 	## The pinned versions of the newest race.
@@ -429,21 +433,31 @@ best_round = |result| {
 	result.rounds.fold(none, |best, r| if r.rps > best.rps r else best)
 }
 
-# The history chart's geometry: race.js's, so the CSS still fits.
+# The history chart's geometry, in HistoryChart.rocstache's viewBox. No
+# room on the right for line names (the legend names them), only for the
+# last date's half; the bottom holds two lines of date.
 width = 720.0
-height = 260.0
+height = 280.0
 left = 72.0
-right = 120.0
+right = 40.0
 top = 14.0
-bottom = 34.0
+bottom = 56.0
 
 chart : List(Data.Entry), Str, Data.Workload, List(Str) -> View.Chart
-chart = |entries, class, workload, competitors| {
+chart = |all_entries, class, workload, competitors| {
 	value = |entry, competitor|
 		match entry.results.find_first(|r| r.class == class and r.workload == workload.name and r.competitor == competitor and r.valid) {
 			Ok(found) => Ok(found.best_rps)
 			Err(_) => Err(Missing)
 		}
+	# From the first race that ran this workload: a workload added later
+	# drew its lines in the right third of an axis of empty dates.
+	ran = |entry| competitors.any(|c|
+		match value(entry, c) {
+			Ok(_) => Bool.True
+			Err(_) => Bool.False
+		})
+	entries = all_entries.drop_first(all_entries.find_first_index(ran) ?? 0)
 	most = entries.fold(0.0, |top_value, entry|
 		competitors.fold(top_value, |t, c|
 			match value(entry, c) {
@@ -457,7 +471,7 @@ chart = |entries, class, workload, competitors| {
 		count = List.len(entries)
 		x = |i| left + (if count == 1 0.5 else i.to_f64() / (count - 1).to_f64()) * (width - left - right)
 		y = |v| top + (1.0 - v / ceiling) * (height - top - bottom)
-		lines = spread_labels(competitors.map(|competitor| line(entries, competitor, value, x, y)))
+		lines = competitors.map(|competitor| line(entries, competitor, value, x, y))
 		ticks = [0.0, 1.0, 2.0, 3.0, 4.0].map(|t| {
 			v = ceiling * t / 4.0
 			{ line_y: Format.one_decimal(y(v)), text_y: Format.one_decimal(y(v) + 4.0), label: Format.compact(v) }
@@ -466,14 +480,18 @@ chart = |entries, class, workload, competitors| {
 		dates = entries
 			.map_with_index(|entry, i| { i, entry })
 			.keep_if(|e| e.i % every == 0 or e.i == count - 1)
-			.map(|e| { x: Format.one_decimal(x(e.i)), label: axis_date(entries, e.entry.started_at) })
+			.map(|e| {
+				x: Format.one_decimal(x(e.i)),
+				day: day(e.entry.started_at),
+				time: axis_time(entries, e.entry.started_at),
+			})
 		{ key: chart_key(workload.name), title: workload.title, empty: Bool.False, lines, ticks, dates }
 	}
 }
 
 ## A competitor's best rounds as an SVG path, lifting the pen over races it
-## did not finish; its name at its last point.
-line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.DraftLine
+## did not finish.
+line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.Line
 line = |entries, competitor, value, x, y| {
 	var $path = ""
 	var $pen = "M"
@@ -501,16 +519,7 @@ line = |entries, competitor, value, x, y| {
 		}
 		$i = $i + 1
 	}
-	{
-		competitor,
-		drawn: !$path.is_empty(),
-		path: $path,
-		dots: $dots,
-		label_x: Format.one_decimal($last_x + 10.0),
-		label_y: Format.one_decimal($last_y + 4.0),
-		end_x: $last_x,
-		end_y: $last_y,
-	}
+	{ competitor, drawn: !$path.is_empty(), path: $path, dots: $dots }
 }
 
 ## The smallest of 1, 2, 5, 10 times a power of ten that is at least `most`.
@@ -633,13 +642,6 @@ label_ys = |ends| {
 	$ys.sort_with(|a, b| if a.i < b.i Before else if a.i > b.i After else Same).map(|p| p.y)
 }
 
-## The labels placed, and the lines as the template reads them (no ends).
-spread_labels : List(View.DraftLine) -> List(View.Line)
-spread_labels = |lines| {
-	ys = label_ys(lines.map(|l| { competitor: l.competitor, x: l.end_x, y: l.end_y, drawn: l.drawn }))
-	List.map2(lines, ys, |l, y| { competitor: l.competitor, drawn: l.drawn, path: l.path, dots: l.dots, label_x: l.label_x, label_y: Format.one_decimal(y) })
-}
-
 expect vcpus(1) == "1 vCPU" and vcpus(4) == "4 vCPUs"
 expect {
 	at = |name, x, y| { competitor: name, x, y, drawn: Bool.True }
@@ -648,12 +650,12 @@ expect {
 		== [112.0, 99.0, 204.0, 100.0]
 }
 
-## A race's date on a chart's axis: the day, and the time when another
-## race shares the day (two "Oct 6" side by side said nothing).
-axis_date : List(Data.Entry), Str -> Str
-axis_date = |entries, stamp| {
+## A race's time on a chart's axis, under its day, only when another race
+## shares the day (two "Oct 6" side by side said nothing).
+axis_time : List(Data.Entry), Str -> Str
+axis_time = |entries, stamp| {
 	shared = entries.keep_if(|entry| day(entry.started_at) == day(stamp))
-	if List.len(shared) > 1 "${day(stamp)} ${clock(stamp)}" else day(stamp)
+	if List.len(shared) > 1 clock(stamp) else ""
 }
 
 ## "2026-10-06T13:58:49Z" is "13:58": the tool writes that one format.

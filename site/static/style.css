@@ -237,13 +237,20 @@ nav.tabs a + a { border-left: 0; }
   nav.tabs a { font-size: 9px; padding: 8px 10px; }
 }
 
-/* History on a phone: the whole chart in view, not scrolled; the legend
-   above names the lines, the axis text grows to stay legible (SVG units
-   shrink with the chart). */
+/* Each history chart's own legend, under its title: the lines it draws
+   (one legend for the page would scroll away above the tabs). */
+.chart-legend { margin: 0 0 6px; gap: 4px 14px; font-size: 12px; }
+.chart-legend .swatch { width: 10px; height: 10px; }
+
+/* History on a phone: the whole chart in view, not scrolled; the axis
+   text grows to stay legible (SVG units shrink with the chart); the card
+   gives the chart its padding back. */
 @media (max-width: 560px) {
   .chart { min-width: 0; }
   .chart .end { display: none; }
   .chart .tick, .chart .date { font-size: 20px; }
+  #history .strip { padding: 12px 10px 6px; }
+  .chart-legend { font-size: 11px; gap: 3px 10px; }
 }
 
 /* The open-loop chart: a step where the loader was the limit is hollow. */
