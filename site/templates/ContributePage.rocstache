@@ -1,6 +1,6 @@
 {{> Top}}<article class="prose">
 <h1>Contribute</h1>
-<p>Make a server faster, or add one, with a pull request; the next race shows it.</p>
+<p>Make one of the <a href="/competitors">competitors</a> faster with a pull request; the next race shows it. The field is closed: no competitor is added, and a pull request adding one is closed.</p>
 <ol>
 <li>Clone <a href="https://github.com/Eldhus/fourneau-dragrace">fourneau-dragrace</a> beside <a href="https://github.com/Eldhus/fourneau">fourneau</a> and <a href="https://github.com/Eldhus/roux">roux</a>.</li>
 <li>Change <code>competitors/NAME/</code>: the code, the build, <code>competitor.json</code>.</li>

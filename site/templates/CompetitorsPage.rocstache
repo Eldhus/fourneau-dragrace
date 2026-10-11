@@ -1,5 +1,6 @@
 {{> Top}}<article class="prose">
 <h1>Competitors</h1>
+<p>These, and no others: the field is closed. Each can be made faster, fairly (<a href="/contribute">Contribute</a>).</p>
 <div class="cards">
 <section class="card"><h3><span class="swatch s-go"></span>go</h3><p class="lang">Go</p><p>The standard library&rsquo;s server: a goroutine per connection on Go&rsquo;s runtime poller (epoll).</p><p><a href="https://go.dev">Go</a><a href="https://github.com/Eldhus/fourneau-dragrace/tree/master/competitors/go">source</a></p></section>
 <section class="card"><h3><span class="swatch s-axum"></span>axum</h3><p class="lang">Rust</p><p>axum 0.8 on tokio&rsquo;s multi-threaded, work-stealing runtime (epoll), TCP_NODELAY as axum&rsquo;s docs show.</p><p><a href="https://github.com/tokio-rs/axum">axum</a><a href="https://tokio.rs">tokio</a><a href="https://github.com/Eldhus/fourneau-dragrace/tree/master/competitors/axum">source</a></p></section>
