@@ -13,7 +13,9 @@ View :: [].{
 	## `share`: the best round's; `low`, `high`: the slowest and fastest
 	## rounds as shares, the whisker's ends (the fastest is the bar's end:
 	## the whisker shows how far noise took the other rounds below it).
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, ranged : Bool, hollow : Bool, tip : Str }
+	## `p99`: the rounds' median p99, small after the rate, for comparing
+	## tails at a glance.
+	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, p99 : Str, ranged : Bool, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -31,7 +33,8 @@ View :: [].{
 		steal : Str,
 		rss : Str,
 	}
-	Strip : { title : Str, summary : Str, rows : List(Row), table : List(TableRow) }
+	## `key`: which chart this is in every class and section (chart_key).
+	Strip : { key : Str, title : Str, summary : Str, rows : List(Row), table : List(TableRow) }
 	Machine : { role : Str, text : Str }
 	## A class as one section shows it (`intro` says what the section is),
 	## and below, outside the section's toggle, the h2c comparison (one, or
@@ -53,7 +56,7 @@ View :: [].{
 	## it ends, for spreading the labels apart (`spread_open`).
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note.
-	OpenChart : { title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	OpenChart : { key : Str, title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -63,7 +66,7 @@ View :: [].{
 	DraftLine : { competitor : Str, drawn : Bool, path : Str, dots : List(Dot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	Tick : { line_y : Str, text_y : Str, label : Str }
 	Mark : { x : Str, label : Str }
-	Chart : { title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
+	Chart : { key : Str, title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(Mark) }
 	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
 	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
 	History : { waiting : Bool, note : Str, competitors : List(Str), sections : List(Section), section : Str, classes : List(Charts) }
@@ -354,13 +357,23 @@ strip = |run, class, workload| {
 	# A local race's traffic is loopback: no network limit applies.
 	local = class == "local"
 	rows = results.map(|r| row(r, most, local))
-	{ title: workload.title, summary: workload.summary, rows, table: results.map(|r| table_row(r, local)) }
+	{ key: chart_key(workload.name), title: workload.title, summary: workload.summary, rows, table: results.map(|r| table_row(r, local)) }
 }
+
+## Which chart a workload's is, the same in every class and section: its
+## name without `-tls`, as race.json names each TLS workload after its
+## HTTP/1.1 one. A tab keeps that chart where it was on the screen
+## (static/demo.js), so switching section compares the two protocols.
+chart_key : Str -> Str
+chart_key = |name| name.drop_suffix("-tls")
+
+expect chart_key("echo-4k-tls") == "echo-4k" and chart_key("echo-4k") == "echo-4k"
+expect chart_key("plaintext-h2") == "plaintext-h2"
 
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", p99: "", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
 		value = Format.thousands(result.best_rps)
 		rounds = List.len(result.rounds).to_str()
@@ -373,6 +386,7 @@ row = |result, most, local|
 			low: Format.two_decimals(slowest / most),
 			high: Format.two_decimals(fastest / most),
 			value,
+			p99: "${Format.latency(result.median_p99_ms)} ms",
 			ranged: (fastest - slowest) / most >= whisker_share_min,
 			hollow: !saturated(result, local),
 			tip: "${result.competitor}: ${value} req/s, the best of ${rounds} rounds (the slowest ${Format.thousands(slowest)}, ${Format.thousands(spread)}% below), limited by ${limited_by(result, local)}; the rounds' median p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
@@ -436,7 +450,7 @@ chart = |entries, class, workload, competitors| {
 				Err(_) => t
 			}))
 	if most <= 0.0 {
-		{ title: workload.title, empty: Bool.True, lines: [], ticks: [], dates: [] }
+		{ key: chart_key(workload.name), title: workload.title, empty: Bool.True, lines: [], ticks: [], dates: [] }
 	} else {
 		ceiling = nice_ceiling(most)
 		count = List.len(entries)
@@ -452,7 +466,7 @@ chart = |entries, class, workload, competitors| {
 			.map_with_index(|entry, i| { i, entry })
 			.keep_if(|e| e.i % every == 0 or e.i == count - 1)
 			.map(|e| { x: Format.one_decimal(x(e.i)), label: axis_date(entries, e.entry.started_at) })
-		{ title: workload.title, empty: Bool.False, lines, ticks, dates }
+		{ key: chart_key(workload.name), title: workload.title, empty: Bool.False, lines, ticks, dates }
 	}
 }
 
@@ -719,15 +733,15 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok({ section: workload.section, chart: open_chart({ title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }) })
+			Ok({ section: workload.section, chart: open_chart({ key: "open-${chart_key(workload.name)}", title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }) })
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: a mixed workload's is its
 ## slowest part's. (A switch to p50, p90, p99.9 and
 ## the mean was built and taken out; the charts all looked alike.)
-open_chart : { title : Str, summary : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ title, summary, results, mixed }| {
+open_chart : { key : Str, title : Str, summary : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
+open_chart = |{ key, title, summary, results, mixed }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -756,7 +770,7 @@ open_chart = |{ title, summary, results, mixed }| {
 		} else {
 			{ caption: ladder, measure: "p99 latency" }
 		}
-	{ title, caption, measure, lines, ticks_x, ticks_y }
+	{ key, title, caption, measure, lines, ticks_x, ticks_y }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine

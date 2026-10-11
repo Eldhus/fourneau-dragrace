@@ -7,12 +7,14 @@ Strip :: [].{
 
 	## What `Strip.rocstache` reads, inferred from its tags.
 	Ctx : {
+		key : Str,
 		rows : List(
 			{
 				competitor : Str,
 				high : Str,
 				hollow : Bool,
 				low : Str,
+				p99 : Str,
 				ranged : Bool,
 				share : Str,
 				tip : Str,

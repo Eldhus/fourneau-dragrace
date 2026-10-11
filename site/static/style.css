@@ -155,6 +155,15 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .drag .bar { height: 20px; width: calc(var(--share) * var(--bar-max)); min-width: 2px; border-radius: 0 2px 2px 0;
   transform-origin: left; animation: launch .9s cubic-bezier(.2,.9,.2,1); }
 .drag .value { font-weight: 700; font-size: 14px; min-width: 0; }
+/* The p99 after the rate, small and quiet: the tails side by side, its
+   name in the hover. On a phone there is no room
+   beside the rate: it goes under it. */
+.drag .figures { display: flex; align-items: baseline; gap: 6px; flex: none; white-space: nowrap; }
+.drag .p99 { font-size: 11px; color: var(--text-3); }
+@media (max-width: 560px) {
+  .drag .figures { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.1; }
+  .drag .p99 { font-size: 10px; }
+}
 /* The bar keeps its width: it is the number. A tag that does not fit wraps
    under the value instead of squeezing the bar off its whisker. */
 .drag .bar { flex: none; }

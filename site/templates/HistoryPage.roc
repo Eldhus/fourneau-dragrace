@@ -13,6 +13,7 @@ HistoryPage :: [].{
 					{
 						dates : List({ label : Str, x : Str }),
 						empty : Bool,
+						key : Str,
 						lines : List(
 							{
 								competitor : Str,
@@ -40,6 +41,7 @@ HistoryPage :: [].{
 					{
 						dates : List({ label : Str, x : Str }),
 						empty : Bool,
+						key : Str,
 						lines : List(
 							{
 								competitor : Str,

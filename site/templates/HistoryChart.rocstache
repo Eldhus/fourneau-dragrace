@@ -1,4 +1,4 @@
-<figure class="strip"><figcaption><b>{{ title }}</b>best round&rsquo;s req/s, race by race</figcaption>
+<figure class="strip" data-chart="{{ key }}"><figcaption><b>{{ title }}</b>best round&rsquo;s req/s, race by race</figcaption>
 {{?empty}}<p class="pending">no results yet</p>{{/empty}}{{^empty}}<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: the best round's requests per second by race">
 {{#ticks}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
 {{/ticks}}{{#dates}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>

@@ -45,14 +45,15 @@
   }
 })();
 
-// Switching sizes keeps your place. The tabs stay at the top of the screen
-// while the results scroll under them (style.css); a click swaps the
-// results in place (Datastar), and the workload you were looking at is put
-// back where it was, so flipping between sizes compares one chart, not two
-// scroll positions. Both sizes list the same workloads in the same order,
-// so the nth chart before is the nth after. A section switch (HTTP/1.1,
-// HTTP/2 + TLS) lists other workloads: it puts the first chart under the
-// tabs instead, if you had scrolled past it.
+// Switching tabs keeps your place, across sizes and sections alike. The
+// tabs stay at the top of the screen while the results scroll under them
+// (style.css); a click morphs the results in place (Datastar), and the
+// chart you were looking at is put back where it was on the screen, so
+// flipping a tab compares one chart, not two scroll positions. Charts are
+// matched by `data-chart` (View.chart_key): Echo 4 KiB over HTTP/1.1 and
+// over HTTP/2 + TLS are one chart. One the other side lacks gives way to
+// the next one it has. (The section tabs went back to
+// the top.)
 (() => {
   let kept = null;
   document.addEventListener("datastar-fetch", (event) => {
@@ -61,20 +62,20 @@
       const region = el && el.closest && el.closest("#race-classes, #history-classes");
       if (!region) return;
       const below = region.querySelector(".tabbar").getBoundingClientRect().bottom;
-      const strips = [...region.querySelectorAll(".strip")];
-      let index = strips.findIndex((strip) => strip.getBoundingClientRect().bottom > below);
-      let top = index < 0 ? 0 : strips[index].getBoundingClientRect().top;
-      if (index > 0 && el.closest("nav.protocol")) {
-        index = 0;
-        top = below + 14;
-      }
-      kept = index < 0 ? null : { region: region.id, index, top };
+      const charts = [...region.querySelectorAll("[data-chart]")];
+      const index = charts.findIndex((chart) => chart.getBoundingClientRect().bottom > below);
+      kept = index < 0 ? null : {
+        region: region.id,
+        keys: charts.slice(index).map((chart) => chart.dataset.chart),
+        top: charts[index].getBoundingClientRect().top,
+      };
     } else if (type === "finished" && kept) {
-      const { region, index, top } = kept;
+      const { region, keys, top } = kept;
       kept = null;
       requestAnimationFrame(() => {
-        const strip = document.querySelectorAll(`#${region} .strip`)[index];
-        if (strip) window.scrollBy(0, strip.getBoundingClientRect().top - top);
+        const charts = [...document.querySelectorAll(`#${region} [data-chart]`)];
+        const chart = keys.map((key) => charts.find((c) => c.dataset.chart === key)).find(Boolean);
+        if (chart) window.scrollBy(0, chart.getBoundingClientRect().top - top);
       });
     }
   });

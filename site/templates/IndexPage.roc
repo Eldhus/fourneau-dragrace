@@ -23,12 +23,14 @@ IndexPage :: [].{
 						),
 						strips : List(
 							{
+								key : Str,
 								rows : List(
 									{
 										competitor : Str,
 										high : Str,
 										hollow : Bool,
 										low : Str,
+										p99 : Str,
 										ranged : Bool,
 										share : Str,
 										tip : Str,
@@ -67,6 +69,7 @@ IndexPage :: [].{
 				open : List(
 					{
 						caption : Str,
+						key : Str,
 						lines : List(
 							{
 								competitor : Str,
@@ -93,12 +96,14 @@ IndexPage :: [].{
 				),
 				strips : List(
 					{
+						key : Str,
 						rows : List(
 							{
 								competitor : Str,
 								high : Str,
 								hollow : Bool,
 								low : Str,
+								p99 : Str,
 								ranged : Bool,
 								share : Str,
 								tip : Str,
