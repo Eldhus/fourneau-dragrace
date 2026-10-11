@@ -127,6 +127,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
    one long line wrapping wherever it ran out. */
 .run-meta { color: var(--text-2); font-size: 13px; margin: 0; }
 .run-meta + .run-meta { margin: 2px 0 16px; }
+/* The commits on one line on a phone: three
+   repositories and their hashes are 50 characters, each .612 em in Space
+   Mono, so the size that fits the page's width less its 16 px sides. */
+@media (max-width: 560px) {
+  .run-meta + .run-meta { font-size: min(13px, calc((100vw - 32px) / 31)); }
+}
 /* Breaks fall between items, never inside a commit or a date. */
 .run-meta span { white-space: nowrap; }
 .run-meta span:not(:last-child)::after { content: " \00b7"; color: var(--text-3); }
