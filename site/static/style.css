@@ -147,7 +147,8 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 /* The drag strip: a name, then a bar from one baseline, its value at the tip. */
 /* The longest bar (the fastest round) takes this share of its track; the
    rest is room for the whisker's end and the number on a phone. */
-.drag { --bar-max: 66%; }
+.drag { --bar-max: 78%; }
+@media (max-width: 560px) { .drag { --bar-max: 66%; } }
 .drag { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; }
 .drag .row { display: contents; }
 .drag .name { text-align: right; color: var(--text-2); font-size: 14px; }
@@ -160,10 +161,10 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
    fits beside the rate on a phone too, running into the margin if it
    must: it is dim enough. */
 .drag .figures { display: flex; align-items: baseline; gap: 6px; flex: none; white-space: nowrap; }
-.drag .p99 { font-size: 11px; color: var(--text-3); }
+.drag .p99 { font-size: 10.5px; color: var(--text-3); }
 @media (max-width: 560px) {
   .drag .figures { gap: 4px; }
-  .drag .p99 { font-size: 10px; }
+  .drag .p99 { font-size: 9.5px; }
 }
 /* The narrowest phones (320 px): shorter bars, or the fastest's p99 is cut. */
 @media (max-width: 360px) { .drag { --bar-max: 50%; } }
@@ -214,7 +215,11 @@ footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 
 @media (max-width: 560px) {
   body { font-size: 15px; }
   nav a { font-size: 9px; padding: 7px 8px; }
-  .drag .name, .drag .value { font-size: 12px; }
+  .drag .value { font-size: 12px; }
+  /* A phone: smaller names, thinner bars, the rows closer (a condensed face for the names was tried and refused). */
+  .drag .name { font-size: 11px; }
+  .drag .bar { height: 14px; }
+  .drag { row-gap: 4px; }
   .class { font-size: 11px; }
   main { padding-top: 24px; }
   /* A page's title close under the bar: 32 px, not 64. */
