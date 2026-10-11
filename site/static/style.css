@@ -364,6 +364,19 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 .h2c .class { color: var(--cyan); }
 .h2c .table { margin-top: 0; }
+/* Plaintext three ways on a phone (for a Pixel
+   10's 412 px): four columns, not six. Rates in three figures, each
+   change small under the rate it led to, the numbers right-aligned so
+   their places line up, and the names pinned should it ever scroll. */
+.three-ways .narrow { display: none; }
+@media (max-width: 560px) {
+  .three-ways .wide, .three-ways .change { display: none; }
+  .three-ways .narrow { display: inline; }
+  .three-ways th:not(:first-child), .three-ways td:not(:first-child) { text-align: right; }
+  .three-ways td { vertical-align: top; padding-top: 7px; padding-bottom: 7px; }
+  .three-ways small { display: block; font-size: 10.5px; line-height: 1.3; color: var(--text-3); }
+  .three-ways th:first-child, .three-ways td:first-child { position: sticky; left: 0; background: var(--surface); }
+}
 /* The racer's news (tonight's race, a race now, a failed run) as an
    arcade banner: pixel type in gold on a lit
    panel, a blinking marker. */

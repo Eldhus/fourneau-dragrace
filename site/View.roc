@@ -49,7 +49,11 @@ View :: [].{
 	## `strips`: the h2c workload's bars, one strip (a template's section
 	## over a record is a list).
 	H2c : { strips : List(Strip), rows : List(H2cRow) }
-	H2cRow : { competitor : Str, plain : Str, h2c : Str, tls : Str, http2_change : Str, tls_change : Str }
+	## On a phone the table is four columns: each
+	## rate in three figures (`*_short`), and each change small under the
+	## rate it led to (`*_note`, "" where either rate is missing; muted, its
+	## sign the news: a colour would read as a competitor's).
+	H2cRow : { competitor : Str, plain : Str, h2c : Str, tls : Str, plain_short : Str, h2c_short : Str, tls_short : Str, http2_change : Str, tls_change : Str, http2_note : Str, tls_note : Str }
 	## A section of the race page, toggled beside the class tabs.
 	Section : { name : Str, label : Str }
 	## The open-loop ladder: p99 against the offered rate, a line per
@@ -350,8 +354,13 @@ h2c_view = |run, class|
 					plain: rate_or_dash(plain),
 					h2c: rate_or_dash(h2),
 					tls: rate_or_dash(secure),
+					plain_short: short_rate(plain),
+					h2c_short: short_rate(h2),
+					tls_short: short_rate(secure),
 					http2_change: change(plain, h2),
 					tls_change: change(h2, secure),
+					http2_note: if h2 > 0.0 and plain > 0.0 change(plain, h2) else "",
+					tls_note: if secure > 0.0 and h2 > 0.0 change(h2, secure) else "",
 				}
 			})
 			[{ strips: [bars], rows }]
@@ -361,6 +370,23 @@ h2c_view = |run, class|
 ## A rate, or a dash where there is none (not raced, or did not finish).
 rate_or_dash : F64 -> Str
 rate_or_dash = |rps| if rps > 0.0 Format.thousands(rps) else "—"
+
+## A rate in three figures, for a phone's table: 136k, 51.5k, 5.2k, 640;
+## five characters at most.
+short_rate : F64 -> Str
+short_rate = |rps|
+	if rps <= 0.0 {
+		"—"
+	} else if rps < 1000.0 {
+		Format.thousands(rps)
+	} else if rps < 100000.0 {
+		Format.compact(rps)
+	} else {
+		"${((rps / 1000.0).round_to_u64_try() ?? 0).to_str()}k"
+	}
+
+expect short_rate(136468.0) == "136k" and short_rate(51457.0) == "51.5k" and short_rate(5247.0) == "5.2k"
+expect short_rate(640.0) == "640" and short_rate(0.0) == "—" and short_rate(17688.0) == "17.7k"
 
 ## From `before` to `after` as a signed percentage ("+21%", "−12%").
 change : F64, F64 -> Str

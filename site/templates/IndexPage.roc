@@ -15,10 +15,15 @@ IndexPage :: [].{
 							{
 								competitor : Str,
 								h2c : Str,
+								h2c_short : Str,
 								http2_change : Str,
+								http2_note : Str,
 								plain : Str,
+								plain_short : Str,
 								tls : Str,
 								tls_change : Str,
+								tls_note : Str,
+								tls_short : Str,
 							},
 						),
 						strips : List(
