@@ -405,16 +405,19 @@ variant_line = |protocol, http2, connections, streams, keepalive| {
 workload_variant : Data.Workload -> List(Str)
 workload_variant = |w| variant_line(w.protocol, w.http2, w.connections, w.streams, w.keepalive)
 
-## A variant's protocol by name: over TLS without HTTP/2 is churn's.
+## A variant's protocol by name, in a variant line: over TLS without
+## HTTP/2 is churn's. "HTTP/2+TLS", no spaces, is one item between the
+## bullets (spaced, it read as three); the tabs
+## and titles keep "HTTP/2 + TLS".
 protocol_label : Str, Bool -> Str
 protocol_label = |protocol, http2|
 	if protocol == "h2c" "HTTP/2 (h2c)"
-	else if protocol == "tls" and http2 "HTTP/2 + TLS"
-	else if protocol == "tls" "HTTP/1.1 + TLS"
+	else if protocol == "tls" and http2 "HTTP/2+TLS"
+	else if protocol == "tls" "HTTP/1.1+TLS"
 	else "HTTP/1.1"
 
-expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2 + TLS", "128 connections × 2 streams", "kept alive"]
-expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1 + TLS", "64 connections", "a new connection a request"]
+expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2+TLS", "128 connections × 2 streams", "kept alive"]
+expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 connections", "a new connection a request"]
 expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections", "kept alive"]
 
 row : Data.Result, F64, Bool -> View.Row
@@ -757,12 +760,13 @@ variant_groups = |specs| {
 			Ok(t) => t.title
 			Err(_) => w.title
 		}
-	group = |protocol, label| {
+	# `usual`: the protocol's label in a line, left out under its heading.
+	group = |protocol, label, usual| {
 		rows = specs
 			.keep_if(|w| w.protocol == protocol)
 			.fold([], |kept, w| {
 				full = variant_line(w.protocol, w.http2, w.connections, w.streams, w.keepalive)
-				shown = if List.first(full) == Ok(label) full.drop_first(1) else full
+				shown = if List.first(full) == Ok(usual) full.drop_first(1) else full
 				title = test_title(w)
 				if kept.any(|r| r.line == shown) {
 					kept.map(|r| if r.line == shown { line: r.line, titles: r.titles.append(title) } else r)
@@ -773,7 +777,7 @@ variant_groups = |specs| {
 			.map(|r| { line: r.line, tests: Str.join_with(r.titles, ", ") })
 		{ label, intro: intro(protocol), rows }
 	}
-	[group("http1", "HTTP/1.1"), group("h2c", "HTTP/2 (h2c)"), group("tls", "HTTP/2 + TLS")].keep_if(|g| !g.rows.is_empty())
+	[group("http1", "HTTP/1.1", "HTTP/1.1"), group("h2c", "HTTP/2 (h2c)", "HTTP/2 (h2c)"), group("tls", "HTTP/2 + TLS", "HTTP/2+TLS")].keep_if(|g| !g.rows.is_empty())
 }
 
 expect {
@@ -788,12 +792,12 @@ expect {
 	specs = [sse, churn, sse_tls, churn_tls, conduit, conduit_tls]
 	card = workload_card(sse, [sse, sse_tls])
 	open = workload_card(conduit, [conduit, conduit_tls])
-	card.route == "GET /sse" and card.paragraphs == [] and card.protocols == ["HTTP/1.1", "HTTP/2 + TLS"]
+	card.route == "GET /sse" and card.paragraphs == [] and card.protocols == ["HTTP/1.1", "HTTP/2+TLS"]
 	and open.route == "/sse"
 	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
 	and variant_groups(specs).map(|g| g.rows) == [
 		[{ line: ["256 connections", "kept alive"], tests: "sse, conduit" }, { line: ["64 connections", "a new connection a request"], tests: "churn" }],
-		[{ line: ["128 connections × 2 streams", "kept alive"], tests: "sse, conduit" }, { line: ["HTTP/1.1 + TLS", "64 connections", "a new connection a request"], tests: "churn" }],
+		[{ line: ["128 connections × 2 streams", "kept alive"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 connections", "a new connection a request"], tests: "churn" }],
 	]
 }
 
