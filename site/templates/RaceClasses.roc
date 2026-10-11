@@ -71,8 +71,6 @@ RaceClasses :: [].{
 						),
 					},
 				),
-				intro : Str,
-				label : Str,
 				machines : List({ items : List(Str), role : Str }),
 				name : Str,
 				open : List(
@@ -105,7 +103,6 @@ RaceClasses :: [].{
 						variant : List(Str),
 					},
 				),
-				section_label : Str,
 				strips : List(
 					{
 						key : Str,

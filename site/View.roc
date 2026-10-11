@@ -40,10 +40,10 @@ View :: [].{
 	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, rows : List(Row), table : List(TableRow) }
 	## A machine's line, item by item: a line breaks between them only.
 	Machine : { role : Str, items : List(Str) }
-	## A class as one section shows it (`intro` says what the section is,
-	## under its tab's `section_label`), and below, outside the section's
-	## toggle, the h2c comparison (one, or none in a race without it).
-	Class : { name : Str, label : Str, title : Str, machines : List(Machine), section_label : Str, intro : Str, strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
+	## A class as one section shows it (its tabs say which), and below, outside the
+	## section's toggle, the h2c comparison (one, or none in a race without
+	## it).
+	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
 	## Plaintext three ways: HTTP/1.1, HTTP/2 without TLS (h2c), HTTP/2 and
 	## TLS; each step's change is what HTTP/2, then TLS, cost or gave.
 	## `strips`: the h2c workload's bars, one strip (a template's section
@@ -294,12 +294,8 @@ class_view = |run, class, section| {
 	machines = ordered.map(|m| { role: m.role, items: [m.size, vcpus(m.cpus)].concat(memory(m.memory_mib)).concat([cpu_name(m.cpu), "Linux ${m.kernel}"]) })
 	strips = in_section(closed(run.race.workloads), section).map(|workload| strip(run, class.name, workload))
 	open = open_charts(run, class.name).keep_if(|o| o.section == section).map(|o| o.chart)
-	{ name: class.name, label: class.label, title: class.title, machines, section_label: section_label(section), intro: intro(section), strips, open, h2c: h2c_view(run, class.name) }
+	{ name: class.name, label: class.label, title: class.title, machines, strips, open, h2c: h2c_view(run, class.name) }
 }
-
-## A section's tab label, beside its sentence so the two read as one.
-section_label : Str -> Str
-section_label = |section| if section == "tls" "HTTP/2 + TLS" else "HTTP/1.1"
 
 ## A CPU's model name without its makers' marks and filler words, so a
 ## machine's line stays short: "Intel(R) Xeon(R) Platinum 8280 CPU @
@@ -314,8 +310,7 @@ expect cpu_name("AMD EPYC 7543 32-Core Processor") == "AMD EPYC 7543 32-Core" an
 in_section : List(Data.Workload), Str -> List(Data.Workload)
 in_section = |workloads, section| workloads.keep_if(|w| w.protocol == section)
 
-## What a protocol is, one sentence: over a section's results, and on
-## Workloads over its variants.
+## What a protocol is, one sentence: on Workloads, over its variants.
 intro : Str -> Str
 intro = |section|
 	if section == "tls" {

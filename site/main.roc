@@ -219,13 +219,13 @@ no_history = { waiting: Bool.True, note: "", sections: [], section: "", classes:
 no_race : View.Latest
 no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], sections: [], section: "", classes: [] }
 
-## A server class as the race's templates read it (a template's contract
-## is exactly what it reads): its tab's label beside its title, and its
-## section's beside the section's sentence, so each reads as its tab's.
-race_class = |class| { name: class.name, label: class.label, title: class.title, machines: class.machines, section_label: class.section_label, intro: class.intro, strips: class.strips, open: class.open, h2c: class.h2c }
+## A server class as the race's templates read it: without its tab's
+## label (the tabs have it), since a template's contract is exactly what
+## it reads.
+race_class = |class| { name: class.name, title: class.title, machines: class.machines, strips: class.strips, open: class.open, h2c: class.h2c }
 
 ## A server class's history charts as their template reads them.
-history_class = |class| { label: class.label, title: class.title, charts: class.charts, h2c: class.h2c }
+history_class = |class| { title: class.title, charts: class.charts, h2c: class.h2c }
 
 # --- the raw data -------------------------------------------------------------
 
