@@ -78,18 +78,19 @@ View :: [].{
 	Pin : { name : Str, version : Str }
 
 	## The Workloads page, every figure from the newest race (nothing typed in that race.json decides). `spec`: what
-	## the loader asked, small under the card.
-	WorkloadCard : { title : Str, route : Str, summary : Str, spec : Str }
-	## The cards of one section, under its heading and a sentence on it.
-	WorkloadGroup : { heading : Str, note : Str, cards : List(WorkloadCard) }
-	Workloads : { ready : Bool, groups : List(WorkloadGroup), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
+	## the loader asked of each way the test is sent (`ways`: HTTP/1.1, then
+	## its variants), small under the card. `paragraphs`: after the summary,
+	## the detail and a mixed one's open loop, those it has.
+	WorkloadCard : { title : Str, route : Str, summary : Str, paragraphs : List(Str), ways : List(WorkloadWay) }
+	WorkloadWay : { label : Str, spec : Str }
+	Workloads : { ready : Bool, cards : List(WorkloadCard), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
 
+	## A card per test: each base workload, its variants (race.json's
+	## `base`) folded under it.
 	workloads : List(Pages.WorkloadSpecs), Pages.RaceSettings -> Workloads
 	workloads = |specs, settings| {
 		ready: Bool.True,
-		groups: workload_groups
-			.map(|g| { heading: g.heading, note: g.note, cards: specs.keep_if(|w| w.section == g.section).map(workload_card) })
-			.keep_if(|g| !g.cards.is_empty()),
+		cards: specs.keep_if(|w| w.base.is_empty()).map(|base| workload_card(base, specs.keep_if(|w| w.base == base.name))),
 		rounds: settings.rounds.to_str(),
 		warmup: settings.warmup_seconds.to_str(),
 		measure: settings.measure_seconds.to_str(),
@@ -682,48 +683,56 @@ took = |timing| {
 loader_limit_pct : F64
 loader_limit_pct = 85.0
 
-## The Workloads page's sections, in the race page's order.
-workload_groups = [
-	{ section: "http1", heading: "HTTP/1.1", note: "Plain HTTP/1.1, as a server behind a proxy sees it." },
-	{ section: "h2c", heading: "HTTP/2 without TLS (h2c)", note: "HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section, beside Plaintext over HTTP/1.1 and over HTTP/2 + TLS." },
-	{ section: "tls", heading: "HTTP/2 + TLS: the realistic deployment", note: "HTTPS as browsers reach a server with no proxy in front. Every server: TLS 1.3, AES-128-GCM, X25519, the race's ECDSA P-256 certificate, no session resumption. basic-webserver serves no TLS and sits these out." },
-]
-
-## A workload's card: its route without the query (SSE's carries the
-## signals), and what the loader asked of it.
-workload_card : Pages.WorkloadSpecs -> View.WorkloadCard
-workload_card = |w| {
+## A test's card: the base workload's route without the query (SSE's
+## carries the signals) and its words, a mixed one's open loop, and what
+## the loader asked of each way it is sent.
+workload_card : Pages.WorkloadSpecs, List(Pages.WorkloadSpecs) -> View.WorkloadCard
+workload_card = |base, variants| {
 	path =
-		match w.path.split_first("?") {
+		match base.path.split_first("?") {
 			Ok({ before, after: _ }) => before
-			Err(_) => w.path
+			Err(_) => base.path
 		}
-	streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
-	if w.kind == "mixed" {
-		rates = "${Format.thousands(w.lowest.to_f64())} to ${Format.thousands(w.highest.to_f64())} requests a second"
-		secure = if w.tls " ${w.connections.to_str()} connections${streams}, over TLS." else ""
-		{ title: w.title, route: path, summary: w.summary, spec: "Open loop only: ${w.mix}; ${rates}, the same for every server, each climbing until it falls behind.${secure}" }
-	} else {
-		reuse = if w.keepalive "kept alive" else "a new one per request"
-		body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
-		secure = if w.tls ", over TLS" else ""
-		{ title: w.title, route: "${w.method} ${path}", summary: w.summary, spec: "${w.connections.to_str()} connections${streams}, ${reuse}${body}${secure}." }
+	mixed = base.kind == "mixed"
+	rates = "${Format.thousands(base.lowest.to_f64())} to ${Format.thousands(base.highest.to_f64())} requests a second"
+	open = if mixed "Open loop only: ${base.mix}; ${rates}, the same for every server, each climbing until it falls behind." else ""
+	{
+		title: base.title,
+		route: if mixed path else "${base.method} ${path}",
+		summary: base.summary,
+		paragraphs: [base.detail, open].keep_if(|p| !p.is_empty()),
+		ways: [base].concat(variants).map(workload_way),
 	}
 }
 
+## One way a test is sent: its protocol, and the loader's connections.
+workload_way : Pages.WorkloadSpecs -> View.WorkloadWay
+workload_way = |w| {
+	label =
+		if w.http2 and w.tls "HTTP/2 + TLS"
+		else if w.http2 "HTTP/2 (h2c)"
+		else if w.tls "HTTP/1.1 + TLS"
+		else "HTTP/1.1"
+	streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
+	reuse = if w.keepalive "kept alive" else "a new one per request"
+	body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
+	{ label, spec: "${w.connections.to_str()} connections${streams}, ${reuse}${body}." }
+}
+
 expect {
-	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, http2: Bool.False, streams: 0, tls: Bool.False, section: "http1", mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
-	echo = workload_card(spec("closed", "POST", "/echo", 4096, 256, Bool.True))
-	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False))
-	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True))
-	page = workload_card({ ..spec("closed", "GET", "/menu", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls" })
-	conduit_tls = workload_card({ ..spec("mixed", "MIXED", "/api/articles", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls" })
-	echo.spec == "256 connections, kept alive, 4,096-byte body."
-	and sse.route == "GET /sse" and sse.spec == "64 connections, a new one per request."
+	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, http2: Bool.False, streams: 0, tls: Bool.False, section: "http1", base: "", detail: "", mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
+	echo = workload_card(spec("closed", "POST", "/echo", 4096, 256, Bool.True), [])
+	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False), [])
+	conduit_tls = { ..spec("mixed", "MIXED", "/api/articles", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls", base: "w" }
+	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True), [conduit_tls])
+	churn_tls = workload_way({ ..spec("closed", "GET", "/plaintext", 0, 64, Bool.False), tls: Bool.True })
+	echo.ways == [{ label: "HTTP/1.1", spec: "256 connections, kept alive, 4,096-byte body." }]
+	and echo.paragraphs == []
+	and sse.route == "GET /sse" and sse.ways == [{ label: "HTTP/1.1", spec: "64 connections, a new one per request." }]
 	and conduit.route == "/api/articles"
-	and conduit.spec == "Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."
-	and page.spec == "128 connections of 2 HTTP/2 streams, kept alive, over TLS."
-	and conduit_tls.spec.ends_with("falls behind. 128 connections of 2 HTTP/2 streams, over TLS.")
+	and conduit.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
+	and conduit.ways == [{ label: "HTTP/1.1", spec: "256 connections, kept alive." }, { label: "HTTP/2 + TLS", spec: "128 connections of 2 HTTP/2 streams, kept alive." }]
+	and churn_tls == { label: "HTTP/1.1 + TLS", spec: "64 connections, a new one per request." }
 }
 
 ## The class's open-loop charts, a ladder each: the closed workload's

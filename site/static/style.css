@@ -121,7 +121,6 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .prose th, .table th { color: var(--text-2); font-weight: 400; }
 .prose dt { color: var(--flame); margin-top: 14px; }
 .prose dd { margin: 4px 0 0; color: var(--text-2); }
-.spec { color: var(--text-3); font-size: 13px; display: block; }
 
 /* Results. */
 /* Two lines by design, the race then the commits it raced, rather than
@@ -203,9 +202,15 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 /* The workloads, a full-width card each, stacked. */
 .workloads { display: grid; gap: 10px; margin: 18px 0; }
 .workloads .card h3 { font-size: 15px; color: var(--flame); flex-wrap: wrap; }
-.workloads .card p { margin: 0; }
+.workloads .card p { margin: 0; color: var(--text-2); }
+.workloads .card p + p { margin-top: 8px; }
+.workloads .card .summary { color: var(--text); }
 .workloads .card a { margin: 0; font-size: inherit; white-space: normal; }
-.workloads .spec { margin-top: 6px; }
+/* Each way the test is sent (HTTP/1.1, its variants), as the machines
+   under a class: small, a label and what the loader asked. */
+.ways { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; font-size: 13px; color: var(--text-3); }
+.prose .ways dt { color: var(--text-2); margin: 0; }
+.prose .ways dd { margin: 0; color: var(--text-3); }
 
 footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--grid); padding: 0 16px 28px; }
 

@@ -107,6 +107,25 @@ func TestOffers(t *testing.T) {
 	}
 }
 
+// A variant takes its base's summary, and has no words of its own.
+func TestFillVariants(t *testing.T) {
+	base := Workload{Name: "plaintext", Summary: "one line", Detail: "more"}
+	workloads := []Workload{{Name: "plaintext-tls", Base: "plaintext"}, base}
+	if err := fillVariants(workloads); err != nil || workloads[0].Summary != "one line" {
+		t.Errorf("filled %+v: %v", workloads[0], err)
+	}
+	for _, wrong := range [][]Workload{
+		{base, {Name: "v", Base: "nothing"}},
+		{base, {Name: "v", Base: "plaintext", Summary: "its own"}},
+		{base, {Name: "v", Base: "plaintext"}, {Name: "w", Base: "v"}},
+		{{Name: "plaintext", Summary: "one line"}},
+	} {
+		if fillVariants(wrong) == nil {
+			t.Errorf("accepted %+v", wrong)
+		}
+	}
+}
+
 // race.json as committed: every section known, and both flavours of HTTP
 // race the same tests: each HTTP/1.1 workload has its
 // twin over TLS, open loop the same. No share ladder: RealWorld's climb
@@ -141,6 +160,12 @@ func TestRaceSections(t *testing.T) {
 			(twin.Mixed == nil) != (workload.Mixed == nil) {
 			t.Errorf("%s-tls is not %s over TLS", workload.Name, workload.Name)
 		}
+		if twin.Base != workload.Name || twin.Summary != workload.Summary {
+			t.Errorf("%s-tls is not a variant of %s, with its words", workload.Name, workload.Name)
+		}
+	}
+	if byName["plaintext-h2"].Base != "plaintext" {
+		t.Errorf("plaintext-h2 is not a variant of plaintext")
 	}
 	if twins+1 != len(race.Workloads)-twins { // and plaintext-h2, h2c's own
 		t.Errorf("%d twins of %d workloads", twins, len(race.Workloads))

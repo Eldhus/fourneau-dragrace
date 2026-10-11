@@ -90,17 +90,27 @@ SELECT count(*) AS results FROM results WHERE run_id = :run_id;
 -- The Workloads page, from the newest finished run: what each workload
 -- asked, so the page never types in what race.json decides. A mixed workload's parts and rates are only in the race's
 -- own race.json: `mix` ("list 50%, article 30%, ..."), and `lowest` and
--- `highest` of its rates (0 for a closed one).
+-- `highest` of its rates (0 for a closed one). From the same race.json:
+-- `base`, the workload a variant is sent another way, and `detail`, a
+-- base's longer text ("" for both before 2026-10-11).
 -- name: workload_specs :many(64)
 -- @param run_id : Str
 -- @column keepalive : Bool
 -- @column http2 : Bool
 -- @column tls : Bool
+-- @column base : Str
+-- @column detail : Str
 -- @column mix : Str
 -- @column lowest : I64
 -- @column highest : I64
 SELECT w.name, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes, w.connections,
   w.keepalive, w.http2, w.streams, w.tls, w.section,
+  coalesce((SELECT json_extract(d.value, '$.base')
+    FROM run_settings s, json_each(s.race_json, '$.workloads') AS d
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS base,
+  coalesce((SELECT json_extract(d.value, '$.detail')
+    FROM run_settings s, json_each(s.race_json, '$.workloads') AS d
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS detail,
   coalesce((SELECT group_concat(json_extract(p.value, '$.name') || ' '
       || CAST(round(json_extract(p.value, '$.share') * 100) AS INTEGER) || '%', ', ')
     FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,

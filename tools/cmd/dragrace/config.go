@@ -69,9 +69,18 @@ type Race struct {
 }
 
 type Workload struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
+	Name  string `json:"name"`
+	Title string `json:"title"`
+	// Base, when set, makes this a variant of the workload it names: the
+	// same test sent another way (HTTP/2, TLS). A variant has no words of
+	// its own; loadRace gives it its base's summary, so every chart of a
+	// test says the same, and the site shows the variants under the base.
+	Base string `json:"base,omitempty"`
+	// Summary is the one line under each chart; Detail is the Workloads
+	// page's longer text after it. The site reads Detail from the run's
+	// race.json.
 	Summary     string `json:"summary"`
+	Detail      string `json:"detail,omitempty"`
 	Method      string `json:"method"`
 	Path        string `json:"path"`
 	BodyBytes   int    `json:"body_bytes"`
@@ -265,6 +274,9 @@ func loadRace(root string) (Race, error) {
 				workload.Name)
 		}
 	}
+	if err := fillVariants(race.Workloads); err != nil {
+		return race, err
+	}
 	race.Menu = string(menu)
 	stream, err := os.ReadFile(filepath.Join(root, "workloads", "sse.txt"))
 	if err != nil {
@@ -272,6 +284,36 @@ func loadRace(root string) (Race, error) {
 	}
 	race.Stream = string(stream)
 	return race, nil
+}
+
+// fillVariants gives each variant its base's summary. A base has a summary
+// and a detail; a variant names a base that is no variant itself, and has
+// neither.
+func fillVariants(workloads []Workload) error {
+	bases := map[string]Workload{}
+	for _, workload := range workloads {
+		if workload.Base == "" {
+			if workload.Summary == "" || workload.Detail == "" {
+				return fmt.Errorf("race.json: %s: a summary and a detail", workload.Name)
+			}
+			bases[workload.Name] = workload
+		}
+	}
+	for i, workload := range workloads {
+		if workload.Base == "" {
+			continue
+		}
+		base, found := bases[workload.Base]
+		if !found {
+			return fmt.Errorf("race.json: %s: no base workload %q", workload.Name, workload.Base)
+		}
+		if workload.Summary != "" || workload.Detail != "" {
+			return fmt.Errorf("race.json: %s: a variant has its base's words, none of its own",
+				workload.Name)
+		}
+		workloads[i].Summary = base.Summary
+	}
+	return nil
 }
 
 func loadCompetitors(root string, names []string) ([]Competitor, error) {
