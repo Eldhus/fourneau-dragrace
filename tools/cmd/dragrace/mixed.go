@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -64,10 +65,18 @@ const (
 )
 
 // putConduitSeed puts the seeded database on the server, if the race has
-// a mixed workload.
-func putConduitSeed(ctx context.Context, root string, race Race, target Target) error {
-	if !race.hasMixed() {
+// a mixed workload or a competitor opens it at start (needsDatabase); made
+// here first if no build made it (a race whose workloads have no mixed
+// one: `build` makes it only for a mixed workload).
+func putConduitSeed(ctx context.Context, root string, race Race, competitors []Competitor,
+	target Target) error {
+	if !needsDatabase(race, competitors) {
 		return nil
+	}
+	if _, err := os.Stat(conduitDatabase(root)); err != nil {
+		if err := buildConduitDatabase(ctx, root); err != nil {
+			return err
+		}
 	}
 	return target.Server.Put(ctx, conduitDatabase(root), target.ServerHome+"/"+conduitSeedName)
 }

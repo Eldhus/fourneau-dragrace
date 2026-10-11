@@ -802,6 +802,11 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	runResult := Run{ID: runID("adhoc", time.Now().UTC()), Where: "adhoc",
 		StartedAt: time.Now().UTC(), Seed: time.Now().UnixNano(), Race: race,
 		Machines: session.Machines}
+	// The competitors open the seeded database at start (each start a fresh
+	// copy of it), RealWorld raced or not.
+	if err := putConduitSeed(ctx, root, race, competitors, target); err != nil {
+		return err
+	}
 	raced := time.Now()
 	if err := raceTarget(ctx, race, competitors, target, &runResult); err != nil {
 		return err

@@ -341,7 +341,7 @@ func raceClass(ctx context.Context, root string, tools Toolchain, race Race,
 	if _, err := server.Shell(ctx, "chmod +x "+home+"/bin/*"); err != nil {
 		return err
 	}
-	if race.hasMixed() {
+	if needsDatabase(race, competitors) {
 		if err := server.Put(ctx, conduitDatabase(root), home+"/"+conduitSeedName); err != nil {
 			return err
 		}

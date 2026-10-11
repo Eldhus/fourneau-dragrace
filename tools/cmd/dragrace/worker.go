@@ -116,7 +116,7 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	if err := loader.Put(ctx, filepath.Join(binDir(root), "oha"), target.LoaderHome+"/oha"); err != nil {
 		return err
 	}
-	if err := putConduitSeed(ctx, root, race, target); err != nil {
+	if err := putConduitSeed(ctx, root, race, competitors, target); err != nil {
 		return err
 	}
 	loaderInfo := machineInfo(ctx, loader, "loader", config.Class.Name, config.Class.LoaderSize)

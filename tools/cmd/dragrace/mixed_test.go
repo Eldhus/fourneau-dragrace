@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+// A race without RealWorld still seeds the database for a competitor that
+// opens it at start (else it exits); one naming no {db} needs none.
+func TestTheDatabaseGoesWhereACompetitorOpensIt(t *testing.T) {
+	race, err := loadRace("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitors, err := loadCompetitors("../../..", []string{"fourneau-zig", "go", "axum"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedOnly := race
+	closedOnly.Workloads = nil
+	for _, w := range race.Workloads {
+		if w.Mixed == nil {
+			closedOnly.Workloads = append(closedOnly.Workloads, w)
+		}
+	}
+	if closedOnly.hasMixed() || !needsDatabase(closedOnly, competitors) {
+		t.Fatal("closed workloads only: the database must still go")
+	}
+	plain := Competitor{Run: RunSpec{Argv: []string{"{bin}", "--port", "{port}"}}}
+	if needsDatabase(closedOnly, []Competitor{plain}) {
+		t.Fatal("no {db}: no database")
+	}
+	inTLS := Competitor{Run: RunSpec{TLS: &RunTLS{Env: map[string]string{"DB": "{db}"}}}}
+	if !inTLS.opensDatabase() {
+		t.Fatal("{db} in the TLS environment")
+	}
+}
+
 func TestMixedStepAddsRatesAndWeighsTheMean(t *testing.T) {
 	step := mixedStep(1000, []OpenPart{
 		{Name: "list", AchievedRPS: 500, MeanMs: 2, P99Ms: 9},

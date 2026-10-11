@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // Versions is versions.json: every pin a race depends on.
@@ -172,6 +173,32 @@ type Competitor struct {
 	Links     map[string]string `json:"links"`
 	Build     []Step            `json:"build"`
 	Run       RunSpec           `json:"run"`
+}
+
+// opensDatabase: the competitor's command names {db}, so it opens the
+// seeded database at start whatever the race's workloads.
+func (competitor Competitor) opensDatabase() bool {
+	names := func(args []string, env map[string]string) bool {
+		for _, arg := range args {
+			if strings.Contains(arg, "{db}") {
+				return true
+			}
+		}
+		for _, value := range env {
+			if strings.Contains(value, "{db}") {
+				return true
+			}
+		}
+		return false
+	}
+	run := competitor.Run
+	return names(run.Argv, run.Env) || run.TLS != nil && names(run.TLS.Argv, run.TLS.Env)
+}
+
+// needsDatabase: the server gets the seeded database, for a mixed workload
+// or for a competitor that opens it at start.
+func needsDatabase(race Race, competitors []Competitor) bool {
+	return race.hasMixed() || slices.ContainsFunc(competitors, Competitor.opensDatabase)
 }
 
 type Step struct {

@@ -244,7 +244,7 @@ func startServer(ctx context.Context, race Race, competitor Competitor, target T
 		"cert":    target.ServerHome + "/" + certificateName,
 		"key":     target.ServerHome + "/" + keyName,
 	}
-	if race.hasMixed() {
+	if race.hasMixed() || competitor.opensDatabase() {
 		if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
 			return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
 		}
