@@ -52,15 +52,19 @@ type Checkout struct {
 
 // Race is race.json: what a race is.
 type Race struct {
-	Port           int        `json:"port"`
-	Rounds         int        `json:"rounds"`
-	WarmupSeconds  int        `json:"warmup_seconds"`
-	MeasureSeconds int        `json:"measure_seconds"`
-	Competitors    []string   `json:"competitors"`
-	Workloads      []Workload `json:"workloads"`
-	Cloud          Cloud      `json:"cloud"`
-	Local          Local      `json:"local"`
-	OpenLoop       OpenLoop   `json:"open_loop"`
+	Port           int      `json:"port"`
+	Rounds         int      `json:"rounds"`
+	WarmupSeconds  int      `json:"warmup_seconds"`
+	MeasureSeconds int      `json:"measure_seconds"`
+	Competitors    []string `json:"competitors"`
+	// Tests are race.json's workloads, each sent each of its variants'
+	// ways; Workloads are what is raced, a test in one variant, made by
+	// loadRace (expand).
+	Tests     []Test     `json:"workloads"`
+	Workloads []Workload `json:"-"`
+	Cloud     Cloud      `json:"cloud"`
+	Local     Local      `json:"local"`
+	OpenLoop  OpenLoop   `json:"open_loop"`
 	// The templates workload's page, as every competitor must render it
 	// (workloads/menu.html), up to how each engine spells an entity.
 	Menu string `json:"-"`
@@ -68,19 +72,55 @@ type Race struct {
 	Stream string `json:"-"`
 }
 
-type Workload struct {
+// Test is one of race.json's workloads: one request, checked the same and
+// answered the same, sent each of its variants' ways (the protocol is a dimension of the test, not a test).
+type Test struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
-	// Base, when set, makes this a variant of the workload it names: the
-	// same test sent another way (HTTP/2, TLS). A variant has no words of
-	// its own; loadRace gives it its base's summary, so every chart of a
-	// test says the same, and the site shows the variants under the base.
-	Base string `json:"base,omitempty"`
-	// Summary is the one line under each chart; Detail is the Workloads
-	// page's longer text after it. The site reads Detail from the run's
-	// race.json.
+	// Summary is the one line under each of the test's charts; Detail is
+	// the Workloads page's longer text after it (the site reads it from
+	// the run's race.json).
 	Summary     string `json:"summary"`
-	Detail      string `json:"detail,omitempty"`
+	Detail      string `json:"detail"`
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	BodyBytes   int    `json:"body_bytes,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
+	Keepalive   bool   `json:"keepalive"`
+	// Ladder, when set, climbs the open-loop ladder after the rounds
+	// (open_loop.go).
+	Ladder bool `json:"ladder,omitempty"`
+	// Mixed, when set, makes this an open-loop-only test of several parts
+	// at once (mixed.go): conduit.
+	Mixed    *Mixed    `json:"mixed,omitempty"`
+	Variants []Variant `json:"variants"`
+}
+
+// Variant is one way a test is sent: its protocol and the loader's
+// connections.
+type Variant struct {
+	// Protocol is "http1" (HTTP/1.1), "h2c" (HTTP/2 without TLS, by prior
+	// knowledge) or "tls" (the competitor's HTTPS mode: HTTP/2
+	// by ALPN when Streams is set, else HTTP/1.1).
+	Protocol    string `json:"protocol"`
+	Connections int    `json:"connections"`
+	// Streams is HTTP/2's requests at once a connection (oha --http2 -p);
+	// 0 is HTTP/1.1.
+	Streams int `json:"streams,omitempty"`
+}
+
+// protocols are a variant's, in the site's order, each with what it adds
+// to its test's name: `plaintext`, `plaintext-h2`, `plaintext-tls`, the
+// names the races had before tests had variants.
+var protocols = []struct{ name, suffix string }{{"http1", ""}, {"h2c", "-h2"}, {"tls", "-tls"}}
+
+// Workload is what is raced: a test in one variant.
+type Workload struct {
+	Name string `json:"name"`
+	// Test is the test's name: the HTTP/1.1 variant's own.
+	Test        string `json:"test"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary"`
 	Method      string `json:"method"`
 	Path        string `json:"path"`
 	BodyBytes   int    `json:"body_bytes"`
@@ -95,16 +135,66 @@ type Workload struct {
 	// TLS, when set, races the competitor's HTTPS mode (CONTRIBUTING.md, "The contract");
 	// a competitor without one sits the workload out.
 	TLS bool `json:"tls,omitempty"`
-	// Section is where the site shows the workload: "http1" (HTTP/1.1,
-	// the default), "h2c" (HTTP/2 without TLS, beside plaintext), or "tls"
-	// (TLS, HTTP/2 where a browser would: the realistic deployment).
-	Section string `json:"section,omitempty"`
-	// Ladder, when set, climbs the open-loop ladder after the rounds
-	// (open_loop.go).
-	Ladder bool `json:"ladder,omitempty"`
-	// Mixed, when set, makes this an open-loop-only workload of several
-	// parts at once (mixed.go): conduit.
-	Mixed *Mixed `json:"mixed,omitempty"`
+	// Protocol is the variant's (Variant.Protocol).
+	Protocol string `json:"protocol"`
+	Ladder   bool   `json:"ladder,omitempty"`
+	Mixed    *Mixed `json:"mixed,omitempty"`
+}
+
+// expand makes a test's workloads, a variant each, in protocols' order.
+// A test has a summary and a detail, and an HTTP/1.1 variant: its name is
+// the test's.
+func (test Test) expand() ([]Workload, error) {
+	if test.Name == "" || test.Summary == "" || test.Detail == "" {
+		return nil, fmt.Errorf("race.json: %q: a name, a summary and a detail", test.Name)
+	}
+	var workloads []Workload
+	for _, protocol := range protocols {
+		i := slices.IndexFunc(test.Variants, func(v Variant) bool { return v.Protocol == protocol.name })
+		if i < 0 {
+			continue
+		}
+		variant := test.Variants[i]
+		name := test.Name + protocol.suffix
+		if variant.Connections < 1 {
+			return nil, fmt.Errorf("race.json: %s: no connections", name)
+		}
+		if (protocol.name == "http1" && variant.Streams != 0) || (protocol.name == "h2c" && variant.Streams < 1) {
+			return nil, fmt.Errorf("race.json: %s: HTTP/1.1 has no streams, h2c has", name)
+		}
+		if variant.Streams > 0 && !test.Keepalive {
+			return nil, fmt.Errorf("race.json: %s: oha's HTTP/2 always keeps connections", name)
+		}
+		title := test.Title
+		if protocol.name != "http1" {
+			title += ", " + protocolLabel(protocol.name, variant.Streams > 0)
+		}
+		workloads = append(workloads, Workload{Name: name, Test: test.Name, Title: title,
+			Summary: test.Summary, Method: test.Method, Path: test.Path,
+			BodyBytes: test.BodyBytes, ContentType: test.ContentType,
+			Connections: variant.Connections, Keepalive: test.Keepalive,
+			HTTP2: variant.Streams > 0, Streams: variant.Streams, TLS: protocol.name == "tls",
+			Protocol: protocol.name, Ladder: test.Ladder, Mixed: test.Mixed})
+	}
+	if len(workloads) != len(test.Variants) || len(workloads) == 0 || workloads[0].Protocol != "http1" {
+		return nil, fmt.Errorf("race.json: %s: an HTTP/1.1 variant, and each protocol once of %v",
+			test.Name, protocols)
+	}
+	return workloads, nil
+}
+
+// protocolLabel is how the site names a variant's protocol: "HTTP/2 + TLS",
+// or "HTTP/1.1 + TLS" over TLS without HTTP/2 (churn).
+func protocolLabel(protocol string, http2 bool) string {
+	switch {
+	case protocol == "h2c":
+		return "HTTP/2 (h2c)"
+	case protocol == "tls" && http2:
+		return "HTTP/2 + TLS"
+	case protocol == "tls":
+		return "HTTP/1.1 + TLS"
+	}
+	return "HTTP/1.1"
 }
 
 // hasH2C says whether a race checks that competitors speak h2c.
@@ -116,17 +206,6 @@ func (race Race) hasH2C() bool {
 	}
 	return false
 }
-
-// section is the workload's section on the site, "http1" when unset.
-func (workload Workload) section() string {
-	if workload.Section == "" {
-		return "http1"
-	}
-	return workload.Section
-}
-
-// sections are the site's: a workload names one of them.
-var sections = []string{"http1", "h2c", "tls"}
 
 // kind is how the site draws a workload: "closed" (bars of the rounds) or
 // "mixed" (a line, latency against the rate offered).
@@ -254,28 +333,23 @@ func loadRace(root string) (Race, error) {
 	if err := readJSON(filepath.Join(root, "race.json"), &race); err != nil {
 		return race, err
 	}
-	if race.Rounds < 1 || race.MeasureSeconds < 1 || len(race.Workloads) == 0 {
+	if race.Rounds < 1 || race.MeasureSeconds < 1 || len(race.Tests) == 0 {
 		return race, fmt.Errorf("race.json: rounds, measure_seconds and workloads must be set")
 	}
 	menu, err := os.ReadFile(filepath.Join(root, "workloads", "menu.html"))
 	if err != nil {
 		return race, err
 	}
-	for _, workload := range race.Workloads {
-		if !slices.Contains(sections, workload.section()) {
-			return race, fmt.Errorf("race.json: %s: no section %q", workload.Name, workload.Section)
-		}
-		if workload.Ladder && (workload.Mixed != nil || len(race.OpenLoop.Shares) == 0) {
+	for _, test := range race.Tests {
+		if test.Ladder && (test.Mixed != nil || len(race.OpenLoop.Shares) == 0) {
 			return race, fmt.Errorf("race.json: %s: a ladder needs rounds and open_loop's shares",
-				workload.Name)
+				test.Name)
 		}
-		if workload.HTTP2 && !workload.Keepalive {
-			return race, fmt.Errorf("race.json: %s: oha's HTTP/2 always keeps connections",
-				workload.Name)
+		workloads, err := test.expand()
+		if err != nil {
+			return race, err
 		}
-	}
-	if err := fillVariants(race.Workloads); err != nil {
-		return race, err
+		race.Workloads = append(race.Workloads, workloads...)
 	}
 	race.Menu = string(menu)
 	stream, err := os.ReadFile(filepath.Join(root, "workloads", "sse.txt"))
@@ -284,36 +358,6 @@ func loadRace(root string) (Race, error) {
 	}
 	race.Stream = string(stream)
 	return race, nil
-}
-
-// fillVariants gives each variant its base's summary. A base has a summary
-// and a detail; a variant names a base that is no variant itself, and has
-// neither.
-func fillVariants(workloads []Workload) error {
-	bases := map[string]Workload{}
-	for _, workload := range workloads {
-		if workload.Base == "" {
-			if workload.Summary == "" || workload.Detail == "" {
-				return fmt.Errorf("race.json: %s: a summary and a detail", workload.Name)
-			}
-			bases[workload.Name] = workload
-		}
-	}
-	for i, workload := range workloads {
-		if workload.Base == "" {
-			continue
-		}
-		base, found := bases[workload.Base]
-		if !found {
-			return fmt.Errorf("race.json: %s: no base workload %q", workload.Name, workload.Base)
-		}
-		if workload.Summary != "" || workload.Detail != "" {
-			return fmt.Errorf("race.json: %s: a variant has its base's words, none of its own",
-				workload.Name)
-		}
-		workloads[i].Summary = base.Summary
-	}
-	return nil
 }
 
 func loadCompetitors(root string, names []string) ([]Competitor, error) {

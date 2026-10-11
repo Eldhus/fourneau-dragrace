@@ -34,7 +34,8 @@ View :: [].{
 		rss : Str,
 	}
 	## `key`: which chart this is in every class and section (chart_key).
-	Strip : { key : Str, title : Str, summary : Str, rows : List(Row), table : List(TableRow) }
+	## `variant`: the line under the summary (variant_line).
+	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), rows : List(Row), table : List(TableRow) }
 	Machine : { role : Str, text : Str }
 	## A class as one section shows it (`intro` says what the section is),
 	## and below, outside the section's toggle, the h2c comparison (one, or
@@ -56,7 +57,7 @@ View :: [].{
 	## it ends, for spreading the labels apart (`spread_open`).
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note.
-	OpenChart : { key : Str, title : Str, caption : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -70,27 +71,31 @@ View :: [].{
 	## another race shares the day (one line, "Oct 10 12:26", overlapped
 	## its neighbours on a phone).
 	DateMark : { x : Str, day : Str, time : Str }
-	Chart : { key : Str, title : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
+	Chart : { key : Str, title : Str, variant : List(Str), empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
 	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
 	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
 	History : { waiting : Bool, note : Str, sections : List(Section), section : Str, classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
 
-	## The Workloads page, every figure from the newest race (nothing typed in that race.json decides). `spec`: what
-	## the loader asked of each way the test is sent (`ways`: HTTP/1.1, then
-	## its variants), small under the card. `paragraphs`: after the summary,
-	## the detail and a mixed one's open loop, those it has.
-	WorkloadCard : { title : Str, route : Str, summary : Str, paragraphs : List(Str), ways : List(WorkloadWay) }
-	WorkloadWay : { label : Str, spec : Str }
-	Workloads : { ready : Bool, cards : List(WorkloadCard), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
+	## The Workloads page, every figure from the newest race (nothing typed in that race.json decides): a card per
+	## test, then its variants said once, by protocol (not repeated under every test). A card's `paragraphs`:
+	## after the summary, the detail and a mixed one's open loop, those it
+	## has; `protocols`: the variants it is raced in.
+	WorkloadCard : { title : Str, route : Str, summary : Str, paragraphs : List(Str), protocols : List(Str) }
+	## A protocol's variants: a row per way the loader sends them (the
+	## variant line, less the protocol where the heading says it), and the
+	## tests sent that way.
+	VariantGroup : { label : Str, intro : Str, rows : List(VariantRow) }
+	VariantRow : { line : List(Str), tests : Str }
+	Workloads : { ready : Bool, cards : List(WorkloadCard), variants : List(VariantGroup), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
 
-	## A card per test: each base workload, its variants (race.json's
-	## `base`) folded under it.
 	workloads : List(Pages.WorkloadSpecs), Pages.RaceSettings -> Workloads
 	workloads = |specs, settings| {
 		ready: Bool.True,
-		cards: specs.keep_if(|w| w.base.is_empty()).map(|base| workload_card(base, specs.keep_if(|w| w.base == base.name))),
+		# A test's HTTP/1.1 variant is named as the test (race.json).
+		cards: specs.keep_if(|w| w.name == w.test).map(|test| workload_card(test, specs.keep_if(|w| w.test == test.test))),
+		variants: variant_groups(specs),
 		rounds: settings.rounds.to_str(),
 		warmup: settings.warmup_seconds.to_str(),
 		measure: settings.measure_seconds.to_str(),
@@ -154,7 +159,7 @@ View :: [].{
 	sections_of : Data.Run -> List(Section)
 	sections_of = |run|
 		[{ name: "http1", label: "HTTP/1.1" }, { name: "tls", label: "HTTP/2 + TLS" }]
-			.keep_if(|s| run.race.workloads.any(|w| w.section == s.name))
+			.keep_if(|s| run.race.workloads.any(|w| w.protocol == s.name))
 
 	## The newest race, as the front page shows it: one section.
 	latest : Data.Run, Str -> Latest
@@ -285,26 +290,35 @@ class_view = |run, class, section| {
 	{ name: class.name, label: class.label, title: class.title, machines, intro: intro(section), strips, open, h2c: h2c_view(run, class.name) }
 }
 
-## The workloads one section shows.
+## The workloads one section shows: its protocol's.
 in_section : List(Data.Workload), Str -> List(Data.Workload)
-in_section = |workloads, section| workloads.keep_if(|w| w.section == section)
+in_section = |workloads, section| workloads.keep_if(|w| w.protocol == section)
 
-## What a section is, one sentence over its results.
+## What a protocol is, one sentence: over a section's results, and on
+## Workloads over its variants.
 intro : Str -> Str
 intro = |section|
 	if section == "tls" {
 		"The realistic deployment: HTTPS as browsers reach a server with no proxy in front. TLS 1.3, AES-128-GCM, X25519, an ECDSA P-256 certificate, no session resumption; HTTP/2 by ALPN (churn: HTTP/1.1). basic-webserver serves no TLS."
+	} else if section == "h2c" {
+		"HTTP/2 without TLS, by prior knowledge: HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section."
 	} else {
 		"Plain HTTP/1.1, as a server behind a proxy sees it."
 	}
 
 ## Plaintext three ways, when the race has h2c: its bars, and each
-## competitor's HTTP/1.1, h2c and HTTP/2 + TLS plaintext side by side.
+## competitor's HTTP/1.1, h2c and HTTP/2 + TLS plaintext side by side, the
+## test's other variants.
 h2c_view : Data.Run, Str -> List(View.H2c)
 h2c_view = |run, class|
-	match run.race.workloads.find_first(|w| w.section == "h2c") {
+	match run.race.workloads.find_first(|w| w.protocol == "h2c") {
 		Err(_) => []
 		Ok(h2c) => {
+			variant = |protocol|
+				match run.race.workloads.find_first(|w| w.test == h2c.test and w.protocol == protocol) {
+					Ok(w) => w.name
+					Err(_) => ""
+				}
 			found = |workload, competitor|
 				match run.results.find_first(|r| r.class == class and r.workload == workload and r.competitor == competitor and r.valid) {
 					Ok(r) => r.best_rps
@@ -312,9 +326,9 @@ h2c_view = |run, class|
 				}
 			bars = strip(run, class, h2c)
 			rows = bars.rows.map(|bar| {
-				plain = found("plaintext", bar.competitor)
+				plain = found(variant("http1"), bar.competitor)
 				h2 = found(h2c.name, bar.competitor)
-				secure = found("plaintext-tls", bar.competitor)
+				secure = found(variant("tls"), bar.competitor)
 				{
 					competitor: bar.competitor,
 					plain: rate_or_dash(plain),
@@ -362,18 +376,46 @@ strip = |run, class, workload| {
 	# A local race's traffic is loopback: no network limit applies.
 	local = class == "local"
 	rows = results.map(|r| row(r, most, local))
-	{ key: chart_key(workload.name), title: workload.title, summary: workload.summary, rows, table: results.map(|r| table_row(r, local)) }
+	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), rows, table: results.map(|r| table_row(r, local)) }
 }
 
 ## Which chart a workload's is, the same in every class and section: its
-## name without `-tls`, as race.json names each TLS workload after its
-## HTTP/1.1 one. A tab keeps that chart where it was on the screen
-## (static/demo.js), so switching section compares the two protocols.
-chart_key : Str -> Str
-chart_key = |name| name.drop_suffix("-tls")
+## test's, over HTTP/1.1 or TLS. A tab keeps that chart where it was on the
+## screen (static/demo.js), so switching section compares the two
+## protocols. h2c's is its own: it shows below either.
+chart_key : Data.Workload -> Str
+chart_key = |workload| if workload.protocol == "h2c" workload.name else workload.test
 
-expect chart_key("echo-4k-tls") == "echo-4k" and chart_key("echo-4k") == "echo-4k"
-expect chart_key("plaintext-h2") == "plaintext-h2"
+expect {
+	w = |name, test, protocol| { name, test, kind: "closed", title: "", summary: "", protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False }
+	chart_key(w("echo-4k-tls", "echo-4k", "tls")) == "echo-4k" and chart_key(w("echo-4k", "echo-4k", "http1")) == "echo-4k"
+	and chart_key(w("plaintext-h2", "plaintext", "h2c")) == "plaintext-h2"
+}
+
+## How a variant is sent, the protocol first: what the line under a chart,
+## and on Workloads under a test, says (thin text
+## in the protocol tabs' colour, bullets between).
+variant_line : Str, Bool, I64, I64, Bool -> List(Str)
+variant_line = |protocol, http2, connections, streams, keepalive| {
+	carried = if http2 "${connections.to_str()} connections × ${streams.to_str()} streams" else "${connections.to_str()} connections"
+	reuse = if keepalive "kept alive" else "a new connection a request"
+	[protocol_label(protocol, http2), carried, reuse]
+}
+
+workload_variant : Data.Workload -> List(Str)
+workload_variant = |w| variant_line(w.protocol, w.http2, w.connections, w.streams, w.keepalive)
+
+## A variant's protocol by name: over TLS without HTTP/2 is churn's.
+protocol_label : Str, Bool -> Str
+protocol_label = |protocol, http2|
+	if protocol == "h2c" "HTTP/2 (h2c)"
+	else if protocol == "tls" and http2 "HTTP/2 + TLS"
+	else if protocol == "tls" "HTTP/1.1 + TLS"
+	else "HTTP/1.1"
+
+expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2 + TLS", "128 connections × 2 streams", "kept alive"]
+expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1 + TLS", "64 connections", "a new connection a request"]
+expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections", "kept alive"]
 
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
@@ -466,7 +508,7 @@ chart = |all_entries, class, workload, competitors| {
 				Err(_) => t
 			}))
 	if most <= 0.0 {
-		{ key: chart_key(workload.name), title: workload.title, empty: Bool.True, lines: [], ticks: [], dates: [] }
+		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), empty: Bool.True, lines: [], ticks: [], dates: [] }
 	} else {
 		ceiling = nice_ceiling(most)
 		count = List.len(entries)
@@ -486,7 +528,7 @@ chart = |all_entries, class, workload, competitors| {
 				day: day(e.entry.started_at),
 				time: axis_time(entries, e.entry.started_at),
 			})
-		{ key: chart_key(workload.name), title: workload.title, empty: Bool.False, lines, ticks, dates }
+		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), empty: Bool.False, lines, ticks, dates }
 	}
 }
 
@@ -683,56 +725,76 @@ took = |timing| {
 loader_limit_pct : F64
 loader_limit_pct = 85.0
 
-## A test's card: the base workload's route without the query (SSE's
-## carries the signals) and its words, a mixed one's open loop, and what
-## the loader asked of each way it is sent.
+## A test's card: its route without the query (SSE's carries the signals)
+## and its words, a mixed one's open loop, and the protocols of its
+## variants.
 workload_card : Pages.WorkloadSpecs, List(Pages.WorkloadSpecs) -> View.WorkloadCard
-workload_card = |base, variants| {
+workload_card = |test, variants| {
 	path =
-		match base.path.split_first("?") {
+		match test.path.split_first("?") {
 			Ok({ before, after: _ }) => before
-			Err(_) => base.path
+			Err(_) => test.path
 		}
-	mixed = base.kind == "mixed"
-	rates = "${Format.thousands(base.lowest.to_f64())} to ${Format.thousands(base.highest.to_f64())} requests a second"
-	open = if mixed "Open loop only: ${base.mix}; ${rates}, the same for every server, each climbing until it falls behind." else ""
+	mixed = test.kind == "mixed"
+	rates = "${Format.thousands(test.lowest.to_f64())} to ${Format.thousands(test.highest.to_f64())} requests a second"
+	open = if mixed "Open loop only: ${test.mix}; ${rates}, the same for every server, each climbing until it falls behind." else ""
 	{
-		title: base.title,
-		route: if mixed path else "${base.method} ${path}",
-		summary: base.summary,
-		paragraphs: [base.detail, open].keep_if(|p| !p.is_empty()),
-		ways: [base].concat(variants).map(workload_way),
+		title: test.title,
+		route: if mixed path else "${test.method} ${path}",
+		summary: test.summary,
+		paragraphs: [test.detail, open].keep_if(|p| !p.is_empty()),
+		protocols: variants.map(|w| protocol_label(w.protocol, w.http2)),
 	}
 }
 
-## One way a test is sent: its protocol, and the loader's connections.
-workload_way : Pages.WorkloadSpecs -> View.WorkloadWay
-workload_way = |w| {
-	label =
-		if w.http2 and w.tls "HTTP/2 + TLS"
-		else if w.http2 "HTTP/2 (h2c)"
-		else if w.tls "HTTP/1.1 + TLS"
-		else "HTTP/1.1"
-	streams = if w.http2 " of ${w.streams.to_str()} HTTP/2 streams" else ""
-	reuse = if w.keepalive "kept alive" else "a new one per request"
-	body = if w.body_bytes > 0 ", ${Format.thousands(w.body_bytes.to_f64())}-byte body" else ""
-	{ label, spec: "${w.connections.to_str()} connections${streams}, ${reuse}${body}." }
+## The variants by protocol, in the race page's order: each a row per way
+## the loader sends them, with the tests sent that way (their HTTP/1.1
+## variants' titles, the tests' own).
+variant_groups : List(Pages.WorkloadSpecs) -> List(View.VariantGroup)
+variant_groups = |specs| {
+	test_title = |w|
+		match specs.find_first(|t| t.name == w.test) {
+			Ok(t) => t.title
+			Err(_) => w.title
+		}
+	group = |protocol, label| {
+		rows = specs
+			.keep_if(|w| w.protocol == protocol)
+			.fold([], |kept, w| {
+				full = variant_line(w.protocol, w.http2, w.connections, w.streams, w.keepalive)
+				shown = if List.first(full) == Ok(label) full.drop_first(1) else full
+				title = test_title(w)
+				if kept.any(|r| r.line == shown) {
+					kept.map(|r| if r.line == shown { line: r.line, titles: r.titles.append(title) } else r)
+				} else {
+					kept.append({ line: shown, titles: [title] })
+				}
+			})
+			.map(|r| { line: r.line, tests: Str.join_with(r.titles, ", ") })
+		{ label, intro: intro(protocol), rows }
+	}
+	[group("http1", "HTTP/1.1"), group("h2c", "HTTP/2 (h2c)"), group("tls", "HTTP/2 + TLS")].keep_if(|g| !g.rows.is_empty())
 }
 
 expect {
-	spec = |kind, method, path, body_bytes, connections, keepalive| { name: "w", kind, title: "W", summary: "", method, path, body_bytes, connections, keepalive, http2: Bool.False, streams: 0, tls: Bool.False, section: "http1", base: "", detail: "", mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
-	echo = workload_card(spec("closed", "POST", "/echo", 4096, 256, Bool.True), [])
-	sse = workload_card(spec("closed", "GET", "/sse?datastar=x", 0, 64, Bool.False), [])
-	conduit_tls = { ..spec("mixed", "MIXED", "/api/articles", 0, 128, Bool.True), http2: Bool.True, streams: 2, tls: Bool.True, section: "tls", base: "w" }
-	conduit = workload_card(spec("mixed", "MIXED", "/api/articles", 0, 256, Bool.True), [conduit_tls])
-	churn_tls = workload_way({ ..spec("closed", "GET", "/plaintext", 0, 64, Bool.False), tls: Bool.True })
-	echo.ways == [{ label: "HTTP/1.1", spec: "256 connections, kept alive, 4,096-byte body." }]
-	and echo.paragraphs == []
-	and sse.route == "GET /sse" and sse.ways == [{ label: "HTTP/1.1", spec: "64 connections, a new one per request." }]
-	and conduit.route == "/api/articles"
-	and conduit.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
-	and conduit.ways == [{ label: "HTTP/1.1", spec: "256 connections, kept alive." }, { label: "HTTP/2 + TLS", spec: "128 connections of 2 HTTP/2 streams, kept alive." }]
-	and churn_tls == { label: "HTTP/1.1 + TLS", spec: "64 connections, a new one per request." }
+	spec = |name, test, kind, connections, keepalive| { name, test, kind, title: name, summary: "", method: "GET", path: "/sse?datastar=x", body_bytes: 0, connections, keepalive, http2: Bool.False, streams: 0, tls: Bool.False, protocol: "http1", detail: "", mix: "list 50%, article 50%", lowest: 250, highest: 32000 }
+	h2 = |w, protocol, connections, streams| { ..w, protocol, connections, streams, http2: Bool.True, tls: protocol == "tls" }
+	sse = spec("sse", "sse", "closed", 256, Bool.True)
+	sse_tls = h2(spec("sse-tls", "sse", "closed", 256, Bool.True), "tls", 128, 2)
+	churn = spec("churn", "churn", "closed", 64, Bool.False)
+	churn_tls = { ..spec("churn-tls", "churn", "closed", 64, Bool.False), protocol: "tls", tls: Bool.True }
+	conduit = spec("conduit", "conduit", "mixed", 256, Bool.True)
+	conduit_tls = h2(spec("conduit-tls", "conduit", "mixed", 256, Bool.True), "tls", 128, 2)
+	specs = [sse, churn, sse_tls, churn_tls, conduit, conduit_tls]
+	card = workload_card(sse, [sse, sse_tls])
+	open = workload_card(conduit, [conduit, conduit_tls])
+	card.route == "GET /sse" and card.paragraphs == [] and card.protocols == ["HTTP/1.1", "HTTP/2 + TLS"]
+	and open.route == "/sse"
+	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
+	and variant_groups(specs).map(|g| g.rows) == [
+		[{ line: ["256 connections", "kept alive"], tests: "sse, conduit" }, { line: ["64 connections", "a new connection a request"], tests: "churn" }],
+		[{ line: ["128 connections × 2 streams", "kept alive"], tests: "sse, conduit" }, { line: ["HTTP/1.1 + TLS", "64 connections", "a new connection a request"], tests: "churn" }],
+	]
 }
 
 ## The class's open-loop charts, a ladder each: the closed workload's
@@ -745,15 +807,15 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok({ section: workload.section, chart: open_chart({ key: "open-${chart_key(workload.name)}", title: workload.title, summary: workload.summary, results, mixed: workload.kind == "mixed" }) })
+			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), results, mixed: workload.kind == "mixed" }) })
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: a mixed workload's is its
 ## slowest part's. (A switch to p50, p90, p99.9 and
 ## the mean was built and taken out; the charts all looked alike.)
-open_chart : { key : Str, title : Str, summary : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ key, title, summary, results, mixed }| {
+open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), results : List(Data.Result), mixed : Bool } -> View.OpenChart
+open_chart = |{ key, title, summary, variant, results, mixed }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -782,7 +844,7 @@ open_chart = |{ key, title, summary, results, mixed }| {
 		} else {
 			{ caption: ladder, measure: "p99 latency" }
 		}
-	{ key, title, caption, measure, lines, ticks_x, ticks_y }
+	{ key, title, caption, variant, measure, lines, ticks_x, ticks_y }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine

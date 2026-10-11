@@ -60,6 +60,7 @@ RaceClasses :: [].{
 									},
 								),
 								title : Str,
+								variant : List(Str),
 							},
 						),
 					},
@@ -93,6 +94,7 @@ RaceClasses :: [].{
 							{ label : Str, line_y : Str, text_y : Str },
 						),
 						title : Str,
+						variant : List(Str),
 					},
 				),
 				strips : List(
@@ -134,6 +136,7 @@ RaceClasses :: [].{
 							},
 						),
 						title : Str,
+						variant : List(Str),
 					},
 				),
 				title : Str,

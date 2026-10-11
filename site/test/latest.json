@@ -79,6 +79,7 @@
     "workloads": [
       {
         "name": "plaintext",
+        "test": "plaintext",
         "title": "Plaintext",
         "summary": "GET /plaintext answers 13 bytes over kept-alive connections: the cost of HTTP itself.",
         "method": "GET",
@@ -88,10 +89,14 @@
         "connections": 256,
         "keepalive": true,
         "kind": "closed",
-        "section": "http1"
+        "protocol": "http1",
+        "streams": 0,
+        "http2": false,
+        "tls": false
       },
       {
         "name": "echo-4k",
+        "test": "echo-4k",
         "title": "Echo 4 KiB",
         "summary": "POST /echo with a 4 KiB body, answered with the same bytes: reading bodies and writing larger responses.",
         "method": "POST",
@@ -101,10 +106,14 @@
         "connections": 256,
         "keepalive": true,
         "kind": "closed",
-        "section": "http1"
+        "protocol": "http1",
+        "streams": 0,
+        "http2": false,
+        "tls": false
       },
       {
         "name": "templates",
+        "test": "templates",
         "title": "Templates",
         "summary": "GET /menu renders a 12-row HTML table from a template per request, every value escaped: the work of a server-rendered page.",
         "method": "GET",
@@ -114,10 +123,14 @@
         "connections": 256,
         "keepalive": true,
         "kind": "closed",
-        "section": "http1"
+        "protocol": "http1",
+        "streams": 0,
+        "http2": false,
+        "tls": false
       },
       {
         "name": "churn",
+        "test": "churn",
         "title": "Connection churn",
         "summary": "GET /plaintext on a new connection every request: accepting, and closing, as fast as possible.",
         "method": "GET",
@@ -127,7 +140,10 @@
         "connections": 64,
         "keepalive": false,
         "kind": "closed",
-        "section": "http1"
+        "protocol": "http1",
+        "streams": 0,
+        "http2": false,
+        "tls": false
       }
     ],
     "cloud": {

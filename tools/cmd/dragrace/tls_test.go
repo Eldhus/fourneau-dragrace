@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -107,67 +109,88 @@ func TestOffers(t *testing.T) {
 	}
 }
 
-// A variant takes its base's summary, and has no words of its own.
-func TestFillVariants(t *testing.T) {
-	base := Workload{Name: "plaintext", Summary: "one line", Detail: "more"}
-	workloads := []Workload{{Name: "plaintext-tls", Base: "plaintext"}, base}
-	if err := fillVariants(workloads); err != nil || workloads[0].Summary != "one line" {
-		t.Errorf("filled %+v: %v", workloads[0], err)
+// A test is a workload a variant, named as the races before variants named
+// them, in the site's order whatever race.json's.
+func TestExpand(t *testing.T) {
+	test := Test{Name: "plaintext", Title: "Plaintext", Summary: "one line", Detail: "more",
+		Method: "GET", Path: "/plaintext", Keepalive: true, Variants: []Variant{
+			{Protocol: "tls", Connections: 32, Streams: 8},
+			{Protocol: "http1", Connections: 256},
+			{Protocol: "h2c", Connections: 32, Streams: 8}}}
+	workloads, err := test.expand()
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, wrong := range [][]Workload{
-		{base, {Name: "v", Base: "nothing"}},
-		{base, {Name: "v", Base: "plaintext", Summary: "its own"}},
-		{base, {Name: "v", Base: "plaintext"}, {Name: "w", Base: "v"}},
-		{{Name: "plaintext", Summary: "one line"}},
-	} {
-		if fillVariants(wrong) == nil {
-			t.Errorf("accepted %+v", wrong)
+	want := []Workload{
+		{Name: "plaintext", Title: "Plaintext", Protocol: "http1", Connections: 256},
+		{Name: "plaintext-h2", Title: "Plaintext, HTTP/2 (h2c)", Protocol: "h2c", Connections: 32,
+			HTTP2: true, Streams: 8},
+		{Name: "plaintext-tls", Title: "Plaintext, HTTP/2 + TLS", Protocol: "tls", Connections: 32,
+			HTTP2: true, Streams: 8, TLS: true},
+	}
+	for i, w := range want {
+		w.Test, w.Summary, w.Method, w.Path, w.Keepalive = "plaintext", "one line", "GET", "/plaintext", true
+		if i >= len(workloads) || !reflect.DeepEqual(workloads[i], w) {
+			t.Errorf("got %+v, want %+v", workloads, want)
+			break
 		}
+	}
+	churn := Test{Name: "churn", Title: "Churn", Summary: "s", Detail: "d", Variants: []Variant{
+		{Protocol: "http1", Connections: 64}, {Protocol: "tls", Connections: 64}}}
+	if got, err := churn.expand(); err != nil || got[1].HTTP2 || !got[1].TLS || got[1].Title != "Churn, HTTP/1.1 + TLS" {
+		t.Errorf("churn over TLS is HTTP/1.1: %+v, %v", got, err)
+	}
+	http1 := Variant{Protocol: "http1", Connections: 256}
+	for _, variants := range [][]Variant{
+		{{Protocol: "tls", Connections: 64}},
+		{http1, http1},
+		{http1, {Protocol: "h3", Connections: 1}},
+		{http1, {Protocol: "h2c", Connections: 32}},
+		{{Protocol: "http1", Connections: 256, Streams: 2}},
+		{{Protocol: "http1"}},
+	} {
+		wrong := Test{Name: "t", Summary: "s", Detail: "d", Keepalive: true, Variants: variants}
+		if _, err := wrong.expand(); err == nil {
+			t.Errorf("accepted %+v", variants)
+		}
+	}
+	unkept := Test{Name: "t", Summary: "s", Detail: "d", Variants: []Variant{http1, {Protocol: "h2c", Connections: 32, Streams: 8}}}
+	wordless := Test{Name: "t", Summary: "s", Keepalive: true, Variants: []Variant{http1}}
+	if _, err := unkept.expand(); err == nil {
+		t.Error("HTTP/2 without keep-alive")
+	}
+	if _, err := wordless.expand(); err == nil {
+		t.Error("a test without a detail")
 	}
 }
 
-// race.json as committed: every section known, and both flavours of HTTP
-// race the same tests: each HTTP/1.1 workload has its
-// twin over TLS, open loop the same. No share ladder: RealWorld's climb
-// is the open loop.
-func TestRaceSections(t *testing.T) {
+// race.json as committed: every test raced over HTTP/1.1 and TLS, plaintext over h2c too (HTTP/2's cost apart from TLS's),
+// each variant the same requests in flight as HTTP/1.1's connections: the
+// same test, carried another way. No share ladder: RealWorld's climb is
+// the open loop.
+func TestRaceVariants(t *testing.T) {
 	race, err := loadRace("../../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byName := map[string]Workload{}
-	for _, workload := range race.Workloads {
-		byName[workload.Name] = workload
-		if workload.TLS != (workload.section() == "tls") {
-			t.Errorf("%s: TLS and the tls section go together", workload.Name)
+	for _, test := range race.Tests {
+		workloads, _ := test.expand()
+		want := []string{"http1", "tls"}
+		if test.Name == "plaintext" {
+			want = []string{"http1", "h2c", "tls"}
 		}
-		if workload.Ladder {
-			t.Errorf("%s: a share ladder", workload.Name)
+		var got []string
+		for _, workload := range workloads {
+			got = append(got, workload.Protocol)
+			if inFlight := workload.Connections * max(1, workload.Streams); inFlight != workloads[0].Connections {
+				t.Errorf("%s: %d requests in flight, HTTP/1.1 %d", workload.Name, inFlight, workloads[0].Connections)
+			}
 		}
-	}
-	twins := 0
-	for _, workload := range race.Workloads {
-		if workload.section() != "http1" {
-			continue
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: variants %v, want %v", test.Name, got, want)
 		}
-		twin, found := byName[workload.Name+"-tls"]
-		if !found {
-			t.Errorf("%s has no twin over TLS", workload.Name)
-			continue
+		if test.Ladder {
+			t.Errorf("%s: a share ladder", test.Name)
 		}
-		twins++
-		if twin.Path != workload.Path || twin.Method != workload.Method ||
-			(twin.Mixed == nil) != (workload.Mixed == nil) {
-			t.Errorf("%s-tls is not %s over TLS", workload.Name, workload.Name)
-		}
-		if twin.Base != workload.Name || twin.Summary != workload.Summary {
-			t.Errorf("%s-tls is not a variant of %s, with its words", workload.Name, workload.Name)
-		}
-	}
-	if byName["plaintext-h2"].Base != "plaintext" {
-		t.Errorf("plaintext-h2 is not a variant of plaintext")
-	}
-	if twins+1 != len(race.Workloads)-twins { // and plaintext-h2, h2c's own
-		t.Errorf("%d twins of %d workloads", twins, len(race.Workloads))
 	}
 }

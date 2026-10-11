@@ -206,11 +206,19 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .workloads .card p + p { margin-top: 8px; }
 .workloads .card .summary { color: var(--text); }
 .workloads .card a { margin: 0; font-size: inherit; white-space: normal; }
-/* Each way the test is sent (HTTP/1.1, its variants), as the machines
-   under a class: small, a label and what the loader asked. */
-.ways { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; font-size: 13px; color: var(--text-3); }
-.prose .ways dt { color: var(--text-2); margin: 0; }
-.prose .ways dd { margin: 0; color: var(--text-3); }
+/* A variant's line: under a chart's summary, and
+   on Workloads, thin small text in the protocol tabs' cyan, quieter than
+   the tabs, bullets between. The protocol first, at full cyan; on a
+   test's card every item is a protocol. */
+.variant { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 6px 0 0; font-family: var(--mono);
+  font-size: 11px; line-height: 1.5; letter-spacing: .02em; color: rgba(95,215,255,.62); }
+.variant > span:first-child, .variant.protocols > span { color: var(--cyan); }
+.variant > span + span::before { content: "•"; margin: 0 7px; color: var(--text-3); }
+.workloads .card p.variant { margin-top: 10px; }
+.prose h3.variant-name { font-family: var(--pixel); font-size: 10px; font-weight: normal; color: var(--cyan); margin: 22px 0 6px; }
+.variant-rows { list-style: none; padding: 0; margin: 8px 0 0; }
+.variant-rows li { color: var(--text-2); font-size: 14px; }
+.variant-rows .variant { display: inline-flex; margin: 0 10px 0 0; }
 
 footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--grid); padding: 0 16px 28px; }
 

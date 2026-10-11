@@ -5,9 +5,15 @@
 {{#cards}}<section class="card"><h3>{{ title }} <code>{{ route }}</code></h3>
 <p class="summary">{{ summary }}</p>
 {{#paragraphs}}<p>{{ . }}</p>
-{{/paragraphs}}<dl class="ways">{{#ways}}<dt>{{ label }}</dt><dd>{{ spec }}</dd>{{/ways}}</dl></section>
+{{/paragraphs}}<p class="variant protocols">{{#protocols}}<span>{{ . }}</span>{{/protocols}}</p></section>
 {{/cards}}</div>
-<p>Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
+<h2>Variants</h2>
+<p>Each test is raced in each of its variants: the same requests and the same answers, carried another way. The race page&rsquo;s tabs are HTTP/1.1 and HTTP/2 + TLS; h2c sits below either.</p>
+{{#variants}}<h3 class="variant-name">{{ label }}</h3>
+<p>{{ intro }}</p>
+<ul class="variant-rows">{{#rows}}<li><span class="variant">{{#line}}<span>{{ . }}</span>{{/line}}</span> {{ tests }}</li>
+{{/rows}}</ul>
+{{/variants}}<p>Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
 {{/ready}}{{^ready}}<p class="pending">No race yet: the workloads show once the first has run.</p>
 {{/ready}}
 <h2>The race</h2>

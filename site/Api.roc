@@ -57,6 +57,8 @@ Api :: [].{
 
 	WorkloadPost : {
 		name : Str,
+		## The test it is a variant of (race.json's workload).
+		test : Str,
 		kind : Str,
 		title : Str,
 		summary : Str,
@@ -67,11 +69,11 @@ Api :: [].{
 		connections : I64,
 		keepalive : Bool,
 		## HTTP/2 (`streams` a connection; 0 for HTTP/1.1), over TLS or not;
-		## the race page's section ("http1", "h2c", "tls"); a ladder climbed.
+		## the variant's protocol ("http1", "h2c", "tls"); a ladder climbed.
 		http2 : Bool,
 		streams : I64,
 		tls : Bool,
-		section : Str,
+		protocol : Str,
 		ladder : Bool,
 	}
 
@@ -429,6 +431,7 @@ Api :: [].{
 			Runs.add_workload!(tx, {
 				run_id,
 				name: w.name,
+				test: w.test,
 				position: $position,
 				kind: w.kind,
 				title: w.title,
@@ -442,7 +445,7 @@ Api :: [].{
 				http2: w.http2,
 				streams: w.streams,
 				tls: w.tls,
-				section: w.section,
+				protocol: w.protocol,
 				ladder: w.ladder,
 			})?
 			$position = $position + 1

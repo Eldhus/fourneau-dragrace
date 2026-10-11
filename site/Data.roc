@@ -38,11 +38,13 @@ Data :: [].{
 		loader_cpu_busy_pct : F64,
 	}
 
-	## `kind`: "closed" (rounds, bars) or "mixed" (an open-loop ladder of
-	## several requests at once, a line). `section`: where the race page
-	## shows it: "http1", "h2c" (HTTP/2 without TLS) or "tls" (the
-	## realistic deployment).
-	Workload : { name : Str, kind : Str, title : Str, summary : Str, section : Str }
+	## A test in one variant. `kind`: "closed" (rounds, bars) or "mixed" (an
+	## open-loop ladder of several requests at once, a line). `protocol`:
+	## the variant's, "http1", "h2c" (HTTP/2 without TLS) or "tls" (the
+	## realistic deployment), each a section of the race page; and how the
+	## loader sent it: connections, HTTP/2's streams on each (0 for
+	## HTTP/1.1), kept alive or not.
+	Workload : { name : Str, test : Str, kind : Str, title : Str, summary : Str, protocol : Str, connections : I64, streams : I64, keepalive : Bool, http2 : Bool, tls : Bool }
 	ServerClass : { name : Str, label : Str, title : Str }
 	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str, memory_mib : U32 }
 	Fingerprint : { dragrace : Str, fourneau : Str, roux : Str }

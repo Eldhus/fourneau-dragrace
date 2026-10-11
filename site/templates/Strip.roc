@@ -44,6 +44,7 @@ Strip :: [].{
 			},
 		),
 		title : Str,
+		variant : List(Str),
 	}
 
 	## The template's value: what a response sends, rendered by the

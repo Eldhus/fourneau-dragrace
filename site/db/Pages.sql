@@ -24,7 +24,11 @@ SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;
 
 -- name: workloads :many(64)
 -- @param run_id : Str
-SELECT name, kind, title, summary, section FROM run_workloads WHERE run_id = :run_id
+-- @column keepalive : Bool
+-- @column http2 : Bool
+-- @column tls : Bool
+SELECT name, test, kind, title, summary, protocol, connections, streams, keepalive, http2, tls
+FROM run_workloads WHERE run_id = :run_id
 ORDER BY position;
 
 -- name: classes :many(32)
@@ -90,38 +94,36 @@ SELECT count(*) AS results FROM results WHERE run_id = :run_id;
 -- The Workloads page, from the newest finished run: what each workload
 -- asked, so the page never types in what race.json decides. A mixed workload's parts and rates are only in the race's
 -- own race.json: `mix` ("list 50%, article 30%, ..."), and `lowest` and
--- `highest` of its rates (0 for a closed one). From the same race.json:
--- `base`, the workload a variant is sent another way, and `detail`, a
--- base's longer text ("" for both before 2026-10-11).
+-- `highest` of its rates (0 for a closed one); and `detail`, the test's
+-- longer text ("" before 2026-10-11). Each is the test's entry, found by
+-- its name: race.json named every workload before tests had variants
+-- (conduit's entry held the same mix as conduit-tls's), and names its
+-- tests since.
 -- name: workload_specs :many(64)
 -- @param run_id : Str
 -- @column keepalive : Bool
 -- @column http2 : Bool
 -- @column tls : Bool
--- @column base : Str
 -- @column detail : Str
 -- @column mix : Str
 -- @column lowest : I64
 -- @column highest : I64
-SELECT w.name, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes, w.connections,
-  w.keepalive, w.http2, w.streams, w.tls, w.section,
-  coalesce((SELECT json_extract(d.value, '$.base')
-    FROM run_settings s, json_each(s.race_json, '$.workloads') AS d
-    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS base,
+SELECT w.name, w.test, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes,
+  w.connections, w.keepalive, w.http2, w.streams, w.tls, w.protocol,
   coalesce((SELECT json_extract(d.value, '$.detail')
     FROM run_settings s, json_each(s.race_json, '$.workloads') AS d
-    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS detail,
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), '') AS detail,
   coalesce((SELECT group_concat(json_extract(p.value, '$.name') || ' '
       || CAST(round(json_extract(p.value, '$.share') * 100) AS INTEGER) || '%', ', ')
     FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
       json_each(d.value, '$.mixed.parts') AS p
-    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), '') AS mix,
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), '') AS mix,
   coalesce((SELECT min(r.value) FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
       json_each(d.value, '$.mixed.rates') AS r
-    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), 0) AS lowest,
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), 0) AS lowest,
   coalesce((SELECT max(r.value) FROM run_settings s, json_each(s.race_json, '$.workloads') AS d,
       json_each(d.value, '$.mixed.rates') AS r
-    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.name), 0) AS highest
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), 0) AS highest
 FROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;
 
 -- The rounds and the ladders of a run: `shares`, the ladder's steps as

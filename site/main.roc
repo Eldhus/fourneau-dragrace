@@ -185,7 +185,7 @@ workloads! = |db, request| {
 	view =
 		match Store.workloads!(db, request) {
 			Ok({ specs, settings }) => View.workloads(specs, settings)
-			Err(NotFound) => { ready: Bool.False, cards: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
+			Err(NotFound) => { ready: Bool.False, cards: [], variants: [], rounds: "", warmup: "", measure: "", shares: "", ladder: "", loader_limit: "" }
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	Ok(Rocstache.html(WorkloadsPage.template({
@@ -194,6 +194,7 @@ workloads! = |db, request| {
 		nav: base.nav,
 		ready: view.ready,
 		cards: view.cards,
+		variants: view.variants,
 		rounds: view.rounds,
 		warmup: view.warmup,
 		measure: view.measure,

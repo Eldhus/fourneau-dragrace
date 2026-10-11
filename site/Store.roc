@@ -62,7 +62,7 @@ Store :: [].{
 			},
 			race: {
 				competitors: competitors.map(|c| c.name),
-				workloads: workloads.map(|w| { name: w.name, kind: w.kind, title: w.title, summary: w.summary, section: w.section }),
+				workloads: workloads.map(|w| { name: w.name, test: w.test, kind: w.kind, title: w.title, summary: w.summary, protocol: w.protocol, connections: w.connections, streams: w.streams, keepalive: w.keepalive, http2: w.http2, tls: w.tls }),
 				cloud: { servers: classes.map(|c| { name: c.name, label: c.label, title: c.title }) },
 			},
 			machines: machines.map(|m| {

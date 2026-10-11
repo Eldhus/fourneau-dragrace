@@ -93,6 +93,9 @@ CREATE TABLE run_competitors (
 CREATE TABLE run_workloads (
   run_id TEXT NOT NULL REFERENCES runs (id),
   name TEXT NOT NULL,
+  -- The test it is a variant of (race.json's workload): plaintext for
+  -- plaintext, plaintext-h2 and plaintext-tls.
+  test TEXT NOT NULL,
   position INTEGER NOT NULL,
   -- closed: rounds at full load, drawn as bars; mixed: an open-loop ladder
   -- of several requests at once (conduit), drawn as a line.
@@ -109,9 +112,9 @@ CREATE TABLE run_workloads (
   http2 INTEGER NOT NULL CHECK (http2 IN (0, 1)),
   streams INTEGER NOT NULL,
   tls INTEGER NOT NULL CHECK (tls IN (0, 1)),
-  -- Where the race page shows it: HTTP/1.1, h2c (HTTP/2 without TLS,
-  -- beside plaintext), or tls (the realistic deployment).
-  section TEXT NOT NULL CHECK (section IN ('http1', 'h2c', 'tls')),
+  -- The variant's protocol: HTTP/1.1, h2c (HTTP/2 without TLS), or tls
+  -- (the realistic deployment). The race page's sections are these.
+  protocol TEXT NOT NULL CHECK (protocol IN ('http1', 'h2c', 'tls')),
   -- It climbed the open-loop ladder after the rounds.
   ladder INTEGER NOT NULL CHECK (ladder IN (0, 1)),
   PRIMARY KEY (run_id, name)

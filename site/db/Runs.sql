@@ -68,6 +68,7 @@ ON CONFLICT DO NOTHING;
 -- name: add_workload :exec
 -- @param run_id : Str
 -- @param name : Str
+-- @param test : Str
 -- @param position : I64
 -- @param kind : Str
 -- @param title : Str
@@ -81,12 +82,12 @@ ON CONFLICT DO NOTHING;
 -- @param http2 : Bool
 -- @param streams : I64
 -- @param tls : Bool
--- @param section : Str
+-- @param protocol : Str
 -- @param ladder : Bool
-INSERT INTO run_workloads (run_id, name, position, kind, title, summary, method, path,
-  body_bytes, content_type, connections, keepalive, http2, streams, tls, section, ladder)
-VALUES (:run_id, :name, :position, :kind, :title, :summary, :method, :path,
-  :body_bytes, :content_type, :connections, :keepalive, :http2, :streams, :tls, :section,
+INSERT INTO run_workloads (run_id, name, test, position, kind, title, summary, method, path,
+  body_bytes, content_type, connections, keepalive, http2, streams, tls, protocol, ladder)
+VALUES (:run_id, :name, :test, :position, :kind, :title, :summary, :method, :path,
+  :body_bytes, :content_type, :connections, :keepalive, :http2, :streams, :tls, :protocol,
   :ladder)
 ON CONFLICT DO NOTHING;
 

@@ -33,6 +33,7 @@ HistoryPage :: [].{
 							{ label : Str, line_y : Str, text_y : Str },
 						),
 						title : Str,
+						variant : List(Str),
 					},
 				),
 				h2c : List(
@@ -59,6 +60,7 @@ HistoryPage :: [].{
 							{ label : Str, line_y : Str, text_y : Str },
 						),
 						title : Str,
+						variant : List(Str),
 					},
 				),
 				title : Str,

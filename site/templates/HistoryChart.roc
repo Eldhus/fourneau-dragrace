@@ -20,6 +20,7 @@ HistoryChart :: [].{
 		),
 		ticks : List({ label : Str, line_y : Str, text_y : Str }),
 		title : Str,
+		variant : List(Str),
 	}
 
 	## The template's value: what a response sends, rendered by the

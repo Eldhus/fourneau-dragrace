@@ -10,10 +10,10 @@ WorkloadsPage :: [].{
 		cards : List(
 			{
 				paragraphs : List(Str),
+				protocols : List(Str),
 				route : Str,
 				summary : Str,
 				title : Str,
-				ways : List({ label : Str, spec : Str }),
 			},
 		),
 		home : Bool,
@@ -25,6 +25,13 @@ WorkloadsPage :: [].{
 		rounds : Str,
 		shares : Str,
 		title : Str,
+		variants : List(
+			{
+				intro : Str,
+				label : Str,
+				rows : List({ line : List(Str), tests : Str }),
+			},
+		),
 		warmup : Str,
 	}
 
