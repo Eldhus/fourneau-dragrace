@@ -1,6 +1,6 @@
 {{> Top}}<article class="prose">
 <h1>Workloads</h1>
-<p>Each workload is one part of a server&rsquo;s job. Every server must answer the same bytes, checked against a reference before it races (<a href="/method">Method</a>).</p>
+<p>Each workload is one part of a server&rsquo;s job. Every server must answer the same bytes, checked against a reference before it races. How a race runs and what it reports follow the workloads.</p>
 {{?ready}}{{#groups}}<h2>{{ heading }}</h2>
 <p>{{ note }}</p>
 <div class="workloads">
@@ -8,11 +8,24 @@
 <p>{{ summary }}</p><span class="spec">{{ spec }}</span></section>
 {{/cards}}</div>
 {{/groups}}
-<p>Each closed-loop workload: {{ warmup }}&nbsp;s warmup, {{ measure }}&nbsp;s measured, {{ rounds }} rounds, the best round&rsquo;s throughput and the rounds&rsquo; median latencies reported (<a href="/method">Method</a>). Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
+<p>Definitions: <a href="https://github.com/Eldhus/fourneau-dragrace/blob/master/race.json"><code>race.json</code></a>.</p>
 {{/ready}}{{^ready}}<p class="pending">No race yet: the workloads show once the first has run.</p>
 {{/ready}}
+<h2>The race</h2>
+<ul>
+<li><b>Machines.</b> Each server class gets a fresh server droplet and a loader droplet with more vCPUs, running <a href="https://github.com/hatoo/oha">oha</a>, in one region, over the private network. The classes race at the same time; every droplet is deleted afterwards.</li>
+<li><b>Checks.</b> Before racing, <code>/plaintext</code> must answer exactly <code>Hello, World!</code>, <code>/echo</code> the body it was sent, <code>/menu</code> the reference page, <code>/sse</code> the reference stream with one chunk per event (and 400 without signals), and an unknown path 404. A server that fails is a DNF.</li>
+<li><b>Builds.</b> Each server is built and configured the way its users ship it. Every version is pinned and recorded with the results.</li>
+<li><b>Noise.</b> Shared-vCPU classes record CPU steal, so a noisy night shows up in the results.</li>
+</ul>
+
 <h2>Closed loop</h2>
-<p><a href="https://github.com/hatoo/oha">oha</a> holds <i>N</i> connections (each workload&rsquo;s above), each sending its next request when the last answer lands, so every server runs flat out at its own pace. By Little&rsquo;s law latency &asymp; <i>N</i> &divide; throughput: these are a saturated server&rsquo;s latencies, and they hide three things.</p>
+<p>oha holds <i>N</i> connections (each workload&rsquo;s above), each sending its next request when the last answer lands, so every server runs flat out at its own pace. Each workload gets a warmup{{?ready}} of {{ warmup }}&nbsp;s{{/ready}}, discarded, then a measured run{{?ready}} of {{ measure }}&nbsp;s{{/ready}}, in {{?ready}}{{ rounds }} {{/ready}}rounds of a seeded random order.</p>
+<ul>
+<li><b>Throughput</b> is the best round&rsquo;s, as a benchmark takes the fastest of its repeats: a server can do no more than it did, and a round that fell short met noise (a neighbour, the network, a frequency change).</li>
+<li><b>Each latency percentile</b> is the rounds&rsquo; median: a tail is the server&rsquo;s own rare stalls, so the least would report the round that missed them and the most the round a neighbour hit.</li>
+</ul>
+<p>By Little&rsquo;s law latency &asymp; <i>N</i> &divide; throughput: these are a saturated server&rsquo;s latencies, and they hide three things.</p>
 <ul>
 <li><b>Coordinated omission.</b> A stall stalls the generator too; the requests users would have sent meanwhile never exist, so the tail is understated, most for servers that pause.</li>
 <li><b>Latency at a given rate.</b> Each server runs at its own maximum, so no two latencies are at the same load.</li>
@@ -25,9 +38,10 @@
 
 <h2>Caveats</h2>
 <ul>
-<li>The loader runs on a bigger droplet, its CPU recorded every round.</li>
+<li>The loader&rsquo;s CPU is recorded every round, so a round it bound shows.</li>
 <li>Echo on the larger classes can fill the network link first: the fast servers tie there (each round records the traffic).</li>
-<li>Only 2xx answers count.</li>
+<li>Only 2xx answers count: an error or another status is no work done.</li>
 </ul>
+<p>This is a reproducible nightly on hardware anyone can rent, not a best case on tuned bare metal. The same race runs on your own machine: <code>dragrace race local</code>.</p>
 </article>
 {{> Bottom}}

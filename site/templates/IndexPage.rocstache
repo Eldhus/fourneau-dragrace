@@ -13,6 +13,6 @@
 <li>Each workload flat out in shuffled rounds: the best round&rsquo;s rate, the median latency. RealWorld (SQLite) climbs fixed rates instead.</li>
 <li>Plain HTTP/1.1, and HTTP/2 + TLS (the tabs).</li>
 </ul>
-<p>Details: <a href="/workloads">Workloads</a>, <a href="/method">Method</a>. To make a server faster or add one: <a href="/contribute">Contribute</a>.</p>
+<p>Details: <a href="/workloads">Workloads</a>. To make a server faster or add one: <a href="/contribute">Contribute</a>.</p>
 </article>
 {{> Bottom}}

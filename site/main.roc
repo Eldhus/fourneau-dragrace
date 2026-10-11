@@ -24,7 +24,6 @@ import templates/RaceClasses
 import templates/HistoryClasses
 import templates/WorkloadsPage
 import templates/CompetitorsPage
-import templates/MethodPage
 import templates/ContributePage
 import templates/AboutPage
 import templates/NotFoundPage
@@ -69,7 +68,8 @@ respond! = |request, { db, tokens }| {
 			"/history-classes" => history_classes!(db, request, wanted)
 			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
-			"/method" => Ok(method)
+			# Method is a part of Workloads now.
+			"/method" => Ok(moved("/workloads"))
 			"/contribute" => Ok(contribute)
 			"/about" => Ok(about)
 			"/data/latest.json" => latest_file!(db, request)
@@ -89,7 +89,6 @@ respond! = |request, { db, tokens }| {
 }
 
 ## The pages that read nothing: constants, which Roc makes at compile time.
-method = Rocstache.html(MethodPage.template(frame("Method", "/method")))
 contribute = Rocstache.html(ContributePage.template(frame("Contribute", "/contribute")))
 about = Rocstache.html(AboutPage.template(frame("About", "/about")))
 
@@ -307,7 +306,6 @@ pages = [
 	{ href: "/history", label: "History" },
 	{ href: "/workloads", label: "Workloads" },
 	{ href: "/competitors", label: "Competitors" },
-	{ href: "/method", label: "Method" },
 	{ href: "/contribute", label: "Contribute" },
 	{ href: "/about", label: "About" },
 ]
