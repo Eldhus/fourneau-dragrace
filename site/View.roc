@@ -13,9 +13,9 @@ View :: [].{
 	## `share`: the best round's; `low`, `high`: the slowest and fastest
 	## rounds as shares, the whisker's ends (the fastest is the bar's end:
 	## the whisker shows how far noise took the other rounds below it).
-	## `p99`: the rounds' median p99, small after the rate, for comparing
-	## tails at a glance.
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, p99 : Str, ranged : Bool, hollow : Bool, tip : Str }
+	## `p99`: the rounds' median p99 in milliseconds, two figures, small
+	## after the rate for comparing tails at a glance; `p99_tip`, its hover.
+	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, p99 : Str, p99_tip : Str, ranged : Bool, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -373,7 +373,7 @@ expect chart_key("plaintext-h2") == "plaintext-h2"
 row : Data.Result, F64, Bool -> View.Row
 row = |result, most, local|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", p99: "", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", p99: "", p99_tip: "", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
 		value = Format.thousands(result.best_rps)
 		rounds = List.len(result.rounds).to_str()
@@ -386,7 +386,8 @@ row = |result, most, local|
 			low: Format.two_decimals(slowest / most),
 			high: Format.two_decimals(fastest / most),
 			value,
-			p99: "${Format.latency(result.median_p99_ms)} ms",
+			p99: Format.two_figures(result.median_p99_ms),
+			p99_tip: "p99 ${Format.latency(result.median_p99_ms)} ms, the rounds' median",
 			ranged: (fastest - slowest) / most >= whisker_share_min,
 			hollow: !saturated(result, local),
 			tip: "${result.competitor}: ${value} req/s, the best of ${rounds} rounds (the slowest ${Format.thousands(slowest)}, ${Format.thousands(spread)}% below), limited by ${limited_by(result, local)}; the rounds' median p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",

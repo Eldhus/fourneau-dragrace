@@ -15,6 +15,7 @@ Strip :: [].{
 				hollow : Bool,
 				low : Str,
 				p99 : Str,
+				p99_tip : Str,
 				ranged : Bool,
 				share : Str,
 				tip : Str,

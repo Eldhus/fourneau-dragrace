@@ -27,6 +27,32 @@ Format :: [].{
 	latency : F64 -> Str
 	latency = |milliseconds| if milliseconds <= 0.0 "–" else Format.two_decimals(milliseconds)
 
+	## Two significant figures, at most four characters where it matters
+	## (the p99 beside a bar): 0.234 is "0.23", 2.34 is
+	## "2.3", 23.4 is "23", 207.4 is "210"; 0 is a dash, as `latency`'s.
+	two_figures : F64 -> Str
+	two_figures = |value|
+		if value <= 0.0 {
+			"–"
+		} else if value < 0.995 {
+			Format.two_decimals(value)
+		} else if value < 9.95 {
+			Format.one_decimal(value)
+		} else {
+			whole = value.round_to_u64_try() ?? 0
+			# Down to two digits, then back up: 207 is 21, then 210. Twenty
+			# steps cover any U64.
+			var $digits = whole
+			var $scale = 1
+			var $steps = 0
+			while $digits >= 100 and $steps < 20 {
+				$digits = ($digits + 5) // 10
+				$scale = $scale * 10
+				$steps = $steps + 1
+			}
+			($digits * $scale).to_str()
+		}
+
 	## An axis tick, short enough for a phone's chart: 100000 is "100k",
 	## 37500 is "37.5k", 500 is "500".
 	compact : F64 -> Str
@@ -81,4 +107,8 @@ expect Format.one_decimal(81.648) == "81.6"
 expect Format.short("49da1f40d81d946096dc88f6011ac65c3c44c1a5") == "49da1f4"
 expect Format.latency(0.0) == "–"
 expect Format.latency(1.234) == "1.23"
+expect Format.two_figures(0.234) == "0.23" and Format.two_figures(0.05) == "0.05" and Format.two_figures(0.996) == "1.0"
+expect Format.two_figures(2.34) == "2.3" and Format.two_figures(9.96) == "10" and Format.two_figures(23.4) == "23"
+expect Format.two_figures(99.6) == "100" and Format.two_figures(207.4) == "210" and Format.two_figures(1234.0) == "1200"
+expect Format.two_figures(0.0) == "–"
 expect Format.compact(100000.0) == "100k" and Format.compact(37500.0) == "37.5k" and Format.compact(500.0) == "500" and Format.compact(0.0) == "0"
