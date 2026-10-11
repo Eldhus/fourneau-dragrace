@@ -1,9 +1,8 @@
 <div id="race-classes">
 <div class="tabbar"><nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav><nav class="tabs protocol" aria-label="Protocol">{{#sections}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/sections}}</nav></div>
-{{#classes}}<h2 class="class">{{ title }}</h2>
-<dl class="machines">{{#machines}}<dt>{{ role }}</dt><dd>{{ text }}</dd>{{/machines}}</dl>
-<p class="raw"><a href="/data/classes/{{ ../id }}/{{ name }}.json">this class's data</a>, as the page draws it</p>
-<p class="intro">{{ intro }}</p>
+{{#classes}}<div class="class-head"><h2 class="class"><span class="tag">{{ label }}</span>{{ title }}</h2><a class="raw" href="/data/classes/{{ ../id }}/{{ name }}.json" title="this class's data, as the page draws it">json</a></div>
+<dl class="machines">{{#machines}}<dt>{{ role }}</dt><dd>{{#items}}<span>{{ . }}</span> {{/items}}</dd>{{/machines}}</dl>
+<p class="intro"><span class="tag">{{ section_label }}</span>{{ intro }}</p>
 <div class="strips">
 {{#strips}}{{> Strip}}{{/strips}}</div>
 {{#open}}<figure class="strip open" data-chart="{{ key }}"><figcaption><b>{{ title }}</b>{{ caption }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>

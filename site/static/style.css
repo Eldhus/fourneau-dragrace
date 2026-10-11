@@ -136,10 +136,23 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 /* Breaks fall between items, never inside a commit or a date. */
 .run-meta span { white-space: nowrap; }
 .run-meta span:not(:last-child)::after { content: " \00b7"; color: var(--text-3); }
-.machines { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 12px; color: var(--text-3); }
+/* A class's header says which tab each part is:
+   the title in the class tabs' gold, led by its tab's label; the
+   section's sentence ruled in the protocol tabs' cyan, led by its tab's
+   label (.intro); the class's data a small link at the right. */
+.class-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 28px 0 8px; }
+.class-head .class { margin: 0; color: var(--gold); }
+.class .tag { display: inline-block; font-size: .7em; line-height: 1; padding: 4px 6px; margin: 0 10px 4px 0;
+  border: 1px solid rgba(255,215,110,.55); vertical-align: middle; }
+.raw { flex: none; margin-top: 1px; padding: 0 7px; font-size: 11px; line-height: 1.7; color: var(--text-3);
+  text-decoration: none; border: 1px solid var(--grid); }
+.raw:hover { color: var(--magenta); border-color: var(--magenta); }
+.machines { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0 0 14px; font-size: 12px; color: var(--text-3); }
 .machines dt { color: var(--text-2); }
 .machines dd { margin: 0; }
-.raw { font-size: 12px; color: var(--text-3); margin: 6px 0 16px; }
+/* A machine's line breaks between its items, never inside one. */
+.machines dd span { white-space: nowrap; }
+.machines dd span:not(:last-of-type)::after { content: " \00b7"; color: var(--text-3); }
 .pending { font-family: var(--pixel); font-size: 12px; color: var(--gold); text-align: center; padding: 40px 0; line-height: 2; }
 .legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0; margin: 16px 0; font-size: 14px; }
 .legend li { display: flex; align-items: center; gap: 8px; }
@@ -338,7 +351,11 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
   nav.protocol a { font-size: 8px; padding: 6px 8px; }
 }
 /* What a section is, over its results; h2c below either, set apart. */
-.intro { font-size: 13px; color: var(--text-2); margin: 0 0 14px; max-width: 760px; }
+.intro { font-size: 13px; color: var(--text-2); margin: 0 0 14px; max-width: 760px;
+  border-left: 2px solid rgba(95,215,255,.55); padding: 1px 0 1px 10px; }
+/* No lone word on a paragraph's last line ("sees / it."). */
+.intro, .strip figcaption, .workloads .card p { text-wrap: pretty; }
+.intro .tag { font-family: var(--pixel); font-size: 8px; letter-spacing: .04em; color: var(--cyan); margin-right: 8px; }
 .h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 .h2c .class { color: var(--cyan); }
 .h2c .table { margin-top: 0; }

@@ -36,11 +36,12 @@ View :: [].{
 	## `key`: which chart this is in every class and section (chart_key).
 	## `variant`: the line under the summary (variant_line).
 	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), rows : List(Row), table : List(TableRow) }
-	Machine : { role : Str, text : Str }
-	## A class as one section shows it (`intro` says what the section is),
-	## and below, outside the section's toggle, the h2c comparison (one, or
-	## none in a race without it).
-	Class : { name : Str, label : Str, title : Str, machines : List(Machine), intro : Str, strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
+	## A machine's line, item by item: a line breaks between them only.
+	Machine : { role : Str, items : List(Str) }
+	## A class as one section shows it (`intro` says what the section is,
+	## under its tab's `section_label`), and below, outside the section's
+	## toggle, the h2c comparison (one, or none in a race without it).
+	Class : { name : Str, label : Str, title : Str, machines : List(Machine), section_label : Str, intro : Str, strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
 	## Plaintext three ways: HTTP/1.1, HTTP/2 without TLS (h2c), HTTP/2 and
 	## TLS; each step's change is what HTTP/2, then TLS, cost or gave.
 	## `strips`: the h2c workload's bars, one strip (a template's section
@@ -284,11 +285,24 @@ class_view = |run, class, section| {
 	described = run.machines.keep_if(|machine| machine.class == class.name or machine.class == "loader")
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
-	machines = ordered.map(|m| { role: m.role, text: "${m.size} · ${vcpus(m.cpus)}${memory(m.memory_mib)} · ${m.cpu} · Linux ${m.kernel}" })
+	machines = ordered.map(|m| { role: m.role, items: [m.size, vcpus(m.cpus)].concat(memory(m.memory_mib)).concat([cpu_name(m.cpu), "Linux ${m.kernel}"]) })
 	strips = in_section(closed(run.race.workloads), section).map(|workload| strip(run, class.name, workload))
 	open = open_charts(run, class.name).keep_if(|o| o.section == section).map(|o| o.chart)
-	{ name: class.name, label: class.label, title: class.title, machines, intro: intro(section), strips, open, h2c: h2c_view(run, class.name) }
+	{ name: class.name, label: class.label, title: class.title, machines, section_label: section_label(section), intro: intro(section), strips, open, h2c: h2c_view(run, class.name) }
 }
+
+## A section's tab label, beside its sentence so the two read as one.
+section_label : Str -> Str
+section_label = |section| if section == "tls" "HTTP/2 + TLS" else "HTTP/1.1"
+
+## A CPU's model name without its makers' marks and filler words, so a
+## machine's line stays short: "Intel(R) Xeon(R) Platinum 8280 CPU @
+## 2.70GHz" is "Intel Xeon Platinum 8280 @ 2.70GHz".
+cpu_name : Str -> Str
+cpu_name = |name| name.replace_each("(R)", "").replace_each("(TM)", "").replace_each(" CPU", "").replace_each(" Processor", "")
+
+expect cpu_name("Intel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz") == "Intel Xeon Platinum 8280 @ 2.70GHz"
+expect cpu_name("AMD EPYC 7543 32-Core Processor") == "AMD EPYC 7543 32-Core" and cpu_name("DO-Regular") == "DO-Regular"
 
 ## The workloads one section shows: its protocol's.
 in_section : List(Data.Workload), Str -> List(Data.Workload)
@@ -1029,16 +1043,16 @@ expect {
 	and limited_by(result([at(1322.0, 100.0)]), Bool.False) == "server CPU"
 }
 
-## A machine's memory as the kernel has it, " · 457 MiB" or " · 3.8 GiB";
+## A machine's memory as the kernel has it, "457 MiB" or "3.8 GiB";
 ## nothing for a run from before it was recorded (0).
-memory : U32 -> Str
+memory : U32 -> List(Str)
 memory = |mib|
 	if mib == 0 {
-		""
+		[]
 	} else if mib < 1024 {
-		" · ${mib.to_str()} MiB"
+		["${mib.to_str()} MiB"]
 	} else {
-		" · ${Format.one_decimal(mib.to_f64() / 1024.0)} GiB"
+		["${Format.one_decimal(mib.to_f64() / 1024.0)} GiB"]
 	}
 
-expect memory(0) == "" and memory(457) == " · 457 MiB" and memory(3916) == " · 3.8 GiB"
+expect memory(0) == [] and memory(457) == ["457 MiB"] and memory(3916) == ["3.8 GiB"]

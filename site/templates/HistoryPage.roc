@@ -63,6 +63,7 @@ HistoryPage :: [].{
 						variant : List(Str),
 					},
 				),
+				label : Str,
 				title : Str,
 			},
 		),

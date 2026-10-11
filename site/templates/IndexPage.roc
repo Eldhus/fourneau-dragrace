@@ -66,7 +66,8 @@ IndexPage :: [].{
 					},
 				),
 				intro : Str,
-				machines : List({ role : Str, text : Str }),
+				label : Str,
+				machines : List({ items : List(Str), role : Str }),
 				name : Str,
 				open : List(
 					{
@@ -97,6 +98,7 @@ IndexPage :: [].{
 						variant : List(Str),
 					},
 				),
+				section_label : Str,
 				strips : List(
 					{
 						key : Str,
