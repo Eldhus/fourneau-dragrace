@@ -34,8 +34,10 @@ View :: [].{
 		rss : Str,
 	}
 	## `key`: which chart this is in every class and section (chart_key).
-	## `variant`: the line under the summary (variant_line).
-	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), rows : List(Row), table : List(TableRow) }
+	## `variant`: the line under the summary (variant_line). `run`: the
+	## run's id, faint in the corner, so a picture of one chart says which
+	## race it is.
+	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, rows : List(Row), table : List(TableRow) }
 	## A machine's line, item by item: a line breaks between them only.
 	Machine : { role : Str, items : List(Str) }
 	## A class as one section shows it (`intro` says what the section is,
@@ -58,7 +60,7 @@ View :: [].{
 	## it ends, for spreading the labels apart (`spread_open`).
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note.
-	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -390,7 +392,7 @@ strip = |run, class, workload| {
 	# A local race's traffic is loopback: no network limit applies.
 	local = class == "local"
 	rows = results.map(|r| row(r, most, local))
-	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), rows, table: results.map(|r| table_row(r, local)) }
+	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, rows, table: results.map(|r| table_row(r, local)) }
 }
 
 ## Which chart a workload's is, the same in every class and section: its
@@ -828,15 +830,15 @@ open_charts = |run, class|
 		if results.is_empty() {
 			Err(NoLadder)
 		} else {
-			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), results, mixed: workload.kind == "mixed" }) })
+			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, results, mixed: workload.kind == "mixed" }) })
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: a mixed workload's is its
 ## slowest part's. (A switch to p50, p90, p99.9 and
 ## the mean was built and taken out; the charts all looked alike.)
-open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ key, title, summary, variant, results, mixed }| {
+open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
+open_chart = |{ key, title, summary, variant, run, results, mixed }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -865,7 +867,7 @@ open_chart = |{ key, title, summary, variant, results, mixed }| {
 		} else {
 			{ caption: ladder, measure: "p99 latency" }
 		}
-	{ key, title, caption, variant, measure, lines, ticks_x, ticks_y }
+	{ key, title, caption, variant, run, measure, lines, ticks_x, ticks_y }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine

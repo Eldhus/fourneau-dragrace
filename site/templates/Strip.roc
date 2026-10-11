@@ -23,6 +23,7 @@ Strip :: [].{
 				value : Str,
 			},
 		),
+		run : Str,
 		summary : Str,
 		table : List(
 			{

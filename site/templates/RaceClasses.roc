@@ -39,6 +39,7 @@ RaceClasses :: [].{
 										value : Str,
 									},
 								),
+								run : Str,
 								summary : Str,
 								table : List(
 									{
@@ -90,6 +91,7 @@ RaceClasses :: [].{
 							},
 						),
 						measure : Str,
+						run : Str,
 						ticks_x : List({ label : Str, x : Str }),
 						ticks_y : List(
 							{ label : Str, line_y : Str, text_y : Str },
@@ -117,6 +119,7 @@ RaceClasses :: [].{
 								value : Str,
 							},
 						),
+						run : Str,
 						summary : Str,
 						table : List(
 							{

@@ -5,7 +5,7 @@
 <p class="intro"><span class="tag">{{ section_label }}</span>{{ intro }}</p>
 <div class="strips">
 {{#strips}}{{> Strip}}{{/strips}}</div>
-{{#open}}<figure class="strip open" data-chart="{{ key }}"><figcaption><b>{{ title }}</b>{{ caption }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
+{{#open}}<figure class="strip open" data-chart="{{ key }}"><span class="run-id">{{ run }}</span><figcaption><b>{{ title }}</b>{{ caption }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
 <p class="axis-note y">&uarr; {{ measure }}</p>
 <div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: {{ measure }} by offered requests per second">
 {{#ticks_y}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>

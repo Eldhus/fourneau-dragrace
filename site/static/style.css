@@ -158,7 +158,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .legend li { display: flex; align-items: center; gap: 8px; }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; flex: none; }
 .strips { display: grid; gap: 22px; }
-.strip { min-width: 0; margin: 0; padding: 14px 16px 10px; background: rgba(33,18,53,.85); border: 1px solid var(--grid); }
+.strip { min-width: 0; margin: 0; padding: 14px 16px 14px; background: rgba(33,18,53,.85); border: 1px solid var(--grid);
+  position: relative; }
+/* The run's id, faint in a race chart's corner: a picture of one chart
+   says which race it is. */
+.run-id { position: absolute; right: 8px; bottom: 3px; font-size: 9px; line-height: 1; color: var(--text-3);
+  opacity: .55; letter-spacing: .02em; pointer-events: none; }
 /* A chart's words are its header, the bars the thing: the title on a line of its own, the summary small and
    quieter under it. */
 .strip figcaption { font-size: 12px; line-height: 1.45; color: var(--text-3); margin-bottom: 10px; }

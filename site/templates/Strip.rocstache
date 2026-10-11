@@ -1,4 +1,4 @@
-<figure class="strip" data-chart="{{ key }}"><figcaption><b>{{ title }}</b>{{ summary }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
+<figure class="strip" data-chart="{{ key }}"><span class="run-id">{{ run }}</span><figcaption><b>{{ title }}</b>{{ summary }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
 <div class="drag" role="list">
 {{#rows}}<div class="row" role="listitem" title="{{ tip }}"><span class="name">{{ competitor }}</span><span class="track">{{?valid}}<span class="bar s-{{ competitor }}{{?hollow}} hollow{{/hollow}}" style="--share:{{ share }}"></span>{{?ranged}}<span class="whisker" style="--low:{{ low }};--high:{{ high }}" aria-hidden="true"></span>{{/ranged}}<span class="figures"><span class="value">{{ value }}</span><span class="p99" title="{{ p99_tip }}">{{ p99 }}</span></span>{{/valid}}{{^valid}}<span class="value dnf">DNF</span>{{/valid}}</span></div>
 {{/rows}}</div>
