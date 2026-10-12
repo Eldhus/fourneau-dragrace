@@ -292,7 +292,8 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 func siteHostConfig(host string) (string, error) {
 	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
 		Home: siteHome, Service: "dragrace-site.service",
-		Health: "https://" + host + "/api/health"}, "", "  ")
+		Health:   "https://" + host + "/api/health",
+		Database: siteState + "/site.db", User: "site"}, "", "  ")
 	return string(config), err
 }
 

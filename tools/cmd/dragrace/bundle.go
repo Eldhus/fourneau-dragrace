@@ -21,7 +21,8 @@ import (
 //     workers: race.json, versions.json, workloads/, each competitor's
 //     competitor.json, and out/bin with the competitors, oha and this
 //     dragrace binary;
-//   - site.tar.gz: the site, for the site host: dragrace-site and static/;
+//   - site.tar.gz: the site, for the site host: dragrace-site, static/ and
+//     migrations/ (which the host agent runs: hostagent.go);
 //   - build.json: the commits built and each file's SHA-256 (the release's
 //     body too).
 //
@@ -74,7 +75,8 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	}
 	if info.Files["site.tar.gz"], err = writeTarball(filepath.Join(*out, "site.tar.gz"),
 		[]bundled{{"dragrace-site", siteBinary(root)}},
-		[]bundledTree{{"static", filepath.Join(root, "site", "static")}}); err != nil {
+		[]bundledTree{{"static", filepath.Join(root, "site", "static")},
+			{"migrations", filepath.Join(root, "site", "migrations")}}); err != nil {
 		return err
 	}
 	encoded, err := json.MarshalIndent(info, "", "  ")

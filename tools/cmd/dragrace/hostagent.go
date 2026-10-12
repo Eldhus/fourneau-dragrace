@@ -21,6 +21,12 @@ import (
 // does not answer /api/health within 30 s, the previous one is made
 // current again and that build is never tried again. Installed by the
 // owner (dragrace site install-host), never updated by a build.
+//
+// A release carries the site's migrations (site/migrations). The site
+// serving answered its health, so its database holds every migration its
+// release carries: those the new release carries beyond them are run,
+// with the site stopped, after a copy of the database; if the new site
+// then does not answer, the copy is put back with the old site.
 
 // HostConfig is the owner's, on the site host (/etc/dragrace-host).
 type HostConfig struct {
@@ -31,6 +37,10 @@ type HostConfig struct {
 	// The site's health, as the agent asks it (its certificate is for the
 	// host's address).
 	Health string `json:"health"`
+	// The site's database and the user it runs as, for migrations; empty in
+	// a config from before 2026-10-12, which migrates nothing.
+	Database string `json:"database"`
+	User     string `json:"user"`
 }
 
 // healthWait is how long a new site has to answer.
@@ -45,7 +55,10 @@ func commandHostAgent(ctx context.Context, args []string) error {
 		return err
 	}
 	agent := &HostAgent{config: config, fetch: httpFetch, restart: systemctlRestart,
-		healthy: httpHealthy}
+		stop: systemctlStop, healthy: httpHealthy,
+		sqlite: func(ctx context.Context, script string) error {
+			return runSQLite(ctx, config.User, config.Database, script)
+		}}
 	return agent.deploy(ctx)
 }
 
@@ -54,7 +67,11 @@ type HostAgent struct {
 	config  HostConfig
 	fetch   func(ctx context.Context, url, path string) error
 	restart func(ctx context.Context, service string) error
+	stop    func(ctx context.Context, service string) error
 	healthy func(ctx context.Context, url string) bool
+	// sqlite runs a script on the site's database as the site's user,
+	// stopping at the first statement that fails.
+	sqlite func(ctx context.Context, script string) error
 }
 
 func (agent *HostAgent) latest(name string) string {
@@ -110,6 +127,25 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 	}
 	log.Printf("deploying site %s (dragrace %s, roux %s)", id, short(info.Commits["fourneau-dragrace"]),
 		short(info.Commits["roux"]))
+	pending := pendingMigrations(current, release)
+	if len(pending) > 0 && agent.config.Database == "" {
+		log.Printf("site %s carries migrations %v, but this agent's config names no database: "+
+			"site install-server again", id, pending)
+		pending = nil
+	}
+	backup := ""
+	if len(pending) > 0 {
+		backup = filepath.Join(filepath.Dir(agent.config.Database), "backups", "pre-migration-"+id+".db")
+		// A request on the site's socket starts the site while it is
+		// stopped: let that be the new one, which waits for the lock.
+		if err := agent.link(release); err != nil {
+			return err
+		}
+		if err := agent.migrate(ctx, release, pending, backup); err != nil {
+			log.Printf("site %s: %v", id, err)
+			return agent.rollBack(ctx, id, current, backup)
+		}
+	}
 	if err := agent.switchTo(ctx, release); err != nil {
 		return err
 	}
@@ -118,10 +154,25 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 		pruneReleases(filepath.Join(home, "releases"), filepath.Base(release), filepath.Base(current))
 		return nil
 	}
-	log.Printf("site %s did not answer in %s: back to %s (a schema change wants a migration "+
-		"over SSH)", id, healthWait, filepath.Base(current))
+	log.Printf("site %s did not answer in %s: back to %s", id, healthWait, filepath.Base(current))
+	return agent.rollBack(ctx, id, current, backup)
+}
+
+// rollBack marks a build failed and serves the previous site again, on
+// the database as it was before the migrations, when there were any.
+func (agent *HostAgent) rollBack(ctx context.Context, id, current, backup string) error {
+	home := agent.config.Home
 	os.MkdirAll(filepath.Join(home, "failed"), 0o755)
 	os.WriteFile(filepath.Join(home, "failed", id), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
+	if backup != "" {
+		if err := agent.stop(ctx, agent.config.Service); err != nil {
+			return err
+		}
+		if err := agent.sqlite(ctx, ".restore '"+backup+"'\n"); err != nil {
+			return fmt.Errorf("site %s: putting the database back from %s: %w", id, backup, err)
+		}
+		log.Printf("site %s: the database put back from %s", id, backup)
+	}
 	if current == "" {
 		return fmt.Errorf("site %s failed, and there is no previous one", id)
 	}
@@ -134,6 +185,56 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 	return fmt.Errorf("site %s rolled back", id)
 }
 
+// migrate stops the site, copies its database to backup, and runs the
+// migrations named, in order, each with -bail.
+func (agent *HostAgent) migrate(ctx context.Context, release string, pending []string,
+	backup string) error {
+	if err := agent.stop(ctx, agent.config.Service); err != nil {
+		return err
+	}
+	os.Remove(backup) // VACUUM INTO refuses a file that exists
+	if err := agent.sqlite(ctx, "VACUUM INTO '"+backup+"';\n"); err != nil {
+		return fmt.Errorf("the copy before migrating: %w", err)
+	}
+	for _, name := range pending {
+		script, err := os.ReadFile(filepath.Join(release, "migrations", name))
+		if err != nil {
+			return err
+		}
+		if err := agent.sqlite(ctx, string(script)); err != nil {
+			return fmt.Errorf("migration %s: %w", name, err)
+		}
+		log.Printf("migrated: %s", name)
+	}
+	return nil
+}
+
+// pendingMigrations are the migrations release carries that current does
+// not, by name, in order. None when current carries no migrations
+// directory: a release from before 2026-10-12, whose database's migrations
+// are unknown (the first release that carries them deploys without any).
+func pendingMigrations(current, release string) []string {
+	if current == "" {
+		return nil // a first site makes its database from schema.sql
+	}
+	have, err := os.ReadDir(filepath.Join(current, "migrations"))
+	if err != nil {
+		return nil
+	}
+	ran := map[string]bool{}
+	for _, entry := range have {
+		ran[entry.Name()] = true
+	}
+	carried, _ := os.ReadDir(filepath.Join(release, "migrations"))
+	var pending []string
+	for _, entry := range carried { // ReadDir sorts by name: by date
+		if strings.HasSuffix(entry.Name(), ".sql") && !ran[entry.Name()] {
+			pending = append(pending, entry.Name())
+		}
+	}
+	return pending
+}
+
 func short(sha string) string {
 	if len(sha) > 7 {
 		return sha[:7]
@@ -143,15 +244,20 @@ func short(sha string) string {
 
 // switchTo points current at a release, atomically, and restarts the site.
 func (agent *HostAgent) switchTo(ctx context.Context, release string) error {
+	if err := agent.link(release); err != nil {
+		return err
+	}
+	return agent.restart(ctx, agent.config.Service)
+}
+
+// link points current at a release, atomically.
+func (agent *HostAgent) link(release string) error {
 	link := filepath.Join(agent.config.Home, "current")
 	os.Remove(link + ".new")
 	if err := os.Symlink(release, link+".new"); err != nil {
 		return err
 	}
-	if err := os.Rename(link+".new", link); err != nil {
-		return err
-	}
-	return agent.restart(ctx, agent.config.Service)
+	return os.Rename(link+".new", link)
 }
 
 // pruneReleases keeps the releases named, and deletes the rest.
@@ -202,9 +308,33 @@ func httpFetch(ctx context.Context, url, path string) error {
 }
 
 func systemctlRestart(ctx context.Context, service string) error {
-	output, err := exec.CommandContext(ctx, "systemctl", "restart", service).CombinedOutput()
+	return systemctl(ctx, "restart", service)
+}
+
+// systemctlStop stops the site; systemd keeps its sockets, so a client
+// waits in their queue (and starts it again: see deploy).
+func systemctlStop(ctx context.Context, service string) error {
+	return systemctl(ctx, "stop", service)
+}
+
+func systemctl(ctx context.Context, verb, service string) error {
+	output, err := exec.CommandContext(ctx, "systemctl", verb, service).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("systemctl restart %s: %v: %s", service, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("systemctl %s %s: %v: %s", verb, service, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// runSQLite runs a script with sqlite3 as the site's user (the files it
+// makes are the site's), -bail stopping at the first failed statement
+// (without it a migration runs on to its DROP and COMMIT),
+// waiting up to 10 s for a lock.
+func runSQLite(ctx context.Context, user, database, script string) error {
+	command := exec.CommandContext(ctx, "runuser", "-u", user, "--", "sqlite3", "-bail", database)
+	command.Stdin = strings.NewReader(".timeout 10000\n" + script)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("sqlite3: %v: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
