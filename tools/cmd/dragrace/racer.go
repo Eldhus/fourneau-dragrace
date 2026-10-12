@@ -797,14 +797,22 @@ func (racer *Racer) recover(ctx context.Context) {
 //
 // A binary built by hand (no buildCommit: the one `racer install` starts
 // it with) is replaced too, so the racer never stays on it.
+//
+// Only to the commit the site serves: the racer and the site speak one
+// API, so a site that did not deploy keeps the racer that works with it.
 func (racer *Racer) update(ctx context.Context) error {
 	builds, err := racer.github.builds(ctx)
 	if err != nil || len(builds) == 0 {
 		return err
 	}
 	newest := builds[0]
-	if newest.Info.Commits["fourneau-dragrace"] == buildCommit {
+	commit := newest.Info.Commits["fourneau-dragrace"]
+	if commit == buildCommit {
 		return nil
+	}
+	if served := racer.siteCommit(ctx); served != commit {
+		return fmt.Errorf("held at %s: the newest build is %s, the site serves %q", short(buildCommit),
+			short(commit), short(served))
 	}
 	dir := filepath.Join(racer.config.State, "update")
 	os.RemoveAll(dir)
@@ -832,4 +840,16 @@ func (racer *Racer) update(ctx context.Context) error {
 	log.Printf("updated to %s: restarting", newest.Info.Commits["fourneau-dragrace"])
 	os.Exit(0)
 	return nil
+}
+
+// siteCommit is the commit of this repository the site serves, from the
+// /site.json its release carries (bundle.go); "" when it does not say.
+func (racer *Racer) siteCommit(ctx context.Context) string {
+	var served struct {
+		Commit string `json:"fourneau-dragrace"`
+	}
+	if err := racer.site.get(ctx, "/site.json", &served); err != nil {
+		return ""
+	}
+	return served.Commit
 }

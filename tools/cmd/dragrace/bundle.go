@@ -21,8 +21,9 @@ import (
 //     workers: race.json, versions.json, workloads/, each competitor's
 //     competitor.json, and out/bin with the competitors, oha and this
 //     dragrace binary;
-//   - site.tar.gz: the site, for the site host: dragrace-site, static/ and
-//     migrations/ (which the host agent runs: hostagent.go);
+//   - site.tar.gz: the site, for the site host: dragrace-site, static/
+//     with site.json (the commit, which the racer reads), and migrations/
+//     (which the host agent runs: hostagent.go);
 //   - build.json: the commits built and each file's SHA-256 (the release's
 //     body too).
 //
@@ -73,8 +74,18 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 		raceFiles, trees); err != nil {
 		return err
 	}
+	// The commit the site serves, at /site.json: the racer updates only to
+	// it (racer.update).
+	siteJSON, err := json.Marshal(map[string]string{"fourneau-dragrace": fingerprint.Dragrace})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(*out, "site.json"), siteJSON, 0o644); err != nil {
+		return err
+	}
 	if info.Files["site.tar.gz"], err = writeTarball(filepath.Join(*out, "site.tar.gz"),
-		[]bundled{{"dragrace-site", siteBinary(root)}},
+		[]bundled{{"dragrace-site", siteBinary(root)},
+			{"static/site.json", filepath.Join(*out, "site.json")}},
 		[]bundledTree{{"static", filepath.Join(root, "site", "static")},
 			{"migrations", filepath.Join(root, "site", "migrations")}}); err != nil {
 		return err

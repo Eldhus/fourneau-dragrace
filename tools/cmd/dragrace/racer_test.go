@@ -51,6 +51,28 @@ func TestBuildOfTheHeads(t *testing.T) {
 	}
 }
 
+// The racer reads the commit the site serves; a site from before
+// site.json (404) says nothing, so the racer holds.
+func TestSiteCommit(t *testing.T) {
+	serving := `{"fourneau-dragrace":"c6d7919"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/site.json" || serving == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(serving))
+	}))
+	defer server.Close()
+	racer := &Racer{site: newSiteClient(server.URL, "token")}
+	if got := racer.siteCommit(context.Background()); got != "c6d7919" {
+		t.Fatalf("served %q", got)
+	}
+	serving = ""
+	if got := racer.siteCommit(context.Background()); got != "" {
+		t.Fatalf("a site without site.json: %q", got)
+	}
+}
+
 func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 	info := BuildInfo{Commits: map[string]string{"fourneau-dragrace": "a", "fourneau": "b",
 		"roux": "c"}, Files: map[string]string{"race.tar.gz": "00"}}
