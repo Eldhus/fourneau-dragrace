@@ -102,85 +102,190 @@ func TestHostAgentDeploysAndRollsBack(t *testing.T) {
 	}
 }
 
-func TestHostAgentMigrates(t *testing.T) {
-	published, home, state := t.TempDir(), t.TempDir(), t.TempDir()
-	database := []string{"a.sql"} // the first site made it: release one's schema
-	var copied []string
-	stops, broken := 0, ""
-	current := func() string {
-		link, _ := os.Readlink(filepath.Join(home, "current"))
-		return link
-	}
-	agent := &HostAgent{config: HostConfig{Home: home, Service: "dragrace-site.service",
-		Database: filepath.Join(state, "site.db"), User: "site"},
+// siteHost is a site host for the agent: a fake database that holds the
+// migrations run on it (its copy a file, so a .partial one is never
+// read), and a site that answers only on a database holding exactly its
+// release's migrations, as roux opens only the schema it was built with.
+// Each effect counts a step; at crashAt it panics, as an agent killed.
+type siteHost struct {
+	t                      *testing.T
+	published, home, state string
+	database               []string
+	stops, steps, crashAt  int
+	broken                 string
+	agent                  *HostAgent
+}
+
+type crashed struct{}
+
+func newSiteHost(t *testing.T) *siteHost {
+	host := &siteHost{t: t, published: t.TempDir(), home: t.TempDir(), state: t.TempDir(),
+		database: []string{"a.sql"}} // the first site made it: release one's schema
+	os.MkdirAll(filepath.Join(host.state, "backups"), 0o755)
+	host.agent = &HostAgent{config: HostConfig{Home: host.home, Service: "dragrace-site.service",
+		Database: filepath.Join(host.state, "site.db"), User: "site"},
 		fetch: func(_ context.Context, url, path string) error {
-			bytes, err := os.ReadFile(filepath.Join(published, filepath.Base(url)))
+			bytes, err := os.ReadFile(filepath.Join(host.published, filepath.Base(url)))
 			if err != nil {
 				return err
 			}
 			return os.WriteFile(path, bytes, 0o644)
 		},
-		restart: func(context.Context, string) error { return nil },
-		stop:    func(context.Context, string) error { stops++; return nil },
-		healthy: func(context.Context, string) bool {
-			if binary, _ := os.ReadFile(filepath.Join(current(), "dragrace-site")); string(binary) == broken {
-				return false
+		restart: func(context.Context, string) error { host.step(); return nil },
+		stop:    func(context.Context, string) error { host.step(); host.stops++; return nil },
+		healthy: func(context.Context, string) bool { host.step(); return host.answers() },
+		sqlite:  host.sqlite,
+	}
+	return host
+}
+
+func (host *siteHost) step() {
+	host.steps++
+	if host.steps == host.crashAt {
+		panic(crashed{})
+	}
+}
+
+func (host *siteHost) current() string {
+	link, _ := os.Readlink(filepath.Join(host.home, "current"))
+	return link
+}
+
+func (host *siteHost) answers() bool {
+	binary, _ := os.ReadFile(filepath.Join(host.current(), "dragrace-site"))
+	if string(binary) == host.broken {
+		return false
+	}
+	entries, _ := os.ReadDir(filepath.Join(host.current(), "migrations"))
+	var carried []string
+	for _, entry := range entries {
+		carried = append(carried, entry.Name())
+	}
+	return strings.Join(carried, " ") == host.holds()
+}
+
+func (host *siteHost) holds() string { return strings.Join(host.database, " ") }
+
+func (host *siteHost) sqlite(_ context.Context, script string) error {
+	host.step()
+	quoted := func() string { return script[strings.Index(script, "'")+1 : strings.LastIndex(script, "'")] }
+	switch {
+	case strings.HasPrefix(script, "VACUUM INTO '"):
+		return os.WriteFile(quoted(), []byte(host.holds()), 0o644)
+	case strings.HasPrefix(script, ".restore '"):
+		bytes, err := os.ReadFile(quoted())
+		if err != nil {
+			return err
+		}
+		host.database = strings.Fields(string(bytes))
+	case strings.Contains(script, "fails"):
+		return fmt.Errorf("Parse error near line 1")
+	default:
+		host.database = append(host.database, script)
+	}
+	return nil
+}
+
+// deploy publishes a site carrying migrations (each script its own name),
+// and runs the agent once; a crash is reported, not raised.
+func (host *siteHost) deploy(site string, migrations ...string) (err error, crash bool) {
+	host.t.Helper()
+	scripts := map[string]string{}
+	for _, name := range migrations {
+		scripts[name] = name
+	}
+	if site != "" {
+		publishSiteWith(host.t, host.published, site, scripts)
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if _, ok := recovered.(crashed); !ok {
+				panic(recovered)
 			}
-			entries, _ := os.ReadDir(filepath.Join(current(), "migrations"))
-			var carried []string
-			for _, entry := range entries {
-				carried = append(carried, entry.Name())
-			}
-			return strings.Join(carried, " ") == strings.Join(database, " ")
-		},
-		sqlite: func(_ context.Context, script string) error {
-			switch {
-			case strings.HasPrefix(script, "VACUUM INTO '"+filepath.Join(state, "backups")):
-				copied = append([]string(nil), database...)
-			case strings.HasPrefix(script, ".restore '"+filepath.Join(state, "backups")):
-				database = append([]string(nil), copied...)
-			case strings.Contains(script, "fails"):
-				return fmt.Errorf("Parse error near line 1")
-			default:
-				database = append(database, script)
-			}
-			return nil
-		},
+			crash = true
+		}
+	}()
+	return host.agent.deploy(context.Background()), false
+}
+
+func TestHostAgentMigrates(t *testing.T) {
+	host := newSiteHost(t)
+	if err, _ := host.deploy("one", "a.sql"); err != nil || host.stops != 0 {
+		t.Fatalf("the first site: %v, %d stops", err, host.stops)
 	}
-	ctx := context.Background()
-	deploy := func(site string, migrations map[string]string) error {
-		t.Helper()
-		publishSiteWith(t, published, site, migrations)
-		return agent.deploy(ctx)
+	if err, _ := host.deploy("two", "a.sql", "b.sql"); err != nil || host.stops != 1 {
+		t.Fatalf("one migration: %v, %d stops", err, host.stops)
 	}
-	one := map[string]string{"a.sql": "a.sql"}
-	if err := deploy("one", one); err != nil || stops != 0 {
-		t.Fatalf("the first site: %v, %d stops", err, stops)
+	copies, _ := filepath.Glob(filepath.Join(host.state, "backups", "pre-migration-*.db"))
+	if len(copies) != 1 {
+		t.Fatalf("copies %v", copies)
 	}
-	two := map[string]string{"a.sql": "a.sql", "b.sql": "b.sql"}
-	if err := deploy("two", two); err != nil || stops != 1 || len(copied) != 1 {
-		t.Fatalf("one migration: %v, %d stops, copied %v", err, stops, copied)
+	serving := host.current()
+	host.agent.sqlite = func(ctx context.Context, script string) error {
+		if strings.TrimSpace(script) == "c.sql" {
+			script = "fails"
+		}
+		return host.sqlite(ctx, script)
 	}
-	serving := current()
-	three := map[string]string{"a.sql": "a.sql", "b.sql": "b.sql", "c.sql": "fails"}
-	if err := deploy("three", three); err == nil || !strings.Contains(err.Error(), "rolled back") {
+	err, _ := host.deploy("three", "a.sql", "b.sql", "c.sql")
+	if err == nil || !strings.Contains(err.Error(), "rolled back") {
 		t.Fatalf("a migration that fails: %v", err)
 	}
-	if current() != serving || strings.Join(database, " ") != "a.sql b.sql" {
-		t.Fatalf("after a failed migration: %s on %v", current(), database)
+	if host.current() != serving || host.holds() != "a.sql b.sql" {
+		t.Fatalf("after a failed migration: %s on %v", host.current(), host.database)
 	}
-	four := map[string]string{"a.sql": "a.sql", "b.sql": "b.sql", "d.sql": "d.sql"}
-	broken = "four"
-	if err := deploy("four", four); err == nil || !strings.Contains(err.Error(), "rolled back") {
+	host.broken = "four"
+	err, _ = host.deploy("four", "a.sql", "b.sql", "d.sql")
+	if err == nil || !strings.Contains(err.Error(), "rolled back") {
 		t.Fatalf("migrated, then not answering: %v", err)
 	}
-	if current() != serving || strings.Join(database, " ") != "a.sql b.sql" {
-		t.Fatalf("after a site that did not answer: %s on %v", current(), database)
+	if host.current() != serving || host.holds() != "a.sql b.sql" {
+		t.Fatalf("after a site that did not answer: %s on %v", host.current(), host.database)
 	}
-	broken = ""
-	five := map[string]string{"a.sql": "a.sql", "b.sql": "b.sql", "e.sql": "e.sql"}
-	if err := deploy("five", five); err != nil || strings.Join(database, " ") != "a.sql b.sql e.sql" {
-		t.Fatalf("the next build: %v, on %v", err, database)
+	host.broken = ""
+	if err, _ := host.deploy("five", "a.sql", "b.sql", "e.sql"); err != nil || host.holds() != "a.sql b.sql e.sql" {
+		t.Fatalf("the next build: %v, on %v", err, host.database)
+	}
+	if _, err := os.Stat(host.agent.journalPath()); err == nil {
+		t.Fatal("a journal left after deploys that ended")
+	}
+}
+
+// An agent killed at any step of a deploy with migrations (a reboot) is
+// ended by the next run, and the build tried again: the host ends serving
+// the new site on its migrations, never a site on a database not its own.
+func TestHostAgentFinishesAnInterruptedDeploy(t *testing.T) {
+	for crashAt := 1; ; crashAt++ {
+		host := newSiteHost(t)
+		if err, _ := host.deploy("one", "a.sql"); err != nil {
+			t.Fatal(err)
+		}
+		host.steps, host.crashAt = 0, crashAt
+		_, crash := host.deploy("two", "a.sql", "b.sql", "c.sql")
+		if !crash {
+			if crashAt < 4 {
+				t.Fatalf("a deploy of %d steps", crashAt)
+			}
+			break // every step has been a crash
+		}
+		host.crashAt = 0
+		for run := 1; ; run++ {
+			if run > 3 {
+				t.Fatalf("crash at step %d: not ended in 3 runs: %s on %v", crashAt,
+					filepath.Base(host.current()), host.database)
+			}
+			host.deploy("")
+			if host.answers() && host.holds() == "a.sql b.sql c.sql" {
+				break
+			}
+		}
+		if _, err := os.Stat(host.agent.journalPath()); err == nil {
+			t.Fatalf("crash at step %d: the journal left", crashAt)
+		}
+		failed, _ := os.ReadDir(filepath.Join(host.home, "failed"))
+		if len(failed) != 0 {
+			t.Fatalf("crash at step %d: the build marked failed", crashAt)
+		}
 	}
 }
 

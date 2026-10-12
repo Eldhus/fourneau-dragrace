@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -79,7 +81,11 @@ func (agent *HostAgent) latest(name string) string {
 }
 
 // deploy makes the newest build's site current, unless it is, or failed.
+// A deploy the agent did not finish is ended first.
 func (agent *HostAgent) deploy(ctx context.Context) error {
+	if found, err := agent.finishInterrupted(ctx); found {
+		return err
+	}
 	home := agent.config.Home
 	work := filepath.Join(home, "download")
 	if err := os.MkdirAll(work, 0o755); err != nil {
@@ -136,6 +142,10 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 	backup := ""
 	if len(pending) > 0 {
 		backup = filepath.Join(filepath.Dir(agent.config.Database), "backups", "pre-migration-"+id+".db")
+		journal := deployJournal{Build: id, Release: release, Previous: current, Backup: backup}
+		if err := agent.writeJournal(journal); err != nil {
+			return err
+		}
 		// A request on the site's socket starts the site while it is
 		// stopped: let that be the new one, which waits for the lock.
 		if err := agent.link(release); err != nil {
@@ -151,11 +161,90 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 	}
 	if agent.healthy(ctx, agent.config.Health) {
 		log.Printf("site %s is serving", id)
+		if err := agent.removeJournal(); err != nil {
+			return err
+		}
 		pruneReleases(filepath.Join(home, "releases"), filepath.Base(release), filepath.Base(current))
 		return nil
 	}
 	log.Printf("site %s did not answer in %s: back to %s", id, healthWait, filepath.Base(current))
 	return agent.rollBack(ctx, id, current, backup)
+}
+
+// deployJournal is a deploy with migrations under way: written beside the
+// database before the site stops, removed when the deploy ends either way.
+// An agent killed or a host rebooted mid-way leaves it, and the next run
+// ends that deploy (finishInterrupted): no state but this, the release
+// serving, and the copy.
+type deployJournal struct {
+	Build    string `json:"build"`
+	Release  string `json:"release"`
+	Previous string `json:"previous"`
+	Backup   string `json:"backup"` // whole when it exists (migrate)
+}
+
+func (agent *HostAgent) journalPath() string {
+	return filepath.Join(filepath.Dir(agent.config.Database), "deploying.json")
+}
+
+// writeJournal writes the journal whole or not at all.
+func (agent *HostAgent) writeJournal(journal deployJournal) error {
+	encoded, err := json.Marshal(journal)
+	if err != nil {
+		return err
+	}
+	path := agent.journalPath()
+	if err := os.WriteFile(path+".new", encoded, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(path+".new", path)
+}
+
+func (agent *HostAgent) removeJournal() error {
+	if agent.config.Database == "" {
+		return nil // no migrations, so no journal
+	}
+	if err := os.Remove(agent.journalPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// finishInterrupted ends a deploy the journal says did not finish: the new
+// release, if it is linked and answers once started (every migration had
+// run); otherwise the copy put back, when there is one, and the previous
+// release. Not marked failed: the next run tries the build again from the
+// start (a reboot is the likely cause, not the build). Found is whether
+// there was one; a failure leaves the journal for the next run.
+func (agent *HostAgent) finishInterrupted(ctx context.Context) (found bool, err error) {
+	if agent.config.Database == "" {
+		return false, nil
+	}
+	var journal deployJournal
+	if err := readJSON(agent.journalPath(), &journal); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return true, err
+	}
+	log.Printf("site %s: a deploy that did not finish (the agent stopped mid-way): ending it",
+		journal.Build)
+	current, _ := os.Readlink(filepath.Join(agent.config.Home, "current"))
+	if current == journal.Release {
+		if err := agent.restart(ctx, agent.config.Service); err == nil &&
+			agent.healthy(ctx, agent.config.Health) {
+			log.Printf("site %s is serving: its migrations had all run", journal.Build)
+			return true, agent.removeJournal()
+		}
+	}
+	backup := journal.Backup
+	if _, err := os.Stat(backup); err != nil {
+		backup = "" // the copy did not finish, so no migration ran
+	}
+	if err := agent.undo(ctx, journal.Build, journal.Previous, backup); err != nil {
+		return true, err
+	}
+	return true, fmt.Errorf("site %s: the deploy that did not finish is undone; tried again next", journal.Build)
 }
 
 // rollBack marks a build failed and serves the previous site again, on
@@ -164,6 +253,16 @@ func (agent *HostAgent) rollBack(ctx context.Context, id, current, backup string
 	home := agent.config.Home
 	os.MkdirAll(filepath.Join(home, "failed"), 0o755)
 	os.WriteFile(filepath.Join(home, "failed", id), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
+	if err := agent.undo(ctx, id, current, backup); err != nil {
+		return err
+	}
+	return fmt.Errorf("site %s rolled back", id)
+}
+
+// undo serves the previous site again, on the copy when there is one, and
+// ends the journal. A failure before the previous site is linked leaves
+// the journal, so the next run tries again.
+func (agent *HostAgent) undo(ctx context.Context, id, current, backup string) error {
 	if backup != "" {
 		if err := agent.stop(ctx, agent.config.Service); err != nil {
 			return err
@@ -179,10 +278,13 @@ func (agent *HostAgent) rollBack(ctx context.Context, id, current, backup string
 	if err := agent.switchTo(ctx, current); err != nil {
 		return err
 	}
+	if err := agent.removeJournal(); err != nil {
+		return err
+	}
 	if !agent.healthy(ctx, agent.config.Health) {
 		return fmt.Errorf("the previous site does not answer either")
 	}
-	return fmt.Errorf("site %s rolled back", id)
+	return nil
 }
 
 // migrate stops the site, copies its database to backup, and runs the
@@ -192,9 +294,15 @@ func (agent *HostAgent) migrate(ctx context.Context, release string, pending []s
 	if err := agent.stop(ctx, agent.config.Service); err != nil {
 		return err
 	}
-	os.Remove(backup) // VACUUM INTO refuses a file that exists
-	if err := agent.sqlite(ctx, "VACUUM INTO '"+backup+"';\n"); err != nil {
+	// The copy exists only whole: an agent stopped while copying leaves a
+	// .partial, and no migration ran (finishInterrupted).
+	partial := backup + ".partial"
+	os.Remove(partial) // VACUUM INTO refuses a file that exists
+	if err := agent.sqlite(ctx, "VACUUM INTO '"+partial+"';\n"); err != nil {
 		return fmt.Errorf("the copy before migrating: %w", err)
+	}
+	if err := os.Rename(partial, backup); err != nil {
+		return err
 	}
 	for _, name := range pending {
 		script, err := os.ReadFile(filepath.Join(release, "migrations", name))
