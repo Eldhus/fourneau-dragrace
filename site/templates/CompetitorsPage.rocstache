@@ -1,20 +1,20 @@
 {{> Top}}<article class="prose">
 <h1>Competitors</h1>
-<p>These five, and no others: the field is closed. Any of them may be made faster, fairly (<a href="/contribute">Contribute</a>).</p>
-<p>Each card says how the server waits on the network (io), renders the menu page (templates), talks to SQLite (db), and is built.</p>
+<p>Five servers. Make any of them faster or fairer: <a href="/contribute">Contribute</a>.</p>
 <div class="cards competitors">
 {{#competitors}}<section class="card competitor"><h3><span class="swatch s-{{ name }}"></span>{{ name }}<span class="lang">{{ language }}</span></h3>
 <dl class="facts"><dt>io</dt><dd>{{ io }}</dd><dt>templates</dt><dd>{{ templates }}</dd><dt>db</dt><dd>{{ db }}</dd><dt>build</dt><dd class="build">{{ build }}</dd></dl>
 <p class="links">{{#links}}<a href="{{ href }}">{{ label }}</a>{{/links}}</p>
 <p class="about">{{ about }}</p></section>
 {{/competitors}}</div>
+<section class="pins">
 <h2>Versions</h2>
-<p>Everything is pinned, and each race records what it raced. fourneau and roux are the two things that move, on purpose: a race takes the newest commit of each.</p>
+<p>As the last race recorded them.</p>
 <table>
-<thead><tr><th>what</th><th>pinned to</th></tr></thead>
 <tbody>
 {{#pins}}<tr><td>{{ name }}</td><td>{{ version }}</td></tr>
 {{/pins}}</tbody>
 </table>
+</section>
 </article>
 {{> Bottom}}

@@ -1,10 +1,12 @@
 ## The competitors as the Competitors page briefs them:
 ## the language, then four facts in a fixed order (how the server waits on
 ## the network, how it renders the menu page, how it talks to SQLite, how
-## it is built), the project's own links and the source, and a few
-## sentences for someone meeting it for the first time. Each fact comes
-## from the competitor's README and competitor.json; the language must
-## match competitor.json's, which each run records.
+## it is built), the project's own links and the source, and a sentence or
+## two for someone meeting it for the first time. Terse: if you know, you
+## know; if you don't, look it up. Each fact reads
+## "the thing: its details". Each comes from the competitor's README and
+## competitor.json; the language must match competitor.json's, which each
+## run records.
 Competitors :: [].{
 	Link : { label : Str, href : Str }
 
@@ -24,52 +26,52 @@ Competitors :: [].{
 		{
 			name: "go",
 			language: "Go",
-			io: "net/http: a goroutine per connection, on the runtime’s epoll poller",
-			templates: "html/template, parsed once at start",
-			db: "database/sql with modernc.org/sqlite (SQLite translated to Go)",
-			build: "go build -trimpath, CGO_ENABLED=0 (static), GOAMD64=v3",
+			io: "net/http: goroutine per connection, epoll netpoller",
+			templates: "html/template: parsed at startup",
+			db: "database/sql: modernc.org/sqlite",
+			build: "go build: -trimpath, CGO_ENABLED=0, GOAMD64=v3",
 			links: [{ label: "net/http", href: "https://pkg.go.dev/net/http" }, source("go")],
-			about: "The baseline: Go’s standard library and nothing else. Each connection is ordinary blocking code on its own goroutine, and the runtime parks them all on one poller. It is what most teams would ship without thinking twice.",
+			about: "The baseline, as most teams would ship it: Go on its standard library.",
 		},
 		{
 			name: "axum",
 			language: "Rust",
-			io: "tokio’s multi-threaded runtime, a worker per core stealing work (epoll); hyper underneath",
-			templates: "askama 0.16, compiled into the binary",
-			db: "sqlx 0.8, SQLite bundled",
-			build: "cargo build --release, LTO, one codegen unit, x86-64-v3",
+			io: "hyper on tokio: work-stealing threads, epoll",
+			templates: "askama: compiled in",
+			db: "sqlx",
+			build: "cargo build --release: LTO, codegen-units=1, x86-64-v3",
 			links: [{ label: "axum", href: "https://github.com/tokio-rs/axum" }, { label: "tokio", href: "https://tokio.rs" }, source("axum")],
-			about: "Rust’s most used web framework, written the way its documentation shows. Every request is a future; tokio’s worker threads take work from each other so no core sits idle.",
+			about: "Rust’s most used web framework, by the book: Rust on tokio.",
 		},
 		{
 			name: "fourneau-zig",
 			language: "Zig",
-			io: "fourneau: io_uring, a fiber per connection, one shard per core sharing nothing",
-			templates: "hand-written Zig, split into parts at compile time (about 80 lines)",
-			db: "SQLite compiled in, a connection per shard",
-			build: "zig build, ReleaseSafe (assertions on), x86-64-v3",
+			io: "fourneau: io_uring, fiber per connection, shard per core",
+			templates: "pure Zig, no engine: the floor",
+			db: "SQLite amalgamation: connection per shard",
+			build: "zig build: ReleaseSafe, x86-64-v3",
 			links: [{ label: "fourneau", href: "https://github.com/Eldhus/fourneau" }, source("fourneau-zig")],
-			about: "fourneau, the server this race was built to measure, with a handler in plain Zig. io_uring hands the kernel whole batches of work instead of asking about each socket. It shares no template code with roux, so its menu page is the ceiling roux’s templates aim for.",
+			about: "The server this race exists to measure, bare: Zig on fourneau.",
 		},
 		{
 			name: "roux",
 			language: "Roc",
-			io: "fourneau underneath: io_uring, fibers, a shard per core",
-			templates: "rocstache, compiled to bytecode and run by the host as the response is sent",
-			db: "roux’s SQLite, every query typed at build time by roux-db",
-			build: "roux build: Roc --opt=speed, the host ReleaseSafe, one static binary",
+			io: "fourneau: io_uring, fiber per connection, shard per core",
+			templates: "rocstache: Roc-typed, compiled to bytecode",
+			db: "roux-db: SQL compiled to typed Roc",
+			build: "roux build: Roc --opt=speed, host ReleaseSafe, one static binary",
 			links: [{ label: "roux", href: "https://github.com/Eldhus/roux" }, { label: "fourneau", href: "https://github.com/Eldhus/fourneau" }, source("roux")],
-			about: "A Roc app on roux, the platform built on fourneau. The handler is pure Roc; the server, the templates and the database belong to the platform, all compiled into one static binary. The distance between roux and fourneau-zig is what Roc costs.",
+			about: "Eldhus’s Roc platform, a pure handler: Roc on fourneau. The gap to fourneau-zig is what Roc costs.",
 		},
 		{
 			name: "basic-webserver",
 			language: "Roc",
-			io: "hyper on tokio; each handler runs on a pool of threads",
-			templates: "the platform’s Html module",
-			db: "the platform’s Sqlite, a pool of 32 connections",
-			build: "roc build (--opt=speed) against the 0.17.0 release",
+			io: "hyper on tokio: epoll, Roc handlers on a thread pool",
+			templates: "Html: the platform’s module",
+			db: "Sqlite: raw libsqlite3-sys, the host’s own pool of 32",
+			build: "roc build: --opt=speed, the released platform",
 			links: [{ label: "basic-webserver", href: "https://github.com/roc-lang/basic-webserver" }, source("basic-webserver")],
-			about: "Roc’s own web platform as released, with only its limits raised to take the race’s load. The same language as roux on a different host: Rust where roux is Zig. It speaks plain HTTP only, so it sits out the TLS workloads.",
+			about: "Roc’s reference web platform, as released: Roc on Rust.",
 		},
 	]
 
