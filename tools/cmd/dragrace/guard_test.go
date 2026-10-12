@@ -295,6 +295,48 @@ func TestGuardOverItsSocket(t *testing.T) {
 	if len(fake.droplets) != 1 {
 		t.Fatalf("left: %v", fake.droplets)
 	}
+	allowed, err := client.allowed(ctx)
+	if err != nil || allowed.Region != guard.config.Region || len(allowed.Sizes) != len(guard.config.Sizes) {
+		t.Fatalf("allowed: %+v %v", allowed, err)
+	}
+	// A guard installed before /allowed answers 404.
+	var unknown []string
+	if err := client.call(ctx, http.MethodGet, "/nothing", nil, &unknown); !errors.Is(err, errGuardUnknown) {
+		t.Fatalf("a path the guard does not know: %v", err)
+	}
+}
+
+// What the guard would refuse is found before a droplet: a third class
+// whose size the guard's install does not have.
+func TestGuardRefusalsBeforeADroplet(t *testing.T) {
+	two := []ServerClass{{Name: "smallest", Size: "s-1vcpu-512mb-10gb", LoaderSize: "c-4"},
+		{Name: "dedicated-2", Size: "c-2", LoaderSize: "c-4"}}
+	cloud := Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180, Servers: two}
+	prices := map[string]float64{"s-1vcpu-512mb-10gb": 0.006, "c-2": 0.0625, "c-4": 0.125,
+		"s-2vcpu-2gb-amd": 0.0312}
+	allowed := guardConfigFor(Race{Cloud: cloud}, prices, 25)
+	if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
+		t.Fatalf("the race the guard was installed for: %v", problems)
+	}
+	cloud.Servers = append(two, ServerClass{Name: "basic-amd-2", Size: "s-2vcpu-2gb-amd", LoaderSize: "c-4"})
+	problems := guardRefusals(cloud, prices, allowed)
+	if strings.Join(problems, "; ") != "basic-amd-2: size s-2vcpu-2gb-amd is not allowed" {
+		t.Fatalf("a class added since: %v", problems)
+	}
+	allowed = guardConfigFor(Race{Cloud: cloud}, prices, 25)
+	if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
+		t.Fatalf("installed again: %v", problems)
+	}
+	cloud.Servers = append(cloud.Servers, ServerClass{Name: "fourth", Size: "c-2", LoaderSize: "c-4"})
+	prices["c-4"] = 0.2
+	cloud.Region = "nyc3"
+	got := strings.Join(guardRefusals(cloud, prices, allowed), "; ")
+	for _, want := range []string{"costs $0.2000 an hour", "region, image, tag nyc3",
+		"4 classes need 8 droplets; the guard allows 6"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("%q missing from %q", want, got)
+		}
+	}
 }
 
 func TestGuardConfigAllowsRaceJSONsSizesOnly(t *testing.T) {

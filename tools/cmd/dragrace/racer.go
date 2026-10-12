@@ -669,6 +669,20 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 	if err != nil {
 		return nil, err
 	}
+	if guard, ok := racer.provider.(*GuardClient); ok {
+		allowed, err := guard.allowed(ctx)
+		switch {
+		case errors.Is(err, errGuardUnknown):
+			log.Printf("the guard predates /allowed: the race not checked against it before its droplets")
+		case err != nil:
+			return nil, err
+		default:
+			if problems := guardRefusals(race.Cloud, prices, allowed); len(problems) > 0 {
+				return nil, fmt.Errorf("%w: %s (race.json changed since the guard's install: "+
+					"dragrace racer install again)", errRefused, strings.Join(problems, "; "))
+			}
+		}
+	}
 	tarball := filepath.Join(filepath.Dir(root), "race.tar.gz")
 	launched := time.Now()
 	fleet, err := launchFleet(ctx, racer.provider, race, run.ID)

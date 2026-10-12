@@ -428,6 +428,11 @@ func (guard *Guard) handler() http.Handler {
 		sizes, err := guard.provider.sizes(r.Context())
 		reply(w, sizes, err)
 	})
+	// What the owner allows: the racer compares a race with it before it
+	// makes a droplet (guardRefusals).
+	mux.HandleFunc("GET /allowed", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, guard.config, nil)
+	})
 	mux.HandleFunc("POST /droplets", func(w http.ResponseWriter, r *http.Request) {
 		var request DropletRequest
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&request); err != nil {
@@ -548,6 +553,9 @@ func (guard *GuardClient) call(ctx context.Context, method, path string, body, i
 	if response.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("%w: %s", errRefused, strings.TrimSpace(string(text)))
 	}
+	if response.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("%w: guard %s %s", errGuardUnknown, method, path)
+	}
 	if response.StatusCode/100 != 2 {
 		return fmt.Errorf("guard %s %s: %d: %s", method, path, response.StatusCode,
 			strings.TrimSpace(string(text)))
@@ -601,4 +609,44 @@ func (guard *GuardClient) sizes(ctx context.Context) ([]Size, error) {
 	var sizes []Size
 	err := guard.call(ctx, http.MethodGet, "/sizes", nil, &sizes)
 	return sizes, err
+}
+
+// errGuardUnknown is a request the guard does not know: a guard installed
+// before it (the guard is never updated by a build).
+var errGuardUnknown = errors.New("not known to this guard")
+
+func (guard *GuardClient) allowed(ctx context.Context) (GuardConfig, error) {
+	var config GuardConfig
+	err := guard.call(ctx, http.MethodGet, "/allowed", nil, &config)
+	return config, err
+}
+
+// guardRefusals is what the guard would refuse of a race, before a
+// droplet is made: each class's sizes (at their prices now), the region,
+// image and tag, and two droplets a class. The guard's sizes are race.json's
+// at its install, so a class added since is refused before
+// any droplet is made.
+func guardRefusals(cloud Cloud, prices map[string]float64, allowed GuardConfig) []string {
+	var problems []string
+	for _, class := range cloud.Servers {
+		for _, size := range []string{class.Size, class.LoaderSize} {
+			most, found := allowed.Sizes[size]
+			switch {
+			case !found:
+				problems = append(problems, fmt.Sprintf("%s: size %s is not allowed", class.Name, size))
+			case prices[size] > most:
+				problems = append(problems, fmt.Sprintf("%s: %s costs $%.4f an hour, the most allowed "+
+					"is $%.4f", class.Name, size, prices[size], most))
+			}
+		}
+	}
+	if cloud.Region != allowed.Region || cloud.Image != allowed.Image || cloud.Tag != allowed.Tag {
+		problems = append(problems, fmt.Sprintf("region, image, tag %s, %s, %s; the guard allows %s, %s, %s",
+			cloud.Region, cloud.Image, cloud.Tag, allowed.Region, allowed.Image, allowed.Tag))
+	}
+	if 2*len(cloud.Servers) > allowed.DropletsMax {
+		problems = append(problems, fmt.Sprintf("%d classes need %d droplets; the guard allows %d",
+			len(cloud.Servers), 2*len(cloud.Servers), allowed.DropletsMax))
+	}
+	return problems
 }
