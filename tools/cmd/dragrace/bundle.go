@@ -56,6 +56,7 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	}
 	raceFiles := []bundled{{"race.json", filepath.Join(root, "race.json")},
 		{"versions.json", filepath.Join(root, "versions.json")},
+		{"out/toolchain.json", toolchainRecord(root)},
 		{"out/bin/oha", tools.Oha}, {"out/bin/dragrace", self}}
 	trees := []bundledTree{{"workloads", filepath.Join(root, "workloads")}}
 	if race.hasMixed() {

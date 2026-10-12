@@ -9,11 +9,9 @@ import (
 	"strings"
 )
 
-// Versions is versions.json: every pin a race depends on.
+// Versions is versions.json: every pin a race depends on but Zig and roc,
+// which are roux's (RouxPins).
 type Versions struct {
-	Zig          Download `json:"zig"`
-	Roc          Download `json:"roc"`
-	RocMusl      RocMusl  `json:"roc_musl"`
 	Oha          Download `json:"oha"`
 	Go           Note     `json:"go"`
 	Rust         Note     `json:"rust"`

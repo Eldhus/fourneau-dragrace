@@ -545,8 +545,17 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 	if post.OpenLoop.Shares == nil {
 		post.OpenLoop.Shares = []float64{}
 	}
-	post.Versions = []NameVersion{{"zig", versions.Zig.Version}, {"roc", versions.Roc.Version},
-		{"roc_musl", versions.RocMusl.Commit}, {"oha", versions.Oha.Version},
+	// Zig's and roc's from the record of the build (loadToolchain), which
+	// race.tar.gz carries: roux's pins.
+	usedJSON, err := os.ReadFile(toolchainRecord(root))
+	if err != nil {
+		return nil, err
+	}
+	var used ToolchainUsed
+	if err := json.Unmarshal(usedJSON, &used); err != nil {
+		return nil, err
+	}
+	post.Versions = []NameVersion{{"zig", used.Zig}, {"roc", used.Roc}, {"oha", versions.Oha.Version},
 		{"go", versions.Go.Version}, {"rust", versions.Rust.Version},
 		{"axum", versions.Axum.Version}, {"tokio", versions.Tokio.Version},
 		{"droplet_image", versions.DropletImage}}

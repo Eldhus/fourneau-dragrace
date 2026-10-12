@@ -1,24 +1,5 @@
 {
-  "comment": "Every version a race depends on.",
-  "zig": {
-    "version": "0.17.0",
-    "url": "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz",
-    "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
-  },
-  "roc": {
-    "version": "nightly-2026-10-06-c34079d",
-    "url": "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-06-c34079d/roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz",
-    "sha256": "11bf5c73b81e517ae2807f4211fe9e996f48f87a68b1e85b82c4ae2c6499a5d6"
-  },
-  "roc_musl": {
-    "comment": "musl's crt1.o and libc.a for x86_64, from Roc's test platform at the nightly's commit: roc build links the roux host with them.",
-    "commit": "c34079d4cde82f475df7c1994c714ba25b29b951",
-    "url": "https://github.com/roc-lang/roc/archive/c34079d4cde82f475df7c1994c714ba25b29b951.tar.gz",
-    "files": {
-      "test/fx/platform/targets/x64musl/crt1.o": "ffb51a69191a69fc34acaec1003fabe245d8841da7036d124d3445718415f9ea",
-      "test/fx/platform/targets/x64musl/libc.a": "85f5eb2316bc6f86be7bd66008488c7d2eca290942b01ad2e86f02f8b5e8c90f"
-    }
-  },
+  "comment": "Every version a race depends on but Zig and roc, which are roux's: its toolchain.json, handed on by each roux build's build.json.",
   "oha": {
     "version": "1.16.0",
     "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64",
@@ -37,7 +18,7 @@
     "checkout": "../fourneau"
   },
   "roux": {
-    "comment": "Not pinned either: roux's master, built on the fourneau checkout above (its build.zig.zon points there).",
+    "comment": "Not pinned either: roux's master, built on the fourneau checkout above (its build.zig.zon points there). In CI, a roux build (its platform, tools and build.json) unpacked here instead, and fourneau checked out at the commit it records.",
     "repository": "https://github.com/Eldhus/roux",
     "branch": "master",
     "checkout": "../roux"

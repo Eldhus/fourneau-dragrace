@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,13 +15,61 @@ import (
 )
 
 // Toolchain is where the pinned tools are, once fetched and verified.
-// Go and Rust come from their own pinning (go.mod, rust-toolchain.toml).
+// Go and Rust come from their own pinning (go.mod, rust-toolchain.toml);
+// Zig and roc from roux's (RouxPins).
 type Toolchain struct {
 	Zig      string
 	Roc      string
 	Oha      string
 	Fourneau string
-	Roux     string
+	// Roux is roux's directory, a checkout or a roux build, ready either
+	// way: its platform in platform/, its tools in zig-out/bin.
+	Roux string
+	Used ToolchainUsed
+}
+
+// ToolchainUsed is the record of what a build was built with,
+// out/toolchain.json, which race.tar.gz carries and a race posts.
+type ToolchainUsed struct {
+	Zig string `json:"zig"`
+	Roc string `json:"roc"`
+}
+
+func toolchainRecord(root string) string { return filepath.Join(outDir(root), "toolchain.json") }
+
+// RouxPins are the Zig and roc that roux is built with, which the drag race
+// builds with too (one pin per tool, in the repository that owns it): a
+// roux checkout's toolchain.json, or the build.json of a roux build
+// unpacked in its place.
+type RouxPins struct {
+	Zig      Download `json:"zig"`
+	Roc      Download `json:"roc"`
+	RocMusl  RocMusl  `json:"roc_musl"` // a checkout's; a build's platform carries musl
+	Roux     string   `json:"roux"`     // a build's commits
+	Fourneau string   `json:"fourneau"`
+}
+
+// rouxPinsOf reads roux's directory: a roux build (build.json) is ready as
+// it is; a checkout (toolchain.json) has its platform and tools to build.
+func rouxPinsOf(dir string) (pins RouxPins, built bool, err error) {
+	path := filepath.Join(dir, "build.json")
+	built = true
+	if _, statErr := os.Stat(path); statErr != nil {
+		path = filepath.Join(dir, "toolchain.json")
+		built = false
+	}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return pins, built, fmt.Errorf("%s is neither a roux checkout nor a roux build "+
+			"(README.md, Use it): %w", dir, err)
+	}
+	if err := json.Unmarshal(bytes, &pins); err != nil {
+		return pins, built, fmt.Errorf("%s: %w", path, err)
+	}
+	if pins.Zig.SHA256 == "" || pins.Roc.SHA256 == "" {
+		return pins, built, fmt.Errorf("%s: no zig or roc pin", path)
+	}
+	return pins, built, nil
 }
 
 // cacheDir holds downloads: $DRAGRACE_CACHE, else ~/.cache/fourneau-dragrace.
@@ -47,17 +96,19 @@ func loadToolchain(ctx context.Context, root string) (Toolchain, error) {
 	var tools Toolchain
 	tools.Fourneau = checkoutPath(root, versions.Fourneau)
 	tools.Roux = checkoutPath(root, versions.Roux)
-	for _, checkout := range []string{tools.Fourneau, tools.Roux} {
-		if _, err := os.Stat(filepath.Join(checkout, "build.zig")); err != nil {
-			return tools, fmt.Errorf("no checkout at %s (README.md, Use it)", checkout)
-		}
+	if _, err := os.Stat(filepath.Join(tools.Fourneau, "build.zig")); err != nil {
+		return tools, fmt.Errorf("no checkout at %s (README.md, Use it)", tools.Fourneau)
 	}
-	zigDir, err := fetchArchive(ctx, cache, "zig-"+versions.Zig.Version, versions.Zig)
+	pins, built, err := rouxPinsOf(tools.Roux)
+	if err != nil {
+		return tools, err
+	}
+	zigDir, err := fetchArchive(ctx, cache, "zig-"+pins.Zig.Version, pins.Zig)
 	if err != nil {
 		return tools, err
 	}
 	tools.Zig = filepath.Join(zigDir, "zig")
-	rocDir, err := fetchArchive(ctx, cache, "roc-"+versions.Roc.Version, versions.Roc)
+	rocDir, err := fetchArchive(ctx, cache, "roc-"+pins.Roc.Version, pins.Roc)
 	if err != nil {
 		return tools, err
 	}
@@ -69,11 +120,34 @@ func loadToolchain(ctx context.Context, root string) (Toolchain, error) {
 	if err := os.Chmod(tools.Oha, 0o755); err != nil {
 		return tools, err
 	}
-	if err := installRocMusl(ctx, cache, versions.RocMusl, tools.Roux); err != nil {
+	if !built {
+		// A checkout: musl beside the host, then what a roux build carries.
+		if err := installRocMusl(ctx, cache, pins.RocMusl, tools.Roux); err != nil {
+			return tools, err
+		}
+		for _, step := range []string{"platform", "tools"} {
+			if err := run(ctx, tools.Roux, nil, tools.Zig, "build", step); err != nil {
+				return tools, err
+			}
+		}
+	}
+	tools.Used = ToolchainUsed{Zig: pins.Zig.Version, Roc: pins.Roc.Version}
+	record, err := json.Marshal(tools.Used)
+	if err != nil {
 		return tools, err
 	}
-	log.Printf("toolchain: zig %s, roc %s, oha %s", versions.Zig.Version, versions.Roc.Version,
-		versions.Oha.Version)
+	if err := os.MkdirAll(outDir(root), 0o755); err != nil {
+		return tools, err
+	}
+	if err := os.WriteFile(toolchainRecord(root), record, 0o644); err != nil {
+		return tools, err
+	}
+	roux := "the checkout, built"
+	if built {
+		roux = "a roux build"
+	}
+	log.Printf("toolchain: zig %s, roc %s, oha %s; roux: %s", pins.Zig.Version, pins.Roc.Version,
+		versions.Oha.Version, roux)
 	return tools, nil
 }
 
@@ -135,7 +209,7 @@ func fetchFile(ctx context.Context, url, want, path string) error {
 	}
 	if got := hex.EncodeToString(hash.Sum(nil)); got != want {
 		os.Remove(partial)
-		return fmt.Errorf("%s: sha256 %s, versions.json pins %s", url, got, want)
+		return fmt.Errorf("%s: sha256 %s, pinned %s", url, got, want)
 	}
 	return os.Rename(partial, path)
 }

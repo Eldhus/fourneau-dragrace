@@ -8,22 +8,6 @@
   },
   "build": [
     {
-      "cwd": "{roux}",
-      "argv": [
-        "{zig}",
-        "build",
-        "platform"
-      ]
-    },
-    {
-      "cwd": "{roux}",
-      "argv": [
-        "{zig}",
-        "build",
-        "tools"
-      ]
-    },
-    {
       "cwd": ".",
       "argv": [
         "cp",

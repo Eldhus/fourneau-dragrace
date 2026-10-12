@@ -20,8 +20,8 @@ import (
 // and a proxy) was the testing ground for: content hashes decide what an
 // edit needs, a page's markup compiles one template's object and no Roc,
 // the app restarts, and the host itself serves the reload stream and
-// adds the script to each page, so no proxy. Here: roux's platform and
-// tools built, then `roux dev` on site/, its static files watched.
+// adds the script to each page, so no proxy. Here: `roux dev` on site/,
+// its static files watched, once the toolchain has built roux's checkout.
 func siteDevCommand(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site dev")
 	port := flags.Int("port", 8090, "the site's port: open http://127.0.0.1:PORT/")
@@ -29,11 +29,6 @@ func siteDevCommand(ctx context.Context, root string, args []string) error {
 	tools, err := loadToolchain(ctx, root)
 	if err != nil {
 		return err
-	}
-	for _, step := range []string{"platform", "tools"} {
-		if err := run(ctx, tools.Roux, nil, tools.Zig, "build", step); err != nil {
-			return err
-		}
 	}
 	roux := filepath.Join(tools.Roux, "zig-out", "bin", "roux")
 	argv := []string{roux, "dev", "--roc=" + tools.Roc, fmt.Sprintf("--port=%d", *port), "--static=static", "main.roc"}

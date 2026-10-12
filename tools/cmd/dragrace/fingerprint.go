@@ -34,6 +34,15 @@ func fingerprintOf(root string) (Fingerprint, error) {
 	if err != nil {
 		return fingerprint, err
 	}
+	// A roux build unpacked in place of the checkout names its own commit.
+	pins, built, err := rouxPinsOf(checkoutPath(root, versions.Roux))
+	if err != nil {
+		return fingerprint, err
+	}
+	if built {
+		fingerprint.Roux = pins.Roux
+		return fingerprint, nil
+	}
 	fingerprint.Roux, fingerprint.RouxDirty, err = commitOf(ctx, checkoutPath(root, versions.Roux))
 	return fingerprint, err
 }
