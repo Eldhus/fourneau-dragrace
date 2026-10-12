@@ -172,7 +172,7 @@
       }
     ],
     "tag": "fourneau-dragrace-race",
-    "max_age_minutes": 180
+    "max_age_minutes": 240
   },
   "local": {
     "server_cpus": "0-1",

@@ -657,9 +657,13 @@ func readResults(path string) ([]Result, error) {
 	return results, json.Unmarshal(bytes, &results)
 }
 
-// The class's worker runs this long at most (the guard deletes droplets at
-// three hours whatever happens).
-const workerTimeMax = 150 * time.Minute
+// workerTimeFor is how long a class's worker may run: until a quarter hour
+// before the guard deletes its droplets (max_age_minutes), the time to
+// fetch the results and tear down. The conduit ladders alone can take most
+// of a fixed 150 minutes.
+func workerTimeFor(ageMinutes int) time.Duration {
+	return time.Duration(max(ageMinutes-15, 10)) * time.Minute
+}
 
 // raceCloud races every class on its own pair of droplets at once, a worker
 // on each loader.
@@ -669,6 +673,9 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 	if err != nil {
 		return nil, err
 	}
+	// The droplets live as long as race.json says, or less when the guard,
+	// installed earlier, deletes them sooner.
+	ageMinutes := race.Cloud.MaxAgeMinutes
 	if guard, ok := racer.provider.(*GuardClient); ok {
 		allowed, err := guard.allowed(ctx)
 		switch {
@@ -681,8 +688,10 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 				return nil, fmt.Errorf("%w: %s (race.json changed since the guard's install: "+
 					"dragrace racer install again)", errRefused, strings.Join(problems, "; "))
 			}
+			ageMinutes = min(ageMinutes, allowed.AgeMaxMinutes)
 		}
 	}
+	workerTime := workerTimeFor(ageMinutes)
 	tarball := filepath.Join(filepath.Dir(root), "race.tar.gz")
 	launched := time.Now()
 	fleet, err := launchFleet(ctx, racer.provider, race, run.ID)
@@ -702,7 +711,7 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 		go func() {
 			defer wait.Done()
 			started := time.Now()
-			parts[i], errs[i] = racer.raceClassWorker(ctx, fleet, class, run, seed, tarball)
+			parts[i], errs[i] = racer.raceClassWorker(ctx, fleet, class, run, seed, tarball, workerTime)
 			seconds[i] = time.Since(started).Seconds()
 			fleet.releaseClass(racer.provider, class.Name)
 			if errs[i] != nil {
@@ -725,7 +734,7 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 // raceClassWorker starts a class's worker on its loader, waits for it, and
 // reads back its results.
 func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class ServerClass,
-	run RunPost, seed int64, tarball string) ([]Result, error) {
+	run RunPost, seed int64, tarball string, workerTime time.Duration) ([]Result, error) {
 	const home = "/root/dragrace"
 	loader := fleet.machines[fleet.loaders[class.Name].ID]
 	server := fleet.servers[class.Name]
@@ -760,7 +769,7 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 		return nil, err
 	}
 	log.Printf("[%s] worker started on its loader", class.Name)
-	deadline := time.Now().Add(workerTimeMax)
+	deadline := time.Now().Add(workerTime)
 	for {
 		if err := sleepContext(ctx, 30*time.Second); err != nil {
 			return nil, err
@@ -771,7 +780,7 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 		}
 		if time.Now().After(deadline) {
 			loader.Shell(ctx, "systemctl stop dragrace-worker")
-			return nil, fmt.Errorf("the worker ran past %s", workerTimeMax)
+			return nil, fmt.Errorf("the worker ran past %s", workerTime)
 		}
 	}
 	text, err := loader.Shell(ctx, "cat "+home+"/results.json")
