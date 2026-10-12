@@ -73,8 +73,11 @@ func statusError(what string, code int, text string) error {
 }
 
 // racedRepositories are the repositories a race races, by their names in
-// the site's database; each is Eldhus/NAME, raced at master.
+// the site's database; each is Eldhus/NAME, raced at racedBranch.
 var racedRepositories = []string{"fourneau-dragrace", "fourneau", "roux"}
+
+// racedBranch is every Eldhus repository's one branch (master). build.yml builds it and is dispatched on it.
+const racedBranch = "master"
 
 // BuildInfo is build.json: a release's commits and its files' hashes. The
 // release's body is this JSON, so a listing of releases says what each
@@ -142,14 +145,14 @@ func (github *GitHub) call(ctx context.Context, method, path string, body, into 
 	return json.Unmarshal(text, into)
 }
 
-// heads is each raced repository's newest commit on master.
+// heads is each raced repository's newest commit on racedBranch.
 func (github *GitHub) heads(ctx context.Context) (map[string]string, error) {
 	heads := map[string]string{}
 	for _, name := range racedRepositories {
 		var commit struct {
 			SHA string `json:"sha"`
 		}
-		if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/"+name+"/commits/master", nil,
+		if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/"+name+"/commits/"+racedBranch, nil,
 			&commit); err != nil {
 			return nil, err
 		}
@@ -214,10 +217,10 @@ func (github *GitHub) building(ctx context.Context, workflow string) (bool, erro
 	return false, nil
 }
 
-// dispatch asks build.yml to build the heads of master.
+// dispatch asks build.yml to build the heads of racedBranch.
 func (github *GitHub) dispatch(ctx context.Context, workflow string) error {
 	return github.call(ctx, http.MethodPost, "/repos/"+github.repository+"/actions/workflows/"+
-		workflow+"/dispatches", map[string]string{"ref": "master"}, nil)
+		workflow+"/dispatches", map[string]string{"ref": racedBranch}, nil)
 }
 
 // download fetches a release file to path, checking its SHA-256; a
