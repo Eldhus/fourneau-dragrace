@@ -87,12 +87,13 @@ func buildCompetitor(ctx context.Context, root string, tools Toolchain, competit
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
+	// No {fourneau}: a tree read by path is an input (keys.go), named in
+	// competitor.json, so its key covers it.
 	values := map[string]string{
-		"out":      out,
-		"zig":      tools.Zig,
-		"roc":      tools.Roc,
-		"fourneau": tools.Fourneau,
-		"roux":     tools.Roux,
+		"out":  out,
+		"zig":  tools.Zig,
+		"roc":  tools.Roc,
+		"roux": tools.Roux,
 	}
 	for _, step := range competitor.Build {
 		dir := expand(step.Cwd, values)

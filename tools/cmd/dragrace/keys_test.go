@@ -28,12 +28,12 @@ func keyRepo(t *testing.T) (root string, tools Toolchain) {
 		filepath.Join(root, "workloads/menu.html"):               "<p>menu</p>\n",
 		filepath.Join(root, "versions.json"):                     "{}\n",
 		filepath.Join(tools.Fourneau, "src/fourneau.zig"):        "pub const x = 1;\n",
-		filepath.Join(tools.Roux, "build.json"):                  `{"roux": "a", "fourneau": "b"}`,
+		filepath.Join(tools.Roux, "host/host.zig"):               "pub const y = 1;\n",
 	}
 	for path, text := range files {
 		writeFile(t, path, text)
 	}
-	for _, dir := range []string{root, tools.Fourneau} {
+	for _, dir := range []string{root, tools.Fourneau, tools.Roux} {
 		for _, argv := range [][]string{{"init", "-q"}, {"add", "-A"},
 			{"-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "t"}} {
 			cmd := exec.Command("git", argv...)
@@ -60,7 +60,8 @@ func TestCompetitorKey(t *testing.T) {
 	root, tools := keyRepo(t)
 	ctx := context.Background()
 	plain := Competitor{Name: "plain", Build: []Step{{Cwd: "competitors/plain", Argv: []string{"go", "build"}}}}
-	zig := Competitor{Name: "plain", Build: []Step{{Cwd: "competitors/plain", Argv: []string{"{zig}", "build"}}}}
+	zig := Competitor{Name: "plain", Inputs: []string{"../fourneau/src"},
+		Build: []Step{{Cwd: "competitors/plain", Argv: []string{"{zig}", "build"}}}}
 	roux := Competitor{Name: "plain", Build: []Step{{Cwd: "{roux}", Argv: []string{"x"}}}}
 	key := func(competitor Competitor) string {
 		t.Helper()
@@ -89,8 +90,10 @@ func TestCompetitorKey(t *testing.T) {
 		{"another competitor's file", "competitors/other/main.go", "package other\n", [3]bool{false, false, false}},
 		{"a workload", "workloads/menu.html", "<p>other</p>\n", [3]bool{true, true, true}},
 		{"versions.json", "versions.json", `{"x": 1}`, [3]bool{true, true, true}},
-		{"fourneau", "../fourneau/src/fourneau.zig", "pub const x = 2;\n", [3]bool{false, true, false}},
-		{"the roux build", "../roux/build.json", `{"roux": "c", "fourneau": "b"}`, [3]bool{false, false, true}},
+		// roux's platform compiles all of fourneau, so its key takes all.
+		{"an input", "../fourneau/src/fourneau.zig", "pub const x = 2;\n", [3]bool{false, true, true}},
+		{"beside an input", "../fourneau/README.md", "fourneau\n", [3]bool{false, false, true}},
+		{"roux", "../roux/host/host.zig", "pub const y = 2;\n", [3]bool{false, false, true}},
 	}
 	for _, change := range changes {
 		path := filepath.Join(root, change.path)

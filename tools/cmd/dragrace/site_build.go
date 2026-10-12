@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -33,6 +34,11 @@ func siteBuildCommand(ctx context.Context, root string, args []string) error {
 }
 
 func siteBuild(ctx context.Context, root string, tools Toolchain) error {
+	// roux attaches the templates to the binary roc wrote: in a fresh
+	// checkout, with no out/bin yet, there is none (AttachFailed).
+	if err := os.MkdirAll(binDir(root), 0o755); err != nil {
+		return err
+	}
 	dir := filepath.Join(root, "site")
 	roux := filepath.Join(tools.Roux, "zig-out", "bin", "roux")
 	if err := run(ctx, dir, nil, roux, "build", "--roc="+tools.Roc, "--output="+siteBinary(root), "main.roc"); err != nil {

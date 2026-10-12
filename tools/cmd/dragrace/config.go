@@ -257,8 +257,12 @@ type Competitor struct {
 	Language  string            `json:"language"`
 	Framework string            `json:"framework"`
 	Links     map[string]string `json:"links"`
-	Build     []Step            `json:"build"`
-	Run       RunSpec           `json:"run"`
+	// Inputs are what its build reads by path outside its directory,
+	// relative to this repository (fourneau-zig: fourneau, and roux's
+	// vendored SQLite): they make its key (keys.go).
+	Inputs []string `json:"inputs"`
+	Build  []Step   `json:"build"`
+	Run    RunSpec  `json:"run"`
 }
 
 // opensDatabase: the competitor's command names {db}, so it opens the

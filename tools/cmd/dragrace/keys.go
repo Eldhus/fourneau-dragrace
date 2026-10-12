@@ -27,7 +27,7 @@ import (
 // competitorKeyRecipe changes whenever what a key covers, or how a
 // competitor is built (buildCompetitor), changes: no binary stored under
 // an older recipe is ever taken for a newer one.
-const competitorKeyRecipe = "competitor-key 1"
+const competitorKeyRecipe = "competitor-key 2"
 
 // storeKeep is how many binaries the store keeps for each competitor, the
 // newest used first.
@@ -35,11 +35,13 @@ const storeKeep = 3
 
 // competitorKey hashes, in order: the recipe; the competitor's directory
 // and workloads/ as the checkout has them (every file git tracks or would
-// track, uncommitted changes included); versions.json; the machine image;
-// and what the tools its steps name bring in: {roux} the roux build (or the
-// roux and fourneau checkouts) and roc, {roc} roc, {zig} Zig and fourneau,
-// the one Zig package this race builds against (fourneau-zig's
-// build.zig.zon names it by path, not by a placeholder).
+// track, uncommitted changes included); versions.json; each of its
+// `inputs`, the trees its build reads by path outside its directory
+// (fourneau-zig: fourneau, and roux's vendored SQLite); the machine image;
+// and the tools its steps name: {roux} the roux build (or the roux and
+// fourneau checkouts) and roc, {roc} roc, {zig} Zig. (Before recipe 2,
+// {zig} stood for fourneau, and roux's SQLite was in no key: found
+// rehearsing build.yml.)
 func competitorKey(ctx context.Context, root string, tools Toolchain, competitor Competitor) (string,
 	error) {
 	hash := sha256.New()
@@ -56,6 +58,13 @@ func competitorKey(ctx context.Context, root string, tools Toolchain, competitor
 		}
 		part(sub, tree)
 	}
+	for _, input := range competitor.Inputs {
+		tree, err := treeHash(ctx, filepath.Join(root, input), ".")
+		if err != nil {
+			return "", fmt.Errorf("%s's input %s: %w", competitor.Name, input, err)
+		}
+		part("input "+input, tree)
+	}
 	part("image", machineImage(ctx))
 	uses := competitor.uses()
 	if uses["roux"] {
@@ -70,11 +79,6 @@ func competitorKey(ctx context.Context, root string, tools Toolchain, competitor
 	}
 	if uses["zig"] {
 		part("zig", tools.Used.Zig)
-		fourneau, err := treeHash(ctx, tools.Fourneau, ".")
-		if err != nil {
-			return "", err
-		}
-		part("fourneau", fourneau)
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
@@ -88,16 +92,13 @@ func (competitor Competitor) uses() map[string]bool {
 		for _, value := range step.Env {
 			texts = append(texts, value)
 		}
-		for _, name := range []string{"roux", "roc", "zig", "fourneau"} {
+		for _, name := range []string{"roux", "roc", "zig"} {
 			for _, text := range texts {
 				if strings.Contains(text, "{"+name+"}") {
 					uses[name] = true
 				}
 			}
 		}
-	}
-	if uses["fourneau"] {
-		uses["zig"] = true // fourneau is a Zig package: its identity rides with Zig's
 	}
 	return uses
 }
@@ -155,13 +156,10 @@ func treeHash(ctx context.Context, dir, sub string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// rouxIdentity is a roux build's build.json (its commits and every file's
-// SHA-256), or, for a checkout, roux's and fourneau's trees.
+// rouxIdentity is what roux's platform and tools are built from: roux's
+// and fourneau's trees (roux's holds its toolchain.json, so Zig's and
+// roc's versions too).
 func rouxIdentity(ctx context.Context, tools Toolchain) (string, error) {
-	if info, err := os.ReadFile(filepath.Join(tools.Roux, "build.json")); err == nil {
-		sum := sha256.Sum256(info)
-		return "build " + hex.EncodeToString(sum[:]), nil
-	}
 	roux, err := treeHash(ctx, tools.Roux, ".")
 	if err != nil {
 		return "", err
@@ -170,8 +168,67 @@ func rouxIdentity(ctx context.Context, tools Toolchain) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "checkout " + roux + " " + fourneau, nil
+	return roux + " " + fourneau, nil
 }
+
+// rouxKeyRecipe is to roux's key what competitorKeyRecipe is to a
+// competitor's.
+const rouxKeyRecipe = "roux-key 1"
+
+// rouxBuilt are the files `zig build platform` and `zig build tools` make
+// in roux's checkout, which the roux competitor and the site use.
+var rouxBuilt = []string{"platform/targets/x64musl/libhost.a", "zig-out/bin/roux",
+	"zig-out/bin/roux-db", "zig-out/bin/roux-load"}
+
+// readyRoux puts roux's platform and tools in its checkout: from the
+// store under their key (the recipe, roux's and fourneau's trees, the
+// machine), else built there and stored. On a developer's machine it saves
+// little (Zig's own cache is warm); on GitHub's runner it saves compiling
+// roux for every build of the site.
+func readyRoux(ctx context.Context, tools Toolchain) error {
+	identity, err := rouxIdentity(ctx, tools)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256([]byte(rouxKeyRecipe + "\x00" + identity + "\x00" + machineImage(ctx)))
+	key := hex.EncodeToString(sum[:])
+	store, err := storeDir()
+	if err != nil {
+		return err
+	}
+	stored := filepath.Join(store, rouxStoreName+"-"+key)
+	if _, err := os.Stat(filepath.Join(stored, "done")); err == nil {
+		for _, path := range rouxBuilt {
+			if err := copyFile(filepath.Join(stored, path), filepath.Join(tools.Roux, path)); err != nil {
+				return err
+			}
+		}
+		now := time.Now()
+		log.Printf("roux: from the store, key %s", key[:12])
+		return os.Chtimes(stored, now, now)
+	}
+	for _, step := range []string{"platform", "tools"} {
+		if err := run(ctx, tools.Roux, nil, tools.Zig, "build", step); err != nil {
+			return err
+		}
+	}
+	os.RemoveAll(stored)
+	for _, path := range rouxBuilt {
+		if err := copyFile(filepath.Join(tools.Roux, path), filepath.Join(stored, path)); err != nil {
+			return err
+		}
+	}
+	// Written last: a store entry cut short has no `done` and is built again.
+	if err := os.WriteFile(filepath.Join(stored, "done"), nil, 0o644); err != nil {
+		return err
+	}
+	log.Printf("roux: built and stored, key %s", key[:12])
+	return pruneStore(store, rouxStoreName, os.RemoveAll)
+}
+
+// rouxStoreName names roux's entries in the store, apart from the roux
+// competitor's (roux-KEY).
+const rouxStoreName = "roux-platform"
 
 // machineImage names what a build links against besides its pins (the C
 // compiler and libc a Rust or Go build may use): GitHub's runner image by
@@ -223,12 +280,15 @@ func toStore(root, name, key string) error {
 		return err
 	}
 	stored := filepath.Join(store, name+"-"+key)
-	if err := copyFile(filepath.Join(binDir(root), name), stored+".partial"); err != nil {
+	if err := copyFile(filepath.Join(binDir(root), name), stored); err != nil {
 		return err
 	}
-	if err := os.Rename(stored+".partial", stored); err != nil {
-		return err
-	}
+	return pruneStore(store, name, os.Remove)
+}
+
+// pruneStore keeps the newest used storeKeep of name's entries (NAME-KEY,
+// the key 64 hex characters) and removes the rest.
+func pruneStore(store, name string, remove func(string) error) error {
 	entries, err := filepath.Glob(filepath.Join(store, name+"-*"))
 	if err != nil {
 		return err
@@ -239,8 +299,8 @@ func toStore(root, name, key string) error {
 	}
 	var all []kept
 	for _, path := range entries {
-		if strings.HasSuffix(path, ".partial") || len(filepath.Base(path)) != len(name)+1+64 {
-			continue
+		if len(filepath.Base(path)) != len(name)+1+64 {
+			continue // another name's entry, or one being written (.partial)
 		}
 		info, err := os.Stat(path)
 		if err != nil {
@@ -251,7 +311,7 @@ func toStore(root, name, key string) error {
 	sort.Slice(all, func(i, j int) bool { return all[i].used.After(all[j].used) })
 	for _, old := range all[min(len(all), storeKeep):] {
 		log.Printf("store: dropping %s", filepath.Base(old.path))
-		if err := os.Remove(old.path); err != nil {
+		if err := remove(old.path); err != nil {
 			return err
 		}
 	}

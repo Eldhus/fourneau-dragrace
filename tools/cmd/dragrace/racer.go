@@ -491,6 +491,9 @@ func pruneRuns(dir string, keep int) {
 	}
 }
 
+// copyFile copies an executable, written beside and renamed over: a
+// program running from `to` keeps its file ("text file busy" otherwise),
+// and no reader sees half.
 func copyFile(from, to string) error {
 	bytes, err := os.ReadFile(from)
 	if err != nil {
@@ -499,7 +502,10 @@ func copyFile(from, to string) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(to, bytes, 0o755)
+	if err := os.WriteFile(to+".partial", bytes, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(to+".partial", to)
 }
 
 // racePost is race.json and versions.json, as the site keeps them.
