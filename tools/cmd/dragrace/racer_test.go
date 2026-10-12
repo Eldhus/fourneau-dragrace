@@ -31,29 +31,90 @@ func TestCommitsSayWhichAreNew(t *testing.T) {
 	}
 }
 
-// The build of the heads is taken whatever its dates; after asking, the
-// newest published since; a release dated by an old commit never counts.
-func TestBuildOfTheHeads(t *testing.T) {
-	heads := map[string]string{"fourneau-dragrace": "a", "fourneau": "b", "roux": "c"}
-	asked := time.Date(2026, 10, 7, 10, 49, 0, 0, time.UTC)
-	exact := Build{Info: BuildInfo{Commits: heads}, PublishedAt: asked.Add(-time.Hour)}
-	newer := Build{Info: BuildInfo{Commits: map[string]string{"fourneau-dragrace": "d",
-		"fourneau": "b", "roux": "c"}}, PublishedAt: asked.Add(8 * time.Minute)}
-	older := Build{Info: BuildInfo{Commits: map[string]string{"fourneau-dragrace": "z"}},
-		PublishedAt: asked.Add(-time.Hour)}
-	if build, found := buildOf([]Build{older, exact}, heads, time.Time{}); !found ||
-		build.Info.Commits["fourneau-dragrace"] != "a" {
-		t.Fatal("the build of the heads, published long ago, was not taken")
+// releasesServer answers GitHub's releases listing with these builds,
+// newest first, and the site's /api/racer/next with the raced commits.
+func releasesServer(t *testing.T, builds []BuildInfo, raced map[string]string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/Eldhus/fourneau-dragrace/releases":
+			var releases []map[string]any
+			for i, info := range builds {
+				body, _ := json.Marshal(info)
+				releases = append(releases, map[string]any{"tag_name": fmt.Sprintf("build-%d", i),
+					"body": string(body), "assets": []map[string]string{}})
+			}
+			json.NewEncoder(w).Encode(releases)
+		case "/api/racer/next":
+			var commits []map[string]string
+			for name, commit := range raced {
+				commits = append(commits, map[string]string{"repository": name, "commit_sha": commit})
+			}
+			json.NewEncoder(w).Encode(map[string]any{"waiting": []any{}, "raced": commits})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+// Tonight's build is the newest of the racer's own commit; it is new when
+// its race key is not the key of the build the last race raced.
+func TestTonight(t *testing.T) {
+	commits := func(dragrace, roux string) map[string]string {
+		return map[string]string{"fourneau-dragrace": dragrace, "fourneau": "f", "roux": roux}
 	}
-	if _, found := buildOf([]Build{older}, heads, time.Time{}); found {
-		t.Fatal("another build taken before asking")
+	defer func(saved string) { buildCommit = saved }(buildCommit)
+	cases := []struct {
+		name   string
+		own    string
+		builds []BuildInfo
+		raced  map[string]string
+		want   string // the roux commit of tonight's build, or "error"
+		isNew  bool
+	}{
+		{"a site change: the same race key", "a2",
+			[]BuildInfo{{Commits: commits("a2", "r1"), RaceKey: "k1"}, {Commits: commits("a1", "r1"), RaceKey: "k1"}},
+			commits("a1", "r1"), "r1", false},
+		{"a new roux build of the same commit", "a1",
+			[]BuildInfo{{Commits: commits("a1", "r2"), RaceKey: "k2"}, {Commits: commits("a1", "r1"), RaceKey: "k1"}},
+			commits("a1", "r1"), "r2", true},
+		{"raced already", "a1",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, commits("a1", "r1"), "r1", false},
+		{"the last race's build gone", "a1",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, commits("a0", "r0"), "r1", true},
+		{"the last race's build from before race keys", "a1",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}, {Commits: commits("a0", "r1")}},
+			commits("a0", "r1"), "r1", true},
+		{"nothing raced yet", "a1",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, map[string]string{}, "r1", true},
+		{"a racer built by hand", "",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, commits("a1", "r1"), "error", false},
+		{"no build of the racer's commit", "a9",
+			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, commits("a1", "r1"), "error", false},
 	}
-	if build, found := buildOf([]Build{newer, older}, heads, asked); !found ||
-		build.Info.Commits["fourneau-dragrace"] != "d" {
-		t.Fatal("the build published after asking was not taken")
-	}
-	if _, found := buildOf([]Build{older}, heads, asked); found {
-		t.Fatal("a build published before asking was taken")
+	for _, c := range cases {
+		server := releasesServer(t, c.builds, c.raced)
+		github := newGitHub("Eldhus/fourneau-dragrace")
+		github.api = server.URL
+		racer := &Racer{site: newSiteClient(server.URL, "token"), github: github}
+		buildCommit = c.own
+		tonight, err := racer.tonight(context.Background(), c.raced)
+		switch {
+		case c.want == "error":
+			if err == nil {
+				t.Errorf("%s: no error", c.name)
+			}
+		case err != nil:
+			t.Errorf("%s: %v", c.name, err)
+		case tonight.Commits["roux"] != c.want || tonight.Build.Info.Commits["roux"] != c.want ||
+			tonight.New != c.isNew:
+			t.Errorf("%s: roux %s, new %v; want %s, %v", c.name, tonight.Commits["roux"], tonight.New,
+				c.want, c.isNew)
+		case c.isNew && !sameCommits(tonight.posted(), tonight.Commits),
+			!c.isNew && !sameCommits(tonight.posted(), c.raced):
+			t.Errorf("%s: the site told %v", c.name, tonight.posted())
+		}
+		server.Close()
 	}
 }
 
@@ -61,11 +122,15 @@ func TestBuildOfTheHeads(t *testing.T) {
 // asked for, and the racer asks again later and later.
 func TestARefusedRunIsNotBackedUp(t *testing.T) {
 	head := strings.Repeat("a", 40)
+	defer func(saved string) { buildCommit = saved }(buildCommit)
+	buildCommit = head
 	refuse, backups := true, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case strings.HasPrefix(r.URL.Path, "/repos/Eldhus/"):
-			fmt.Fprintf(w, `{"sha":%q}`, head)
+		case r.URL.Path == "/repos/Eldhus/fourneau-dragrace/releases":
+			body, _ := json.Marshal(BuildInfo{RaceKey: "k", Commits: map[string]string{
+				"fourneau-dragrace": head, "fourneau": head, "roux": head}})
+			json.NewEncoder(w).Encode([]map[string]any{{"tag_name": "build-1", "body": string(body)}})
 		case r.URL.Path == "/api/racer/next":
 			raced := ""
 			for i, name := range racedRepositories {
@@ -82,7 +147,7 @@ func TestARefusedRunIsNotBackedUp(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	github := newGitHub("", "Eldhus/fourneau-dragrace")
+	github := newGitHub("Eldhus/fourneau-dragrace")
 	github.api = server.URL
 	racer := &Racer{site: newSiteClient(server.URL, "token"), github: github}
 	handled, err := racer.handleNext(context.Background())
@@ -117,14 +182,14 @@ func TestGitHubRetriesAMoment(t *testing.T) {
 		switch r.URL.Path {
 		case "/race.tar.gz":
 			w.Write([]byte(content))
-		case "/repos/Eldhus/fourneau/commits/master":
-			fmt.Fprintf(w, `{"sha":%q}`, strings.Repeat("b", 40))
+		case "/repos/Eldhus/fourneau-dragrace/releases/latest":
+			fmt.Fprintf(w, `{"tag_name":%q}`, strings.Repeat("b", 40))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
-	github := newGitHub("", "Eldhus/fourneau-dragrace")
+	github := newGitHub("Eldhus/fourneau-dragrace")
 	github.api = server.URL
 	var waits []string
 	github.sleep = func(_ context.Context, wait time.Duration) error {
@@ -142,11 +207,13 @@ func TestGitHubRetriesAMoment(t *testing.T) {
 		t.Fatalf("waits %v", waits)
 	}
 	waits = nil
-	var commit struct{ SHA string }
-	failures["/repos/Eldhus/fourneau/commits/master"] = 1
-	if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/fourneau/commits/master", nil, &commit); err != nil ||
-		len(commit.SHA) != 40 || len(waits) != 1 {
-		t.Fatalf("a call after a 504: %v %q %v", err, commit.SHA, waits)
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	failures["/repos/Eldhus/fourneau-dragrace/releases/latest"] = 1
+	if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/fourneau-dragrace/releases/latest", nil,
+		&release); err != nil || len(release.TagName) != 40 || len(waits) != 1 {
+		t.Fatalf("a call after a 504: %v %q %v", err, release.TagName, waits)
 	}
 	waits = nil
 	if err := github.download(ctx, server.URL+"/gone", "00", path); err == nil || len(waits) != 0 {
@@ -203,7 +270,7 @@ func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	github := newGitHub("", "Eldhus/fourneau-dragrace")
+	github := newGitHub("Eldhus/fourneau-dragrace")
 	github.api = server.URL
 	builds, err := github.builds(context.Background())
 	if err != nil || len(builds) != 1 || builds[0].Assets["race.tar.gz"] != "u" {

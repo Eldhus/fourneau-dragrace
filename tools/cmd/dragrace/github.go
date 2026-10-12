@@ -16,12 +16,10 @@ import (
 	"time"
 )
 
-// GitHub is what the racer asks of GitHub: each repository's newest commit, the builds released by
-// build.yml, a build dispatched. Its token is fine-grained: this repository,
-// Actions read and write; the repositories are public, so heads and
-// downloads need none.
+// GitHub is what the racer asks of GitHub: the builds
+// build.yml released, and their files. The repository is public, so it
+// holds no token.
 type GitHub struct {
-	token      string
 	repository string // owner/name of this repository
 	api        string
 	client     *http.Client
@@ -31,8 +29,8 @@ type GitHub struct {
 	sleep               func(context.Context, time.Duration) error
 }
 
-func newGitHub(token, repository string) *GitHub {
-	return &GitHub{token: token, repository: repository, api: "https://api.github.com",
+func newGitHub(repository string) *GitHub {
+	return &GitHub{repository: repository, api: "https://api.github.com",
 		client: &http.Client{Timeout: 2 * time.Minute}, window: 30 * time.Minute,
 		first: 2 * time.Second, most: time.Minute, sleep: sleepContext}
 }
@@ -73,11 +71,8 @@ func statusError(what string, code int, text string) error {
 }
 
 // racedRepositories are the repositories a race races, by their names in
-// the site's database; each is Eldhus/NAME, raced at racedBranch.
+// the site's database; each is Eldhus/NAME.
 var racedRepositories = []string{"fourneau-dragrace", "fourneau", "roux"}
-
-// racedBranch is every Eldhus repository's one branch (master). build.yml builds it and is dispatched on it.
-const racedBranch = "master"
 
 // BuildInfo is build.json: a release's commits and its files' hashes. The
 // release's body is this JSON, so a listing of releases says what each
@@ -88,6 +83,10 @@ type BuildInfo struct {
 	// Each file's SHA-256, hex: race.tar.gz (the racer's), site.tar.gz
 	// (the site host's).
 	Files map[string]string `json:"files"`
+	// Each competitor's key, and the race key over them (keys.go): two
+	// builds with one race key race the same.
+	Competitors map[string]string `json:"competitors"`
+	RaceKey     string            `json:"race_key"`
 }
 
 // Build is a release of build.yml.
@@ -115,9 +114,6 @@ func (github *GitHub) request(ctx context.Context, method, url string, body any)
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if github.token != "" {
-		request.Header.Set("Authorization", "Bearer "+github.token)
-	}
 	return github.client.Do(request)
 }
 
@@ -143,25 +139,6 @@ func (github *GitHub) call(ctx context.Context, method, path string, body, into 
 		return err
 	}
 	return json.Unmarshal(text, into)
-}
-
-// heads is each raced repository's newest commit on racedBranch.
-func (github *GitHub) heads(ctx context.Context) (map[string]string, error) {
-	heads := map[string]string{}
-	for _, name := range racedRepositories {
-		var commit struct {
-			SHA string `json:"sha"`
-		}
-		if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/"+name+"/commits/"+racedBranch, nil,
-			&commit); err != nil {
-			return nil, err
-		}
-		if len(commit.SHA) != 40 {
-			return nil, fmt.Errorf("Eldhus/%s: a head of %q", name, commit.SHA)
-		}
-		heads[name] = commit.SHA
-	}
-	return heads, nil
 }
 
 // builds are the newest releases of build.yml, newest first; a release
@@ -196,31 +173,6 @@ func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
 		builds = append(builds, build)
 	}
 	return builds, nil
-}
-
-// building says whether a run of the workflow is queued or in progress:
-// a push's build, which will build the heads too.
-func (github *GitHub) building(ctx context.Context, workflow string) (bool, error) {
-	for _, status := range []string{"queued", "in_progress"} {
-		var runs struct {
-			TotalCount int `json:"total_count"`
-		}
-		path := "/repos/" + github.repository + "/actions/workflows/" + workflow +
-			"/runs?per_page=1&status=" + status
-		if err := github.call(ctx, http.MethodGet, path, nil, &runs); err != nil {
-			return false, err
-		}
-		if runs.TotalCount > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// dispatch asks build.yml to build the heads of racedBranch.
-func (github *GitHub) dispatch(ctx context.Context, workflow string) error {
-	return github.call(ctx, http.MethodPost, "/repos/"+github.repository+"/actions/workflows/"+
-		workflow+"/dispatches", map[string]string{"ref": racedBranch}, nil)
 }
 
 // download fetches a release file to path, checking its SHA-256; a

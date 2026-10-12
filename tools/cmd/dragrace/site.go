@@ -414,12 +414,14 @@ func hostFiles() map[string]string {
 	}
 }
 
-// hostRetired are the old reboot timer's files, deleted by an
-// install: the timer, its service, and the moved update time.
+// hostRetired are files an install deletes: the old reboot timer's
+// (the timer, its service, and the moved update time), and the racer's
+// GitHub token, which started builds until the builds became daily.
 var hostRetired = []string{
 	"/etc/systemd/system/dragrace-reboot.timer",
 	"/etc/systemd/system/dragrace-reboot.service",
 	"/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf",
+	"/etc/credstore.encrypted/github-token",
 }
 
 // hostSetup is the script that goes with hostFiles: the first boot's

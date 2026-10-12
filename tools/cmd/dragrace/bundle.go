@@ -19,13 +19,13 @@ import (
 //
 //   - race.tar.gz: a checkout as a race needs it, for the racer and its
 //     workers: race.json, versions.json, workloads/, each competitor's
-//     competitor.json, and out/bin with the competitors, oha and this
-//     dragrace binary;
+//     competitor.json, out/toolchain.json, and out/bin with the
+//     competitors, oha and this dragrace binary;
 //   - site.tar.gz: the site, for the site host: dragrace-site, static/
 //     with site.json (the commit, which the racer reads), and migrations/
 //     (which the host agent runs: hostagent.go);
-//   - build.json: the commits built and each file's SHA-256 (the release's
-//     body too).
+//   - build.json: the commits built, each competitor's key and the race
+//     key (keys.go), and each file's SHA-256 (the release's body too).
 //
 // Everything must be built first (dragrace build, dragrace site build).
 func commandBundle(ctx context.Context, root string, args []string) error {
@@ -70,7 +70,21 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	}
 	info := BuildInfo{Commits: map[string]string{"fourneau-dragrace": fingerprint.Dragrace,
 		"fourneau": fingerprint.Fourneau, "roux": fingerprint.Roux},
-		BuiltAt: time.Now().UTC(), Files: map[string]string{}}
+		BuiltAt: time.Now().UTC(), Files: map[string]string{}, Competitors: map[string]string{}}
+	// Each competitor's key as `dragrace build` took it, and the race key.
+	var keys map[string]string
+	if err := readJSON(competitorKeysPath(root), &keys); err != nil {
+		return err
+	}
+	for _, name := range race.Competitors {
+		if keys[name] == "" {
+			return fmt.Errorf("%s: no key in %s (dragrace build first)", name, competitorKeysPath(root))
+		}
+		info.Competitors[name] = keys[name]
+	}
+	if info.RaceKey, err = raceKey(ctx, root, info.Competitors); err != nil {
+		return err
+	}
 	if info.Files["race.tar.gz"], err = writeTarball(filepath.Join(*out, "race.tar.gz"),
 		raceFiles, trees); err != nil {
 		return err

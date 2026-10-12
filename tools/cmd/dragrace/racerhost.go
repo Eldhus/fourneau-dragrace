@@ -84,7 +84,6 @@ Wants=network-online.target
 [Service]
 User=racer
 LoadCredentialEncrypted=racer-token
-LoadCredentialEncrypted=github-token
 StateDirectory=dragrace-racer
 StateDirectoryMode=0700
 ExecStart=/var/lib/dragrace-racer/bin/dragrace racer serve
@@ -189,16 +188,12 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	racerJSON, err := json.MarshalIndent(RacerConfig{Site: "https://" + *siteHost,
-		Guard: guardConfig.Socket, Repository: "Eldhus/fourneau-dragrace", Workflow: "build.yml",
+		Guard: guardConfig.Socket, Repository: "Eldhus/fourneau-dragrace",
 		State: "/var/lib/dragrace-racer"}, "", "  ")
 	if err != nil {
 		return err
 	}
 	racerToken, err := keyringToken(ctx, "racer-token")
-	if err != nil {
-		return err
-	}
-	githubToken, err := keyringLookup(ctx, "github-token")
 	if err != nil {
 		return err
 	}
@@ -238,7 +233,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	secrets := map[string]string{"digitalocean-token": strings.TrimSpace(os.Getenv("DIGITALOCEAN_TOKEN")),
-		"racer-token": racerToken, "github-token": githubToken}
+		"racer-token": racerToken}
 	for name, secret := range secrets {
 		encrypt := "sudo systemd-creds encrypt --name=" + name + " - /etc/credstore.encrypted/" + name
 		if err := machine.ShellInput(ctx, encrypt, secret); err != nil {

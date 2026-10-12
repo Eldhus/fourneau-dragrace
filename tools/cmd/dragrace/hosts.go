@@ -124,7 +124,7 @@ func hostWants(root, site, racer, key string) ([]hostWant, error) {
 		files:   racerFiles,
 		present: []string{"/etc/dragrace-guard/config.json", "/etc/dragrace-racer/config.json",
 			"/etc/credstore.encrypted/digitalocean-token", "/etc/credstore.encrypted/racer-token",
-			"/etc/credstore.encrypted/github-token", "/usr/local/bin/dragrace-guard"},
+			"/usr/local/bin/dragrace-guard"},
 		ports: []string{"22"},
 		units: []string{"dragrace-guard.service", "dragrace-racer.service",
 			"dragrace-racer-check.timer", "apt-daily-upgrade.timer"},

@@ -258,6 +258,36 @@ func toStore(root, name, key string) error {
 	return nil
 }
 
+// raceKeyRecipe is to the race key what competitorKeyRecipe is to a
+// competitor's.
+const raceKeyRecipe = "race-key 1"
+
+// raceKey is a hash of what a race races: each competitor's key,
+// race.json and workloads/. A check races only when it is not the last
+// race's (racer.tonight). The tool's own code is not in it: a change to
+// the tool alone is raced with the next change that is, or when the owner
+// asks (`site race-now`).
+func raceKey(ctx context.Context, root string, competitors map[string]string) (string, error) {
+	hash := sha256.New()
+	fmt.Fprintf(hash, "%s\x00", raceKeyRecipe)
+	names := make([]string, 0, len(competitors))
+	for name := range competitors {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintf(hash, "%s\x00%s\x00", name, competitors[name])
+	}
+	for _, sub := range []string{"race.json", "workloads"} {
+		tree, err := treeHash(ctx, root, sub)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(hash, "%s\x00%s\x00", sub, tree)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 // competitorKeysPath is out/competitors.json, each competitor's key as it
 // was built, which the bundle records.
 func competitorKeysPath(root string) string { return filepath.Join(outDir(root), "competitors.json") }

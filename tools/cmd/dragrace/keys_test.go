@@ -115,6 +115,41 @@ func TestCompetitorKey(t *testing.T) {
 	}
 }
 
+// The race key moves with a competitor's key, race.json and a workload,
+// and not with the site or the tool.
+func TestRaceKey(t *testing.T) {
+	root, _ := keyRepo(t)
+	writeFile(t, filepath.Join(root, "race.json"), "{}\n")
+	ctx := context.Background()
+	keys := map[string]string{"plain": "k1", "other": "k2"}
+	key := func(keys map[string]string) string {
+		t.Helper()
+		got, err := raceKey(ctx, root, keys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	base := key(keys)
+	if key(map[string]string{"plain": "k1", "other": "k3"}) == base {
+		t.Error("a competitor's key does not move the race key")
+	}
+	for path, moves := range map[string]bool{"race.json": true, "workloads/menu.html": true,
+		"site/Page.rocstache": false, "tools/racer.go": false} {
+		full := filepath.Join(root, path)
+		old, readErr := os.ReadFile(full)
+		writeFile(t, full, "changed\n")
+		if got := key(keys) != base; got != moves {
+			t.Errorf("%s: the race key moved %v, want %v", path, got, moves)
+		}
+		if readErr == nil {
+			writeFile(t, full, string(old))
+		} else if err := os.Remove(full); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestStore(t *testing.T) {
 	t.Setenv("DRAGRACE_CACHE", t.TempDir())
 	root := t.TempDir()

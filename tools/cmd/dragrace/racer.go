@@ -19,16 +19,17 @@ import (
 )
 
 // The racer takes what the site was asked
-// (a check or a race), finds or dispatches the build of the heads, races
-// it through the guard with a worker on each loader, and tells the site
-// how it went. It holds no DigitalOcean token: the guard does.
+// (a check or a race), races the build it runs from (the one the site
+// serves) through the guard with a worker on each loader, and tells the
+// site how it went. A check races only when that build's race key is not
+// the last race's. It holds no DigitalOcean token (the
+// guard does) and no GitHub token (the builds are public).
 
 // RacerConfig is the owner's, on the racer (/etc/dragrace-racer).
 type RacerConfig struct {
 	Site       string `json:"site"`
 	Guard      string `json:"guard"`
 	Repository string `json:"repository"`
-	Workflow   string `json:"workflow"`
 	State      string `json:"state"`
 }
 
@@ -61,6 +62,15 @@ type Next struct {
 		Repository string `json:"repository"`
 		CommitSHA  string `json:"commit_sha"`
 	} `json:"raced"`
+}
+
+// raced is the newest finished run's commits, by repository.
+func (next Next) raced() map[string]string {
+	raced := map[string]string{}
+	for _, commit := range next.Raced {
+		raced[commit.Repository] = commit.CommitSHA
+	}
+	return raced
 }
 
 // RunPost and the types below are the site's API bodies (site/Api.roc).
@@ -167,24 +177,15 @@ func commandRacer(ctx context.Context, args []string) error {
 	if err := readJSON(*path, &config); err != nil {
 		return err
 	}
-	// The check posts to the site alone: its unit has the racer token and
-	// no other (a GitHub token it never had would fail it).
-	credentials := map[string]string{"RACER_TOKEN": "racer-token"}
-	if args[0] != "check" {
-		credentials["GITHUB_TOKEN"] = "github-token"
-	}
-	for variable, credential := range credentials {
-		if err := tokenFromCredential(variable, credential); err != nil {
-			return err
-		}
+	if err := tokenFromCredential("RACER_TOKEN", "racer-token"); err != nil {
+		return err
 	}
 	token := strings.TrimSpace(os.Getenv("RACER_TOKEN"))
 	if config.Site == "" || token == "" {
 		return fmt.Errorf("the site and its racer token (RACER_TOKEN) are required")
 	}
 	racer := &Racer{config: config, site: newSiteClient(config.Site, token),
-		github: newGitHub(strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), config.Repository),
-		local:  *local}
+		github: newGitHub(config.Repository), local: *local}
 	if racer.local == "" {
 		racer.provider = newGuardClient(config.Guard)
 	}
@@ -216,7 +217,8 @@ func requestWait(refused int) time.Duration {
 
 // serve takes requests until stopped: every 30 s it asks the site (less
 // often while the site refuses its runs: requestWait), every 10 minutes it
-// tells the site the heads, and, idle, it updates itself.
+// tells the site what tonight's check would race, and, idle, it updates
+// itself.
 func (racer *Racer) serve(ctx context.Context) error {
 	racer.recover(ctx)
 	var headsAt, updateAt time.Time
@@ -267,11 +269,7 @@ func (racer *Racer) handleNext(ctx context.Context) (bool, error) {
 	if len(next.Waiting) == 0 {
 		return false, nil
 	}
-	raced := map[string]string{}
-	for _, commit := range next.Raced {
-		raced[commit.Repository] = commit.CommitSHA
-	}
-	err := racer.handle(ctx, next.Waiting[0], raced)
+	err := racer.handle(ctx, next.Waiting[0], next.raced())
 	if errors.Is(err, errRunNotRecorded) {
 		// Nothing new to copy: a backup each time would push the nights'
 		// copies out of the thirty kept.
@@ -283,24 +281,69 @@ func (racer *Racer) handleNext(ctx context.Context) (bool, error) {
 	return true, err
 }
 
-func (racer *Racer) heads(ctx context.Context) (map[string]string, error) {
+// Tonight is what a check would race now: its commits, its build (none
+// for a local racer, which races its checkout), and whether it is new
+// since the newest finished race.
+type Tonight struct {
+	Commits map[string]string
+	Build   Build
+	New     bool
+	Raced   map[string]string
+}
+
+// tonight is, for a racer in the cloud, the newest build of the commit it
+// runs from: the one the site serves, which it updated itself to (a new
+// roux build makes another build of the same commit). New when its race
+// key is not the last race's, which is the race key of the build with the
+// last race's commits; with no such build (pruned, or from before race
+// keys) it counts as new. A change to the site or the tool alone keeps the
+// race key: no race. For a local racer, the checkout's commits, new when
+// any differs.
+func (racer *Racer) tonight(ctx context.Context, raced map[string]string) (Tonight, error) {
 	if racer.local != "" {
 		fingerprint, err := fingerprintOf(racer.local)
 		if err != nil {
-			return nil, err
+			return Tonight{}, err
 		}
-		return map[string]string{"fourneau-dragrace": fingerprint.Dragrace,
-			"fourneau": fingerprint.Fourneau, "roux": fingerprint.Roux}, nil
+		heads := map[string]string{"fourneau-dragrace": fingerprint.Dragrace,
+			"fourneau": fingerprint.Fourneau, "roux": fingerprint.Roux}
+		_, anyNew := commitsPost(heads, raced)
+		return Tonight{Commits: heads, New: anyNew, Raced: raced}, nil
 	}
-	return racer.github.heads(ctx)
+	builds, err := racer.github.builds(ctx)
+	if err != nil {
+		return Tonight{}, err
+	}
+	own, found := newestOfCommit(builds, buildCommit)
+	if !found {
+		return Tonight{}, fmt.Errorf("no build of this racer's commit %q among the newest "+
+			"(one just installed updates itself within 10 minutes)", short(buildCommit))
+	}
+	last, found := buildWith(builds, raced)
+	isNew := !found || last.Info.RaceKey == "" || last.Info.RaceKey != own.Info.RaceKey
+	return Tonight{Commits: own.Info.Commits, Build: own, New: isNew, Raced: raced}, nil
+}
+
+// posted is what the race page's line on tonight is told (Store.roc,
+// status): the commits tonight's check would race, or, with nothing new,
+// the last race's, which the site reads as nothing new.
+func (tonight Tonight) posted() map[string]string {
+	if tonight.New {
+		return tonight.Commits
+	}
+	return tonight.Raced
 }
 
 func (racer *Racer) postHeads(ctx context.Context) error {
-	heads, err := racer.heads(ctx)
+	var next Next
+	if err := racer.site.get(ctx, "/api/racer/next", &next); err != nil {
+		return err
+	}
+	tonight, err := racer.tonight(ctx, next.raced())
 	if err != nil {
 		return err
 	}
-	return racer.postHeadsOf(ctx, heads)
+	return racer.postHeadsOf(ctx, tonight.posted())
 }
 
 func (racer *Racer) postHeadsOf(ctx context.Context, heads map[string]string) error {
@@ -323,7 +366,7 @@ func commitsPost(heads, raced map[string]string) ([]CommitPost, bool) {
 }
 
 // handle does one request: a check with nothing new is a skipped run;
-// anything else builds and races.
+// anything else races tonight's build.
 func (racer *Racer) handle(ctx context.Context, request Request, raced map[string]string) error {
 	watch := stopwatch{start: time.Now()}
 	trigger := "timer"
@@ -337,27 +380,24 @@ func (racer *Racer) handle(ctx context.Context, request Request, raced map[strin
 	started := time.Now().UTC()
 	run := RunPost{ID: runID(where, started), RequestID: request.ID, Trigger: trigger,
 		WhereRaced: where, StartedAt: started.Format(time.RFC3339)}
-	heads, err := racer.heads(ctx)
+	tonight, err := racer.tonight(ctx, raced)
 	if err != nil {
-		return racer.notRaced(ctx, run, "failed", "the heads: "+err.Error())
+		return racer.notRaced(ctx, run, "failed", "tonight's build: "+err.Error())
 	}
-	// The race page's line on tonight shows these heads at once: posted
-	// from the idle loop only, they would stand still for the hour a
-	// request takes.
-	if err := racer.postHeadsOf(ctx, heads); err != nil {
+	// The race page's line on tonight says it at once: posted from the
+	// idle loop only, it would stand still for the hour a request takes.
+	if err := racer.postHeadsOf(ctx, tonight.posted()); err != nil {
 		log.Printf("heads: %v", err)
 	}
-	commits, anyNew := commitsPost(heads, raced)
-	run.Commits = commits
-	if request.Kind == "check" && !anyNew {
-		log.Printf("check: nothing new since the last finished run: skipped")
+	run.Commits, _ = commitsPost(tonight.Commits, raced)
+	if request.Kind == "check" && !tonight.New {
+		log.Printf("check: nothing raced changed since the last finished run: skipped")
 		return racer.notRaced(ctx, run, "skipped", "nothing new since the last finished race")
 	}
-	root, built, err := racer.build(ctx, run.ID, heads)
+	root, err := racer.build(ctx, run.ID, tonight)
 	if err != nil {
 		return racer.notRaced(ctx, run, "failed", "the build: "+err.Error())
 	}
-	run.Commits, _ = commitsPost(built, raced)
 	buildSeconds := watch.since()
 	return racer.race(ctx, root, run, watch, buildSeconds)
 }
@@ -380,100 +420,54 @@ func (racer *Racer) notRaced(ctx context.Context, run RunPost, status, reason st
 }
 
 // build is the checkout to race: this one, for a local racer; otherwise
-// the release built from the heads (dispatched if there is none), unpacked.
-// It returns the commits the build has.
-func (racer *Racer) build(ctx context.Context, id string, heads map[string]string) (string,
-	map[string]string, error) {
+// tonight's build, its race.tar.gz downloaded and unpacked.
+func (racer *Racer) build(ctx context.Context, id string, tonight Tonight) (string, error) {
 	if racer.local != "" {
 		tools, err := loadToolchain(ctx, racer.local)
 		if err != nil {
-			return "", nil, err
+			return "", err
 		}
 		if err := copyFile(tools.Oha, filepath.Join(binDir(racer.local), "oha")); err != nil {
-			return "", nil, err
+			return "", err
 		}
-		return racer.local, heads, nil
+		return racer.local, nil
 	}
-	build, err := racer.findBuild(ctx, heads)
-	if err != nil {
-		return "", nil, err
-	}
+	build := tonight.Build
 	dir := filepath.Join(racer.config.State, "runs", id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", nil, err
+		return "", err
 	}
 	pruneRuns(filepath.Join(racer.config.State, "runs"), 5)
 	tarball := filepath.Join(dir, "race.tar.gz")
 	if err := racer.github.download(ctx, build.Assets["race.tar.gz"], build.Info.Files["race.tar.gz"],
 		tarball); err != nil {
-		return "", nil, err
+		return "", err
 	}
 	root := filepath.Join(dir, "bundle")
 	if err := os.MkdirAll(root, 0o700); err != nil {
-		return "", nil, err
+		return "", err
 	}
 	if err := run(ctx, root, nil, "tar", "-xzf", tarball); err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return root, build.Info.Commits, nil
+	return root, nil
 }
 
-// buildWaitMax bounds the wait for build.yml (it takes about 15 minutes).
-const buildWaitMax = 45 * time.Minute
-
-func (racer *Racer) findBuild(ctx context.Context, heads map[string]string) (Build, error) {
-	builds, err := racer.github.builds(ctx)
-	if err != nil {
-		return Build{}, err
-	}
-	if build, found := buildOf(builds, heads, time.Time{}); found {
-		return build, nil
-	}
-	asked := time.Now()
-	// A push's build already running builds these heads: wait for it
-	// rather than ask for a second build of the same commits.
-	running, err := racer.github.building(ctx, racer.config.Workflow)
-	if err != nil {
-		return Build{}, err
-	}
-	if running {
-		log.Printf("no build of these heads yet; %s is running: waiting for it", racer.config.Workflow)
-	} else {
-		log.Printf("no build of these heads: dispatching %s", racer.config.Workflow)
-		if err := racer.github.dispatch(ctx, racer.config.Workflow); err != nil {
-			return Build{}, err
-		}
-	}
-	for time.Since(asked) < buildWaitMax {
-		if err := sleepContext(ctx, 30*time.Second); err != nil {
-			return Build{}, err
-		}
-		builds, err := racer.github.builds(ctx)
-		if err != nil {
-			log.Printf("builds: %v", err)
-			continue
-		}
-		if build, found := buildOf(builds, heads, asked); found {
-			return build, nil
-		}
-	}
-	return Build{}, fmt.Errorf("no build after %s", buildWaitMax)
-}
-
-// buildOf is the build of exactly these heads, or, since `after` (zero:
-// never), the newest published since: the heads may have moved on while
-// it built, and then it built newer ones. Builds come newest first.
-func buildOf(builds []Build, heads map[string]string, after time.Time) (Build, bool) {
+// newestOfCommit is the newest build of this repository at commit. Builds
+// come newest first.
+func newestOfCommit(builds []Build, commit string) (Build, bool) {
 	for _, build := range builds {
-		if sameCommits(build.Info.Commits, heads) {
+		if commit != "" && build.Info.Commits["fourneau-dragrace"] == commit {
 			return build, true
 		}
 	}
-	if after.IsZero() {
-		return Build{}, false
-	}
+	return Build{}, false
+}
+
+// buildWith is the newest build of exactly these commits.
+func buildWith(builds []Build, commits map[string]string) (Build, bool) {
 	for _, build := range builds {
-		if build.PublishedAt.After(after) {
+		if sameCommits(build.Info.Commits, commits) {
 			return build, true
 		}
 	}
