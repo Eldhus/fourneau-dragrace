@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,12 +51,33 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 			return err
 		}
 	}
+	// Each by its key (keys.go): from the store when it has the key, else
+	// built and stored. The keys are taken before any step runs, as the
+	// checkout was, and recorded for the bundle.
+	keys := map[string]string{}
 	for _, competitor := range competitors {
+		key, err := competitorKey(ctx, root, tools, competitor)
+		if err != nil {
+			return err
+		}
+		keys[competitor.Name] = key
+		stored, err := fromStore(root, competitor.Name, key)
+		if err != nil {
+			return err
+		}
+		if stored {
+			log.Printf("%s: from the store, key %s", competitor.Name, key[:12])
+			continue
+		}
 		if err := buildCompetitor(ctx, root, tools, competitor); err != nil {
 			return err
 		}
+		if err := toStore(root, competitor.Name, key); err != nil {
+			return err
+		}
+		log.Printf("%s: built and stored, key %s", competitor.Name, key[:12])
 	}
-	return nil
+	return writeCompetitorKeys(root, keys)
 }
 
 // buildCompetitor runs one competitor's build steps in root, into root's
