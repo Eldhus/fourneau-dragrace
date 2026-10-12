@@ -15,6 +15,23 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: write
+# The competitors' dependencies and compiler caches, kept between builds: only caches their own
+# tools key by content (Cargo, Go, Zig), so a stale entry is never used.
+# Roc's compile cache is left out: `roc build` can reuse a stale binary
+# (a known trap); its downloaded packages, pinned by hash, are
+# kept. ci.yml restores the same list, which must match this one: the
+# cache's version is a hash of it.
+env:
+  DEPS_PATHS: |
+    ~/.cargo/registry
+    ~/.cargo/git
+    fourneau-dragrace/competitors/axum/target
+    ~/go/pkg/mod
+    ~/.cache/go-build
+    ~/.cache/zig
+    fourneau-dragrace/competitors/fourneau-zig/.zig-cache
+    roux/.zig-cache
+    ~/.cache/roc/packages
 jobs:
   build:
     if: github.repository == 'Eldhus/fourneau-dragrace'
@@ -42,21 +59,19 @@ jobs:
         with:
           path: ~/.cache/fourneau-dragrace
           key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
-      # The competitors' dependencies and builds, kept between runs: 7.5 of
-      # a build's 8 minutes went to compiling them from scratch.
-      # Cargo, Go, Zig and Roc each key their own caches by content.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The deps cache's key: the ISO week, so it starts afresh each week
+      # (Zig's and Cargo's caches only grow), and the pins it was built
+      # with. Each build saves its own (the run's id last): a cache hit on
+      # an exact key is never saved again, which froze the cache from
+      # 2026-10-10 to 10-12.
+      - name: The deps cache's key
+        id: deps
+        run: echo "prefix=deps-$(date -u +%G-W%V)-${{ hashFiles('fourneau-dragrace/competitors/axum/Cargo.lock', 'fourneau-dragrace/competitors/go/go.sum', 'fourneau-dragrace/versions.json') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            fourneau-dragrace/competitors/axum/target
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/zig
-            ~/.cache/roc
-          key: deps-${{ hashFiles('fourneau-dragrace/competitors/axum/Cargo.lock', 'fourneau-dragrace/competitors/go/go.sum', 'fourneau-dragrace/versions.json') }}
-          restore-keys: deps-
+          path: ${{ env.DEPS_PATHS }}
+          key: ${{ steps.deps.outputs.prefix }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.deps.outputs.prefix }}-
       # The conduit workload's seeded database is made with the sqlite3 shell.
       - name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
@@ -86,3 +101,26 @@ jobs:
             sort -r | tail -n +21 | while read -r old; do
               gh release delete "$old" --cleanup-tag --yes
             done
+      # Saved after the release, so it never delays one, and only from a
+      # build that succeeded. Bounded: past 4 GiB it is not saved, and the
+      # next build restores the last one that was (GitHub keeps 10 GiB a
+      # repository).
+      - name: The deps cache's size
+        id: size
+        run: |
+          total=0
+          while read -r path; do
+            path="${path/#\~/$HOME}"
+            if [ -n "$path" ] && [ -e "$path" ]; then
+              total=$((total + $(du -sb "$path" | cut -f1)))
+            fi
+          done <<< "$DEPS_PATHS"
+          echo "deps cache: $((total / 1048576)) MiB"
+          if [ "$total" -le $((4 * 1073741824)) ]; then
+            echo "bounded=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.size.outputs.bounded == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DEPS_PATHS }}
+          key: ${{ steps.deps.outputs.prefix }}-${{ github.run_id }}-${{ github.run_attempt }}

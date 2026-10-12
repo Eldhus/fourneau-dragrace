@@ -8,6 +8,19 @@ on:
   pull_request:
 permissions:
   contents: read
+# build.yml's list, which must match it (the cache's version is a hash of
+# it); that file says why each is kept.
+env:
+  DEPS_PATHS: |
+    ~/.cargo/registry
+    ~/.cargo/git
+    fourneau-dragrace/competitors/axum/target
+    ~/go/pkg/mod
+    ~/.cache/go-build
+    ~/.cache/zig
+    fourneau-dragrace/competitors/fourneau-zig/.zig-cache
+    roux/.zig-cache
+    ~/.cache/roc/packages
 jobs:
   smoke:
     runs-on: ubuntu-26.04
@@ -35,21 +48,16 @@ jobs:
         with:
           path: ~/.cache/fourneau-dragrace
           key: toolchain-${{ hashFiles('fourneau-dragrace/versions.json') }}
-      # The competitors' dependencies and builds, kept between runs: 7.5 of
-      # a build's 8 minutes went to compiling them from scratch.
-      # Cargo, Go, Zig and Roc each key their own caches by content.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The newest deps cache build.yml saved, read only: one writer, and
+      # a pull request's run can never change what master builds with.
+      - name: The deps cache's key
+        id: deps
+        run: echo "prefix=deps-$(date -u +%G-W%V)-${{ hashFiles('fourneau-dragrace/competitors/axum/Cargo.lock', 'fourneau-dragrace/competitors/go/go.sum', 'fourneau-dragrace/versions.json') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            fourneau-dragrace/competitors/axum/target
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/zig
-            ~/.cache/roc
-          key: deps-${{ hashFiles('fourneau-dragrace/competitors/axum/Cargo.lock', 'fourneau-dragrace/competitors/go/go.sum', 'fourneau-dragrace/versions.json') }}
-          restore-keys: deps-
+          path: ${{ env.DEPS_PATHS }}
+          key: ${{ steps.deps.outputs.prefix }}
+          restore-keys: ${{ steps.deps.outputs.prefix }}-
       # The conduit workload's seeded database is made with the sqlite3 shell.
       - name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
