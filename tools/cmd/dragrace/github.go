@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -23,11 +25,51 @@ type GitHub struct {
 	repository string // owner/name of this repository
 	api        string
 	client     *http.Client
+	// A call or download that fails for a moment is tried again, waiting
+	// first, doubling up to most, for window (retry).
+	window, first, most time.Duration
+	sleep               func(context.Context, time.Duration) error
 }
 
 func newGitHub(token, repository string) *GitHub {
 	return &GitHub{token: token, repository: repository, api: "https://api.github.com",
-		client: &http.Client{Timeout: 2 * time.Minute}}
+		client: &http.Client{Timeout: 2 * time.Minute}, window: 30 * time.Minute,
+		first: 2 * time.Second, most: time.Minute, sleep: sleepContext}
+}
+
+// errGitHubMoment is a failure that may pass: a connection dropped, a 5xx,
+// a 429.
+var errGitHubMoment = errors.New("GitHub, for a moment")
+
+// retry runs attempt until it succeeds, fails otherwise than for a moment,
+// or the window passes. GitHub answers 5xx now and then, and a 504 on a
+// release's download must not spend the night's check.
+func (github *GitHub) retry(ctx context.Context, what string, attempt func() error) error {
+	deadline := time.Now().Add(github.window)
+	wait := github.first
+	for n := 1; ; n++ {
+		err := attempt()
+		if err == nil || !errors.Is(err, errGitHubMoment) || ctx.Err() != nil {
+			return err
+		}
+		if time.Now().Add(wait).After(deadline) {
+			return fmt.Errorf("%s: %d attempts over %s: %w", what, n, github.window, err)
+		}
+		log.Printf("%s (attempt %d): %v; again in %s", what, n, err, wait)
+		if err := github.sleep(ctx, wait); err != nil {
+			return err
+		}
+		wait = min(2*wait, github.most)
+	}
+}
+
+// statusError is an answer that is not a success; a moment's when 5xx or
+// 429.
+func statusError(what string, code int, text string) error {
+	if code/100 == 5 || code == http.StatusTooManyRequests {
+		return fmt.Errorf("%w: %s: %d: %s", errGitHubMoment, what, code, text)
+	}
+	return fmt.Errorf("%s: %d: %s", what, code, text)
 }
 
 // racedRepositories are the repositories a race races, by their names in
@@ -77,21 +119,25 @@ func (github *GitHub) request(ctx context.Context, method, url string, body any)
 }
 
 func (github *GitHub) call(ctx context.Context, method, path string, body, into any) error {
-	response, err := github.request(ctx, method, github.api+path, body)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	text, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
-	if err != nil {
-		return err
-	}
-	if response.StatusCode/100 != 2 {
-		return fmt.Errorf("GitHub %s %s: %d: %s", method, path, response.StatusCode,
-			strings.TrimSpace(string(text)))
-	}
-	if into == nil {
+	what := "GitHub " + method + " " + path
+	var text []byte
+	err := github.retry(ctx, what, func() error {
+		response, err := github.request(ctx, method, github.api+path, body)
+		if err != nil {
+			return fmt.Errorf("%w: %w", errGitHubMoment, err)
+		}
+		defer response.Body.Close()
+		text, err = io.ReadAll(io.LimitReader(response.Body, 16<<20))
+		if err != nil {
+			return fmt.Errorf("%w: %w", errGitHubMoment, err)
+		}
+		if response.StatusCode/100 != 2 {
+			return statusError(what, response.StatusCode, strings.TrimSpace(string(text)))
+		}
 		return nil
+	})
+	if err != nil || into == nil {
+		return err
 	}
 	return json.Unmarshal(text, into)
 }
@@ -174,8 +220,15 @@ func (github *GitHub) dispatch(ctx context.Context, workflow string) error {
 		workflow+"/dispatches", map[string]string{"ref": "master"}, nil)
 }
 
-// download fetches a release file to path, checking its SHA-256.
+// download fetches a release file to path, checking its SHA-256; a
+// moment's failure is tried again (retry).
 func (github *GitHub) download(ctx context.Context, url, sha256Hex, path string) error {
+	return github.retry(ctx, "GitHub download", func() error {
+		return github.downloadOnce(ctx, url, sha256Hex, path)
+	})
+}
+
+func (github *GitHub) downloadOnce(ctx context.Context, url, sha256Hex, path string) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -183,11 +236,11 @@ func (github *GitHub) download(ctx context.Context, url, sha256Hex, path string)
 	client := &http.Client{Timeout: 20 * time.Minute}
 	response, err := client.Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errGitHubMoment, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %d", url, response.StatusCode)
+		return statusError(url, response.StatusCode, "")
 	}
 	file, err := os.Create(path)
 	if err != nil {
@@ -198,7 +251,7 @@ func (github *GitHub) download(ctx context.Context, url, sha256Hex, path string)
 	_, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, downloadBytesMax))
 	closeErr := file.Close()
 	if copyErr != nil {
-		return copyErr
+		return fmt.Errorf("%w: %w", errGitHubMoment, copyErr)
 	}
 	if closeErr != nil {
 		return closeErr

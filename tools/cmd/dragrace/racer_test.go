@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +100,68 @@ func TestARefusedRunIsNotBackedUp(t *testing.T) {
 	}
 	if got := strings.Join(waits, " "); got != "30s 1m0s 2m0s 4m0s 8m0s 16m0s 30m0s 30m0s 30m0s" {
 		t.Fatalf("waits: %s", got)
+	}
+}
+
+// GitHub's 5xx is a moment's: tried again, the waits doubling, until the
+// window passes; a 404 or a file not the build's fails at once.
+func TestGitHubRetriesAMoment(t *testing.T) {
+	failures := map[string]int{}
+	content := "race"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failures[r.URL.Path] > 0 {
+			failures[r.URL.Path]--
+			http.Error(w, "upstream", http.StatusGatewayTimeout)
+			return
+		}
+		switch r.URL.Path {
+		case "/race.tar.gz":
+			w.Write([]byte(content))
+		case "/repos/Eldhus/fourneau/commits/master":
+			fmt.Fprintf(w, `{"sha":%q}`, strings.Repeat("b", 40))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	github := newGitHub("", "Eldhus/fourneau-dragrace")
+	github.api = server.URL
+	var waits []string
+	github.sleep = func(_ context.Context, wait time.Duration) error {
+		waits = append(waits, wait.String())
+		return nil
+	}
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "race.tar.gz")
+	sum := sha256.Sum256([]byte(content))
+	failures["/race.tar.gz"] = 2
+	if err := github.download(ctx, server.URL+"/race.tar.gz", hex.EncodeToString(sum[:]), path); err != nil {
+		t.Fatalf("after two 504s: %v", err)
+	}
+	if strings.Join(waits, " ") != "2s 4s" {
+		t.Fatalf("waits %v", waits)
+	}
+	waits = nil
+	var commit struct{ SHA string }
+	failures["/repos/Eldhus/fourneau/commits/master"] = 1
+	if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/fourneau/commits/master", nil, &commit); err != nil ||
+		len(commit.SHA) != 40 || len(waits) != 1 {
+		t.Fatalf("a call after a 504: %v %q %v", err, commit.SHA, waits)
+	}
+	waits = nil
+	if err := github.download(ctx, server.URL+"/gone", "00", path); err == nil || len(waits) != 0 {
+		t.Fatalf("a 404 is not a moment's: %v, %v", err, waits)
+	}
+	if err := github.download(ctx, server.URL+"/race.tar.gz", "00", path); err == nil || len(waits) != 0 {
+		t.Fatalf("a file not the build's is not a moment's: %v, %v", err, waits)
+	}
+	github.window = 10 * time.Second
+	failures["/race.tar.gz"] = 100
+	err := github.download(ctx, server.URL+"/race.tar.gz", hex.EncodeToString(sum[:]), path)
+	// The sleep stands still, so the window ends at the first wait past
+	// it: 2, 4, 8 s, then not 16.
+	if err == nil || !strings.Contains(err.Error(), "4 attempts over 10s") || len(waits) != 3 {
+		t.Fatalf("past the window: %v, %v", err, waits)
 	}
 }
 
