@@ -7,6 +7,18 @@ CompetitorsPage :: [].{
 
 	## What `CompetitorsPage.rocstache` reads, inferred from its tags.
 	Ctx : {
+		competitors : List(
+			{
+				about : Str,
+				build : Str,
+				db : Str,
+				io : Str,
+				language : Str,
+				links : List({ href : Str, label : Str }),
+				name : Str,
+				templates : Str,
+			},
+		),
 		home : Bool,
 		nav : List({ current : Bool, href : Str, label : Str }),
 		pins : List({ name : Str, version : Str }),

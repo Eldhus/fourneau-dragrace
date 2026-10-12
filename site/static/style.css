@@ -225,6 +225,18 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
 .card h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 10px; font-size: 16px; }
 .card .lang { color: var(--text-3); margin: 0; font-size: 13px; }
 .card a { margin-right: 10px; font-size: 13px; white-space: nowrap; }
+/* A competitor's card: the language unlabelled in
+   grey, then four facts for the initiated at a glance (build the smallest),
+   the links, and a few sentences for everyone else at the bottom. */
+.competitors .card { display: flex; flex-direction: column; gap: 10px; }
+.competitors .card h3 { margin: 0; font-size: 17px; }
+.competitors .card .lang { margin-top: -6px; }
+.competitors .facts { margin: 0; display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 6px 12px; font-size: 13px; }
+.competitors .facts dt { margin: 0; color: var(--text-3); font-family: var(--mono); font-size: 11px; line-height: 1.6; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 1px; }
+.competitors .facts dd { margin: 0; color: var(--text-2); min-width: 0; }
+.competitors .facts dd.build { font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
+.competitors .links { margin: 0; }
+.competitors .about { margin: 0; padding-top: 10px; border-top: 1px solid var(--grid); color: var(--text); font-size: 14px; line-height: 1.6; text-wrap: pretty; }
 /* The workloads, a full-width card each, stacked. */
 .workloads { display: grid; gap: 10px; margin: 18px 0; }
 .workloads .card h3 { font-size: 15px; color: var(--flame); flex-wrap: wrap; }

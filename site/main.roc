@@ -18,6 +18,7 @@ import Api
 import Store
 import Data
 import View
+import Competitors
 import templates/IndexPage
 import templates/HistoryPage
 import templates/RaceClasses
@@ -175,7 +176,7 @@ competitors! = |db, request| {
 			Err(NotFound) => []
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
-	Ok(Rocstache.html(CompetitorsPage.template({ title: base.title, home: base.home, nav: base.nav, pins })))
+	Ok(Rocstache.html(CompetitorsPage.template({ title: base.title, home: base.home, nav: base.nav, pins, competitors: Competitors.all })))
 }
 
 ## The workloads as the newest race asked them.
