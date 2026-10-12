@@ -3,7 +3,7 @@
 <p>These five, and no others: the field is closed. Any of them may be made faster, fairly (<a href="/contribute">Contribute</a>).</p>
 <p>Each card says how the server waits on the network (io), renders the menu page (templates), talks to SQLite (db), and is built.</p>
 <div class="cards competitors">
-{{#competitors}}<section class="card competitor"><h3><span class="swatch s-{{ name }}"></span>{{ name }}</h3><p class="lang">{{ language }}</p>
+{{#competitors}}<section class="card competitor"><h3><span class="swatch s-{{ name }}"></span>{{ name }}<span class="lang">{{ language }}</span></h3>
 <dl class="facts"><dt>io</dt><dd>{{ io }}</dd><dt>templates</dt><dd>{{ templates }}</dd><dt>db</dt><dd>{{ db }}</dd><dt>build</dt><dd class="build">{{ build }}</dd></dl>
 <p class="links">{{#links}}<a href="{{ href }}">{{ label }}</a>{{/links}}</p>
 <p class="about">{{ about }}</p></section>
