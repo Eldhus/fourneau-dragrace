@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // The racer host: a small droplet in
@@ -136,19 +138,15 @@ func racerProvision(ctx context.Context, root string, args []string) error {
 	return nil
 }
 
-// guardConfigFor allows race.json's sizes, each at up to a quarter above
-// its price today, in race.json's region and image.
-func guardConfigFor(race Race, prices map[string]float64, capUSD float64) GuardConfig {
-	config := GuardConfig{Region: race.Cloud.Region, Image: race.Cloud.Image, Tag: race.Cloud.Tag,
-		Sizes: map[string]float64{}, MonthlyCapUSD: capUSD, DropletsMax: 6,
+// guardConfigFor allows any size up to hourlyMaxUSD an hour, in race.json's
+// region and image, under the month's cap. Before, it allowed
+// race.json's sizes only, and a class added without an install lost a
+// night.
+func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64) GuardConfig {
+	return GuardConfig{Region: race.Cloud.Region, Image: race.Cloud.Image, Tag: race.Cloud.Tag,
+		HourlyMaxUSD: hourlyMaxUSD, MonthlyCapUSD: capUSD, DropletsMax: 6,
 		AgeMaxMinutes: race.Cloud.MaxAgeMinutes, Socket: "/run/dragrace-guard/guard.sock",
 		Ledger: "/var/lib/dragrace-guard/ledger.json"}
-	for _, class := range race.Cloud.Servers {
-		for _, size := range []string{class.Size, class.LoaderSize} {
-			config.Sizes[size] = math.Ceil(prices[size]*1.25*10000) / 10000
-		}
-	}
-	return config
 }
 
 // racerInstall sets the racer up, as cook: the guard (this binary, pinned)
@@ -162,6 +160,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	siteHost := flags.String("site", "", "the site host's address")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
 	capUSD := flags.Float64("cap", 25, "the most the races may cost in a month, US dollars")
+	hourlyMaxUSD := flags.Float64("hourly-max", 0.25, "the most any droplet may cost an hour, US dollars")
 	flags.Parse(args)
 	if *host == "" || *siteHost == "" {
 		return fmt.Errorf("-host and -site are required")
@@ -178,9 +177,12 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	guardConfig := guardConfigFor(race, prices, *capUSD)
+	guardConfig := guardConfigFor(race, *hourlyMaxUSD, *capUSD)
 	if err := guardConfig.check(); err != nil {
 		return err
+	}
+	if problems := guardRefusals(race.Cloud, prices, guardConfig); len(problems) > 0 {
+		return fmt.Errorf("this guard would refuse race.json: %s", strings.Join(problems, "; "))
 	}
 	guardJSON, err := json.MarshalIndent(guardConfig, "", "  ")
 	if err != nil {
@@ -243,7 +245,11 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 			return fmt.Errorf("the %s credential: %w", name, err)
 		}
 	}
+	// Everything above is safe while a race runs (the running guard and
+	// racer keep their binaries and configs until restarted); the restart
+	// is not, so it waits for the racer to be idle.
 	start := strings.Join([]string{
+		racerIdleTest,
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-guard.service",
 		"sudo systemctl enable dragrace-racer.service",
@@ -252,10 +258,45 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		"sleep 3",
 		"systemctl is-active dragrace-guard.service dragrace-racer.service",
 	}, " && ")
-	if _, err := machine.Shell(ctx, start); err != nil {
+	if err := whenRacerIdle(ctx, func() error { _, err := machine.Shell(ctx, start); return err },
+		sleepContext); err != nil {
 		log.Printf("not running; the logs: ssh cook@%s journalctl -u dragrace-guard -u dragrace-racer", *host)
 		return err
 	}
-	fmt.Printf("the racer is serving: guard cap $%.2f a month, sizes %v\n", *capUSD, guardConfig.Sizes)
+	fmt.Printf("the racer is serving: guard cap $%.2f a month, any size up to $%.4f an hour\n",
+		*capUSD, *hourlyMaxUSD)
 	return nil
+}
+
+// racerIdleTest fails with racerBusyStatus while the racer races a run (its
+// `racing` file: racer.remember). In the same command as the restart, so a
+// run can start only in the instant between. A racer restarted while it
+// waits for a build records nothing: the request stays and is taken again.
+const (
+	racerBusyStatus = 75
+	racerIdleTest   = "if sudo test -e /var/lib/dragrace-racer/racing; then exit 75; fi"
+)
+
+// racerIdleWaits bounds the wait: a minute apart, four hours, past the
+// longest race (a worker's 150 minutes and a build's 40).
+const racerIdleWaits = 240
+
+// whenRacerIdle runs start (which begins with racerIdleTest) until the
+// racer is idle and it runs.
+func whenRacerIdle(ctx context.Context, start func() error,
+	sleep func(context.Context, time.Duration) error) error {
+	for wait := 1; wait <= racerIdleWaits; wait++ {
+		err := start()
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != racerBusyStatus {
+			return err
+		}
+		if wait == 1 {
+			log.Printf("a race is running: the racer restarts when it ends (asking each minute)")
+		}
+		if err := sleep(ctx, time.Minute); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("the racer was still racing after %d minutes: install again later", racerIdleWaits)
 }

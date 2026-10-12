@@ -31,8 +31,13 @@ type GuardConfig struct {
 	Region string `json:"region"`
 	Image  string `json:"image"`
 	Tag    string `json:"tag"`
-	// The sizes allowed, each with the most it may cost an hour.
-	Sizes         map[string]float64 `json:"sizes"`
+	// The most any droplet may cost an hour: whatever size the race asks
+	// for under it is allowed, so a class added to race.json needs no
+	// install. The month's cap still bounds the spend.
+	HourlyMaxUSD float64 `json:"hourly_max_usd,omitempty"`
+	// The sizes allowed, each with the most it may cost an hour: a config
+	// from before hourly_max_usd (race.json's sizes at the install).
+	Sizes         map[string]float64 `json:"sizes,omitempty"`
 	MonthlyCapUSD float64            `json:"monthly_cap_usd"`
 	DropletsMax   int                `json:"droplets_max"`
 	AgeMaxMinutes int                `json:"age_max_minutes"`
@@ -45,8 +50,11 @@ func (config GuardConfig) check() error {
 	if config.Region == "" || config.Image == "" || config.Tag == "" {
 		problems = append(problems, "region, image and tag are required")
 	}
-	if len(config.Sizes) == 0 {
-		problems = append(problems, "no sizes allowed")
+	if len(config.Sizes) == 0 && config.HourlyMaxUSD <= 0 {
+		problems = append(problems, "no sizes allowed: hourly_max_usd or sizes")
+	}
+	if config.HourlyMaxUSD > guardHourlyUSDMax {
+		problems = append(problems, fmt.Sprintf("hourly_max_usd: at most %d", guardHourlyUSDMax))
 	}
 	if config.MonthlyCapUSD <= 0 || config.MonthlyCapUSD > guardCapUSDMax {
 		problems = append(problems, fmt.Sprintf("monthly_cap_usd: above 0, at most %d", guardCapUSDMax))
@@ -66,8 +74,12 @@ func (config GuardConfig) check() error {
 	return nil
 }
 
-// guardCapUSDMax bounds a cap typed with a zero too many.
-const guardCapUSDMax = 200
+// guardCapUSDMax bounds a cap typed with a zero too many; guardHourlyUSDMax,
+// an hourly ceiling (the race's dearest size, c-4, is $0.125).
+const (
+	guardCapUSDMax    = 200
+	guardHourlyUSDMax = 2
+)
 
 // Life is one droplet the guard made, by its own clock, at the price it
 // allowed.
@@ -137,6 +149,22 @@ func (guard *Guard) committed(now time.Time) float64 {
 	return total
 }
 
+// sizeProblem says why a size at its price now is not allowed, or "": under
+// hourly_max_usd, or at most its own price in a config of sizes.
+func (config GuardConfig) sizeProblem(size string, priceNow float64) string {
+	most, listed := config.Sizes[size]
+	if !listed && config.HourlyMaxUSD > 0 {
+		most, listed = config.HourlyMaxUSD, true
+	}
+	switch {
+	case !listed:
+		return fmt.Sprintf("size %s is not allowed", size)
+	case priceNow <= 0 || priceNow > most:
+		return fmt.Sprintf("%s costs $%.4f an hour, the most allowed is $%.4f", size, priceNow, most)
+	}
+	return ""
+}
+
 // errRefused is the guard's refusal: the race asked for what the owner did
 // not allow. The racer records the run as refused.
 var errRefused = errors.New("refused by the guard")
@@ -145,13 +173,10 @@ var errRefused = errors.New("refused by the guard")
 // the size's price now; it returns the price to record.
 func (guard *Guard) allow(request DropletRequest, priceNow float64) error {
 	config := guard.config
-	most, allowed := config.Sizes[request.Size]
+	if problem := config.sizeProblem(request.Size, priceNow); problem != "" {
+		return fmt.Errorf("%w: %s", errRefused, problem)
+	}
 	switch {
-	case !allowed:
-		return fmt.Errorf("%w: size %s is not allowed", errRefused, request.Size)
-	case priceNow <= 0 || priceNow > most:
-		return fmt.Errorf("%w: %s costs $%.4f an hour, the most allowed is $%.4f",
-			errRefused, request.Size, priceNow, most)
 	case request.Region != config.Region:
 		return fmt.Errorf("%w: region %s, not %s", errRefused, request.Region, config.Region)
 	case request.Image != config.Image:
@@ -623,20 +648,14 @@ func (guard *GuardClient) allowed(ctx context.Context) (GuardConfig, error) {
 
 // guardRefusals is what the guard would refuse of a race, before a
 // droplet is made: each class's sizes (at their prices now), the region,
-// image and tag, and two droplets a class. The guard's sizes are race.json's
-// at its install, so a class added since is refused before
-// any droplet is made.
+// image and tag, and two droplets a class, so a run is not refused after
+// droplets were already made.
 func guardRefusals(cloud Cloud, prices map[string]float64, allowed GuardConfig) []string {
 	var problems []string
 	for _, class := range cloud.Servers {
 		for _, size := range []string{class.Size, class.LoaderSize} {
-			most, found := allowed.Sizes[size]
-			switch {
-			case !found:
-				problems = append(problems, fmt.Sprintf("%s: size %s is not allowed", class.Name, size))
-			case prices[size] > most:
-				problems = append(problems, fmt.Sprintf("%s: %s costs $%.4f an hour, the most allowed "+
-					"is $%.4f", class.Name, size, prices[size], most))
+			if problem := allowed.sizeProblem(size, prices[size]); problem != "" {
+				problems = append(problems, class.Name+": "+problem)
 			}
 		}
 	}

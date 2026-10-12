@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -307,47 +308,112 @@ func TestGuardOverItsSocket(t *testing.T) {
 }
 
 // What the guard would refuse is found before a droplet: a third class
-// whose size the guard's install does not have.
+// whose size a guard of race.json's sizes does not have; a guard with an
+// hourly ceiling takes it with no install.
 func TestGuardRefusalsBeforeADroplet(t *testing.T) {
 	two := []ServerClass{{Name: "smallest", Size: "s-1vcpu-512mb-10gb", LoaderSize: "c-4"},
 		{Name: "dedicated-2", Size: "c-2", LoaderSize: "c-4"}}
 	cloud := Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180, Servers: two}
 	prices := map[string]float64{"s-1vcpu-512mb-10gb": 0.006, "c-2": 0.0625, "c-4": 0.125,
-		"s-2vcpu-2gb-amd": 0.0312}
-	allowed := guardConfigFor(Race{Cloud: cloud}, prices, 25)
-	if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
-		t.Fatalf("the race the guard was installed for: %v", problems)
+		"s-2vcpu-2gb-amd": 0.0312, "c-8": 0.25, "c-16": 0.5}
+	legacy := GuardConfig{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", DropletsMax: 6,
+		Sizes: map[string]float64{"s-1vcpu-512mb-10gb": 0.0075, "c-2": 0.0782, "c-4": 0.1563}}
+	ceiling := guardConfigFor(Race{Cloud: cloud}, 0.25, 25)
+	for _, allowed := range []GuardConfig{legacy, ceiling} {
+		if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
+			t.Fatalf("the race the guard was installed for: %v", problems)
+		}
 	}
 	cloud.Servers = append(two, ServerClass{Name: "basic-amd-2", Size: "s-2vcpu-2gb-amd", LoaderSize: "c-4"})
-	problems := guardRefusals(cloud, prices, allowed)
+	problems := guardRefusals(cloud, prices, legacy)
 	if strings.Join(problems, "; ") != "basic-amd-2: size s-2vcpu-2gb-amd is not allowed" {
-		t.Fatalf("a class added since: %v", problems)
+		t.Fatalf("a class added since, a guard of sizes: %v", problems)
 	}
-	allowed = guardConfigFor(Race{Cloud: cloud}, prices, 25)
-	if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
-		t.Fatalf("installed again: %v", problems)
+	if problems := guardRefusals(cloud, prices, ceiling); len(problems) != 0 {
+		t.Fatalf("a class added since, a guard with a ceiling: %v", problems)
 	}
-	cloud.Servers = append(cloud.Servers, ServerClass{Name: "fourth", Size: "c-2", LoaderSize: "c-4"})
-	prices["c-4"] = 0.2
+	cloud.Servers = append(cloud.Servers, ServerClass{Name: "fourth", Size: "c-8", LoaderSize: "c-16"})
 	cloud.Region = "nyc3"
-	got := strings.Join(guardRefusals(cloud, prices, allowed), "; ")
-	for _, want := range []string{"costs $0.2000 an hour", "region, image, tag nyc3",
-		"4 classes need 8 droplets; the guard allows 6"} {
+	got := strings.Join(guardRefusals(cloud, prices, ceiling), "; ")
+	for _, want := range []string{"fourth: c-16 costs $0.5000 an hour, the most allowed is $0.2500",
+		"region, image, tag nyc3", "4 classes need 8 droplets; the guard allows 6"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("%q missing from %q", want, got)
 		}
 	}
+	if strings.Contains(got, "c-8") {
+		t.Fatalf("c-8, at the ceiling, refused: %q", got)
+	}
 }
 
-func TestGuardConfigAllowsRaceJSONsSizesOnly(t *testing.T) {
+// racer install restarts the racer only when no run races: a busy racer
+// (the test's exit status) is asked again each minute; any other failure
+// ends the install.
+func TestRacerInstallWaitsForTheRace(t *testing.T) {
+	busy := func(status int) error {
+		return exec.Command("sh", "-c", fmt.Sprintf("exit %d", status)).Run()
+	}
+	starts, sleeps := 0, 0
+	sleep := func(context.Context, time.Duration) error { sleeps++; return nil }
+	start := func() error {
+		starts++
+		if starts <= 2 {
+			return busy(racerBusyStatus)
+		}
+		return nil
+	}
+	if err := whenRacerIdle(context.Background(), start, sleep); err != nil || starts != 3 || sleeps != 2 {
+		t.Fatalf("busy twice: %v, %d starts, %d sleeps", err, starts, sleeps)
+	}
+	starts, sleeps = 0, 0
+	failing := func() error { starts++; return busy(1) }
+	if err := whenRacerIdle(context.Background(), failing, sleep); err == nil || starts != 1 || sleeps != 0 {
+		t.Fatalf("a failed restart: %v, %d starts", err, starts)
+	}
+	starts = 0
+	always := func() error { starts++; return busy(racerBusyStatus) }
+	if err := whenRacerIdle(context.Background(), always, sleep); err == nil || starts != racerIdleWaits {
+		t.Fatalf("a race that never ends: %v, %d starts", err, starts)
+	}
+	if !strings.Contains(racerIdleTest, fmt.Sprintf("exit %d", racerBusyStatus)) {
+		t.Fatalf("the test's status is not racerBusyStatus: %s", racerIdleTest)
+	}
+}
+
+// The guard with a ceiling makes any size under it, and nothing dearer.
+func TestGuardAllowsAnySizeUnderItsCeiling(t *testing.T) {
+	guard, fake, _ := testGuard(t, 25)
+	guard.config.Sizes, guard.config.HourlyMaxUSD = nil, 0.13
+	if err := guard.config.check(); err != nil {
+		t.Fatal(err)
+	}
+	fake.prices["s-2vcpu-2gb-amd"] = 0.0312
+	for _, size := range []string{"c-2", "s-2vcpu-2gb-amd", "c-4"} {
+		if _, err := guard.createDroplet(context.Background(), raceDroplet(size)); err != nil {
+			t.Fatalf("%s: %v", size, err)
+		}
+	}
+	if _, err := guard.createDroplet(context.Background(), raceDroplet("c-32")); !errors.Is(err, errRefused) {
+		t.Fatalf("c-32 at $1 an hour: %v", err)
+	}
+	guard.config.HourlyMaxUSD = 0
+	if err := guard.config.check(); err == nil {
+		t.Fatal("a guard allowing no size")
+	}
+}
+
+func TestGuardConfigHasACeiling(t *testing.T) {
 	race := Race{Cloud: Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180,
 		Servers: []ServerClass{{Name: "a", Size: "c-2", LoaderSize: "c-4"}}}}
-	config := guardConfigFor(race, map[string]float64{"c-2": 0.0625, "c-4": 0.125, "c-32": 1}, 25)
+	config := guardConfigFor(race, 0.25, 25)
 	if err := config.check(); err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Sizes) != 2 || config.Sizes["c-2"] != 0.0782 || config.Sizes["c-4"] != 0.1563 {
-		t.Fatalf("sizes %v", config.Sizes)
+	if len(config.Sizes) != 0 || config.HourlyMaxUSD != 0.25 {
+		t.Fatalf("sizes %v, ceiling %v", config.Sizes, config.HourlyMaxUSD)
+	}
+	if err := guardConfigFor(race, 20, 25).check(); err == nil {
+		t.Fatal("a ceiling of $20 an hour, a zero too many, accepted")
 	}
 	for _, unit := range racerUnits() {
 		if strings.Contains(unit, "digitalocean-token") && !strings.Contains(unit, "User=guard") {
