@@ -162,13 +162,6 @@
         "title": "Dedicated cores, no neighbours",
         "size": "c-2",
         "loader_size": "c-4"
-      },
-      {
-        "name": "basic-amd-2",
-        "label": "2GB/2vCPU AMD",
-        "title": "What a $21/month droplet can do",
-        "size": "s-2vcpu-2gb-amd",
-        "loader_size": "c-4"
       }
     ],
     "tag": "fourneau-dragrace-race",
