@@ -13,6 +13,7 @@ import pf.Rocstache
 import pf.File
 import pf.Sse
 import pf.Sqlite
+import pf.Sleep
 import db/Database
 import Api
 import Store
@@ -20,6 +21,7 @@ import Data
 import View
 import Competitors
 import templates/IndexPage
+import templates/LiveRace
 import templates/HistoryPage
 import templates/RaceClasses
 import templates/HistoryClasses
@@ -67,6 +69,7 @@ respond! = |request, { db, tokens }| {
 			"/history" => history!(db, request, wanted)
 			"/race-classes" => race_classes!(db, request, wanted)
 			"/history-classes" => history_classes!(db, request, wanted)
+			"/race-live" => race_live!(db, request)
 			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
 			# Method is a part of Workloads now.
@@ -111,12 +114,18 @@ index! = |db, request, wanted| {
 			Err(DbErr(err)) => return Err(DbErr(err))
 		}
 	racer = Store.status(Store.racer!(db, request)?)
+	live =
+		match Store.live!(db, request)? {
+			Racing(run) => [View.live_banner(run.newest, run.classes, Bool.False)]
+			Idle => []
+		}
 	shown = race_tabs(latest, wanted)
 	Ok(Rocstache.html(IndexPage.template({
 		title: base.title,
 		home: Bool.True,
 		nav: base.nav,
 		racer,
+		live,
 		ready,
 		id: latest.id,
 		started: latest.started,
@@ -395,6 +404,60 @@ history_classes! = |db, request, wanted| {
 	shown = history_tabs(view, wanted)
 	patch!(request, HistoryClasses.template({ tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
 }
+
+## The race page's live banner, kept current while a run races: a Datastar stream per open race page. Every 1.618 s the
+## handler reads the run (`Sleep.millis!`: its fiber waits, the shard
+## serves others) and patches `#live-race` when what it says changed, with
+## the flare when a result has landed (a new canvas each time, so its
+## animation runs). A `ping` every twelve quiet reads (~20 s) finds a page
+## that was closed. When the run is over the page reloads, showing it.
+## Bounded: 27,000 reads, past 12 hours.
+race_live! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
+race_live! = |db, request| {
+	stream = Sse.start!(request, [])?
+	var $text = ""
+	var $done = ""
+	var $quiet = 0
+	var $reads = 0
+	var $racing = Bool.True
+	while $racing and $reads < 27_000 {
+		$reads = $reads + 1
+		match Store.live!(db, request)? {
+			Idle => {
+				Sse.send!(stream, reload)?
+				$racing = Bool.False
+			}
+			Racing(run) => {
+				calm = View.live_banner(run.newest, run.classes, Bool.False)
+				if calm.text != $text or calm.done != $done {
+					# The first read draws what the page has; no flare.
+					landed = $done != "" and calm.done != $done
+					Sse.send!(stream, Rocstache.patch!(LiveRace.template(View.live_banner(run.newest, run.classes, landed))))?
+					$text = calm.text
+					$done = calm.done
+					$quiet = 0
+				} else {
+					$quiet = $quiet + 1
+					if $quiet >= 12 {
+						Sse.send!(stream, ping)?
+						$quiet = 0
+					}
+				}
+				Sse.flush!(stream)?
+				Sleep.millis!(1_618)
+			}
+		}
+	}
+	Sse.end!(stream)
+}
+
+## Datastar runs a script patched into the page: this one reloads it.
+reload : Sse.Event
+reload = Sse.Event.named("datastar-patch-elements", "selector body\nmode append\nelements <script data-effect=\"el.remove()\">window.location.reload()</script>") ?? Sse.Event.data("")
+
+## An event Datastar ignores: what tells a stream its page was closed.
+ping : Sse.Event
+ping = Sse.Event.named("ping", "") ?? Sse.Event.data("")
 
 ## A Datastar patch: one event, the template's HTML a line per `elements`
 ## field, the element replaced by its id (Datastar's default, outer).

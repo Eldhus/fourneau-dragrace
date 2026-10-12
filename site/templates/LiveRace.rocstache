@@ -1,0 +1,1 @@
+<p id="live-race" class="racer live"><span class="news">{{ text }}</span><span class="items"><span class="row">{{#items}}<span class="item">{{ . }}</span>{{/items}}</span></span>{{?flare}}<canvas class="flare" id="flare-{{ done }}" aria-hidden="true"></canvas>{{/flare}}</p>

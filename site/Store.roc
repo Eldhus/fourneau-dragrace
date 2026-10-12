@@ -3,6 +3,7 @@ import pf.Sqlite
 import db/Pages
 import db/Heads
 import db/Requests
+import db/Live
 import Data
 
 ## The races as the pages model them (Data.roc), read from the database:
@@ -213,7 +214,25 @@ Store :: [].{
 				}
 				_ => []
 			}
-		racing.concat(asked).concat(tonight).concat(last)
+		# A run racing is the live banner's (live!), not a banner here.
+		asked.concat(tonight).concat(last)
+	}
+
+	## The run racing now, as the race page's live banner shows it: its newest results, and each class's progress
+	## and seconds left (db/Live.sql says how they are estimated).
+	LiveRun : { id : Str, newest : List(Live.Newest), classes : List(Live.Progress) }
+
+	live! : Sqlite.Db, Server.Request => Try([Racing(LiveRun), Idle], [DbErr(Sqlite.Err)])
+	live! = |db, request| {
+		reads = Sqlite.read(db, request)
+		match Live.racing!(reads) {
+			Ok({ id, .. }) => {
+				key = { run_id: id }
+				Ok(Racing({ id, newest: Live.newest!(reads, key)?, classes: Live.progress!(reads, key)? }))
+			}
+			Err(NotFound) => Ok(Idle)
+			Err(DbErr(err)) => Err(DbErr(err))
+		}
 	}
 
 	short : Str -> Str
@@ -280,8 +299,8 @@ expect {
 	run = |status, reason| { id: "r1", trigger: "timer", status, reason, started_at: "", finished_at: Null }
 	racing = { recent: [run("racing", "")], classes: [{ class: "smallest", status: "done", reason: "", seconds: 1.0 }], results: 12, waiting: [], heads: [], raced: [] }
 	skipped = { ..racing, recent: [run("skipped", "nothing new")], classes: [] }
-	now = [{ text: "Racing now: r1, 12 results in", items: ["smallest done"] }]
-	Store.status(racing) == now
-	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == now
+	# A run racing is the live banner's; tonight's news waits for its end.
+	Store.status(racing) == []
+	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == []
 	and Store.status(skipped) == [{ text: "The last run, r1, was skipped: nothing new.", items: [] }]
 }

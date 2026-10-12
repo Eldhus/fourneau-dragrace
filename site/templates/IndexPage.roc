@@ -153,6 +153,9 @@ IndexPage :: [].{
 		competitors : List(Str),
 		home : Bool,
 		id : Str,
+		live : List(
+			{ done : Str, flare : Bool, items : List(Str), text : Str },
+		),
 		nav : List({ current : Bool, href : Str, label : Str }),
 		racer : List({ items : List(Str), text : Str }),
 		ready : Bool,

@@ -413,3 +413,13 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .racer .item::before { content: "\00b7"; display: inline-block; width: 2.4em; text-align: center; color: var(--text-3); }
 @media (prefers-reduced-motion: reduce) { .racer::before { animation: none; } }
 @media (max-width: 560px) { .racer { font-size: 9px; } }
+/* The live banner: the racer's banner while a run
+   races, kept current by its stream (main.roc, race_live!). A result
+   landing burns the masthead's fire across it once (demo.js): the canvas
+   sits on the banner's bottom edge and reaches above it for the smoke,
+   lit onto the panel, never catching a click. */
+.live-wrap { position: relative; }
+.racer.live .flare {
+  position: absolute; left: 0; bottom: 0; width: 100%; height: 260%; z-index: 2;
+  image-rendering: pixelated; pointer-events: none; mix-blend-mode: screen; opacity: .8;
+}

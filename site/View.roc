@@ -1,6 +1,7 @@
 import Data
 import Format
 import db/Pages
+import db/Live
 
 ## What the pages show, made from the races: every number formatted, every
 ## bar's share and every chart's path computed here, so the templates only
@@ -205,6 +206,50 @@ View :: [].{
 			h2c: charted("h2c", class),
 		})
 		{ waiting: List.len(shown) < 2, note, sections, section, classes }
+	}
+
+	## The race page's live banner while a run races (LiveRace.rocstache): one sentence (results in, of how many, and
+	## the time left as HH:MM), the newest results as its items, and the
+	## flare when a result has just landed; `done` names the flare's canvas,
+	## so each result's is a new element and its animation runs.
+	LiveBanner : { text : Str, items : List(Str), flare : Bool, done : Str }
+
+	live_banner : List(Live.Newest), List(Live.Progress), Bool -> LiveBanner
+	live_banner = |newest, classes, flare| {
+		done : I64
+		done = classes.fold(0, |sum, c| sum + c.done)
+		expected : I64
+		expected = classes.fold(0, |sum, c| sum + (if c.expected > c.done c.expected else c.done))
+		# A class the previous run did not race has no estimate.
+		timed = classes.keep_if(|c| c.expected > 0 and !c.over)
+		left = timed.fold(0.0, |most, c| if c.left_seconds > most c.left_seconds else most)
+		text =
+			if done >= expected and done > 0 {
+				"Racing now · all ${done.to_str()} results in, finishing"
+			} else if timed.is_empty() {
+				"Racing now · ${done.to_str()} of ${expected.to_str()} results in"
+			} else {
+				"Racing now · ${done.to_str()} of ${expected.to_str()} results in · about ${View.clock(left)} left"
+			}
+		items = newest.map(
+			|n| {
+				rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
+				"${n.competitor} ${n.workload} on ${n.class_label}: ${rate}"
+			},
+		)
+		{ text, items, flare, done: done.to_str() }
+	}
+
+	## Seconds as hours and minutes, HH:MM, rounded up to the minute: a
+	## race says 00:01 until it is done, never 00:00.
+	clock : F64 -> Str
+	clock = |seconds| {
+		whole_seconds = seconds.round_to_u64_try() ?? 0
+		minutes = (whole_seconds + 59) // 60
+		hours = minutes // 60
+		rest = minutes % 60
+		pad = |n| if n < 10 "0${n.to_str()}" else n.to_str()
+		"${pad(hours)}:${pad(rest)}"
 	}
 
 	## The pinned versions of the newest race.
@@ -1079,3 +1124,18 @@ memory = |mib|
 	}
 
 expect memory(0) == [] and memory(457) == ["457 MiB"] and memory(3916) == ["3.8 GiB"]
+
+expect View.clock(0.0) == "00:00" and View.clock(1.0) == "00:01" and View.clock(60.0) == "00:01"
+expect View.clock(61.0) == "00:02" and View.clock(4320.0) == "01:12" and View.clock(36000.0) == "10:00"
+
+expect {
+	newest = [{ class: "smallest", class_label: "512MB/1vCPU", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 }]
+	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds }
+	banner = View.live_banner(newest, [progress("a", 41, 59, 300.0), progress("b", 40, 59, 4320.0), progress("c", 30, 0, 0.0)], Bool.True)
+	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.items == ["roux Echo 4 KiB on 512MB/1vCPU: 35,297 req/s"] and banner.done == "111"
+}
+
+expect {
+	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0 }], Bool.False)
+	all_in.text == "Racing now · all 59 results in, finishing"
+}
