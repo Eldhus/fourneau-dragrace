@@ -199,11 +199,28 @@ func commandRacer(ctx context.Context, args []string) error {
 	return fmt.Errorf("unknown: dragrace racer %s", args[0])
 }
 
-// serve takes requests until stopped: every 30 s it asks the site, every
-// 10 minutes it tells the site the heads, and, idle, it updates itself.
+// errRunNotRecorded is a request whose run the site did not take (refused,
+// or not answering): the request stays, and is taken again.
+var errRunNotRecorded = errors.New("the site did not record the run")
+
+// requestWait is how long the racer waits before asking the site again,
+// after `refused` runs in a row it did not record: 30 s, then doubling from
+// a minute up to half an hour. A site that refuses every run (a field it
+// does not know) is asked fewer than fifty times a day, not every 30 s.
+func requestWait(refused int) time.Duration {
+	if refused == 0 {
+		return 30 * time.Second
+	}
+	return min(time.Minute<<min(refused-1, 5), 30*time.Minute)
+}
+
+// serve takes requests until stopped: every 30 s it asks the site (less
+// often while the site refuses its runs: requestWait), every 10 minutes it
+// tells the site the heads, and, idle, it updates itself.
 func (racer *Racer) serve(ctx context.Context) error {
 	racer.recover(ctx)
 	var headsAt, updateAt time.Time
+	refused := 0
 	for {
 		if time.Since(headsAt) > 10*time.Minute {
 			headsAt = time.Now()
@@ -215,13 +232,19 @@ func (racer *Racer) serve(ctx context.Context) error {
 		if err != nil {
 			log.Printf("request: %v", err)
 		}
+		if handled && errors.Is(err, errRunNotRecorded) {
+			refused++
+			log.Printf("asking again in %s", requestWait(refused))
+		} else {
+			refused = 0
+		}
 		if !handled && racer.local == "" && time.Since(updateAt) > 10*time.Minute {
 			updateAt = time.Now()
 			if err := racer.update(ctx); err != nil {
 				log.Printf("update: %v", err)
 			}
 		}
-		if err := sleepContext(ctx, 30*time.Second); err != nil {
+		if err := sleepContext(ctx, requestWait(refused)); err != nil {
 			return nil
 		}
 	}
@@ -249,6 +272,11 @@ func (racer *Racer) handleNext(ctx context.Context) (bool, error) {
 		raced[commit.Repository] = commit.CommitSHA
 	}
 	err := racer.handle(ctx, next.Waiting[0], raced)
+	if errors.Is(err, errRunNotRecorded) {
+		// Nothing new to copy: a backup each time would push the nights'
+		// copies out of the thirty kept.
+		return true, err
+	}
 	if backupErr := racer.site.post(ctx, "/api/backup", nil, nil); backupErr != nil {
 		log.Printf("backup: %v", backupErr)
 	}
@@ -343,7 +371,7 @@ func (racer *Racer) notRaced(ctx context.Context, run RunPost, status, reason st
 	}
 	run.Status, run.Reason = status, reason
 	if err := racer.site.post(ctx, "/api/runs", run, nil); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errRunNotRecorded, err)
 	}
 	if status == "failed" {
 		return errors.New(reason)
@@ -560,7 +588,7 @@ func (racer *Racer) race(ctx context.Context, root string, run RunPost, watch st
 	}
 	run.Status, run.WorkerToken = "racing", randomToken()
 	if err := racer.site.post(ctx, "/api/runs", run, nil); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errRunNotRecorded, err)
 	}
 	racer.remember(run.ID)
 	defer racer.forget()
