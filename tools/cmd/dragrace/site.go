@@ -176,7 +176,7 @@ WantedBy=timers.target
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups")
+		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now")
 	}
 	switch args[0] {
 	case "build":
@@ -189,8 +189,6 @@ func commandSite(ctx context.Context, root string, args []string) error {
 		return siteInstallServer(ctx, root, args[1:])
 	case "race-now":
 		return siteRaceNow(ctx, args[1:])
-	case "backups":
-		return siteBackups(ctx, args[1:])
 	}
 	return fmt.Errorf("unknown: dragrace site %s", args[0])
 }
@@ -515,25 +513,4 @@ func siteRaceNow(ctx context.Context, args []string) error {
 		fmt.Printf("race asked for (request %d); the racer takes it within a minute\n", answer.ID)
 	}
 	return nil
-}
-
-// siteBackups turns on DigitalOcean's backups of the site host, with the
-// owner's token: the copy of the whole disk beside the site's own nightly
-// copies. DigitalOcean's default plan is daily, seven kept, 30% of the
-// droplet's price (its backup policy endpoint says so).
-func siteBackups(ctx context.Context, args []string) error {
-	flags := newFlags("site backups")
-	flags.Parse(args)
-	do, err := newDigitalOcean()
-	if err != nil {
-		return err
-	}
-	droplets, err := do.dropletsTagged(ctx, "fourneau-dragrace-site")
-	if err != nil {
-		return err
-	}
-	if len(droplets) != 1 {
-		return fmt.Errorf("%d droplets tagged fourneau-dragrace-site, want 1", len(droplets))
-	}
-	return do.enableBackups(ctx, droplets[0].ID)
 }

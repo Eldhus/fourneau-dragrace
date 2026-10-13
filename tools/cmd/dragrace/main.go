@@ -11,14 +11,12 @@
 //	dragrace adhoc race|down        builds at any commits raced against
 //	                                each other on a warm pair, in under a
 //	                                minute
-//	dragrace sizes [-prefix c]      droplet sizes and prices in race.json's region
 //	dragrace reap                   delete race droplets older than allowed
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site dev               the site rebuilt and reloaded as it is
 //	                                edited (Roc's dev backend; for the UI)
 //	dragrace site provision|install-server   the 24/7 site droplet, set up
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
-//	dragrace site backups           DigitalOcean's daily backups of the site
 //	dragrace racer provision|install   the racer droplet, set up
 //	dragrace hosts check [-racer H] both hosts against this checkout, read
 //	                                only
@@ -129,8 +127,6 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandAdhoc(ctx, root, args)
 	case "diff":
 		return commandDiff(ctx, root, args)
-	case "sizes":
-		return commandSizes(ctx, root, args)
 	case "reap":
 		return commandReap(ctx, root, args)
 	case "site":
@@ -156,8 +152,7 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | race cloud | adhoc race|down | diff |
-  sizes | reap |
-  bundle | worker | site build|dev|provision|install-server|race-now|backups |
+  reap | bundle | worker | site build|dev|provision|install-server|race-now |
   guard | racer serve|check|once|provision|install | host-agent |
   hosts check | version
 See README.md.`)

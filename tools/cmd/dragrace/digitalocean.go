@@ -159,12 +159,6 @@ func (do *DigitalOcean) deleteDroplet(ctx context.Context, id int) error {
 	return do.call(ctx, http.MethodDelete, fmt.Sprintf("/v2/droplets/%d", id), nil, nil)
 }
 
-// enableBackups turns on a droplet's backups (DigitalOcean's default plan: daily).
-func (do *DigitalOcean) enableBackups(ctx context.Context, id int) error {
-	return do.call(ctx, http.MethodPost, fmt.Sprintf("/v2/droplets/%d/actions", id),
-		map[string]string{"type": "enable_backups"}, nil)
-}
-
 type SSHKey struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
@@ -210,14 +204,11 @@ func (do *DigitalOcean) deleteKey(ctx context.Context, id int) error {
 
 // Size is one droplet size and where it can be made.
 type Size struct {
-	Slug         string   `json:"slug"`
-	Available    bool     `json:"available"`
-	Regions      []string `json:"regions"`
-	VCPUs        int      `json:"vcpus"`
-	MemoryMiB    int      `json:"memory"`
-	PriceHourly  float64  `json:"price_hourly"`
-	PriceMonthly float64  `json:"price_monthly"`
-	Description  string   `json:"description"`
+	Slug        string   `json:"slug"`
+	Available   bool     `json:"available"`
+	Regions     []string `json:"regions"`
+	VCPUs       int      `json:"vcpus"`
+	PriceHourly float64  `json:"price_hourly"`
 }
 
 func (do *DigitalOcean) sizes(ctx context.Context) ([]Size, error) {
@@ -271,48 +262,4 @@ func checkSizes(ctx context.Context, do Provider, cloud Cloud) (map[string]float
 		return nil, fmt.Errorf("race.json's cloud sizes: %s", strings.Join(problems, "; "))
 	}
 	return prices, nil
-}
-
-// commandSizes prints the droplet sizes whose slug starts with -prefix
-// (CPU-optimized by default), with prices and the regions offering them
-// (race.json's first, marked): the numbers a change to race.json's sizes
-// and region is decided on.
-func commandSizes(ctx context.Context, root string, args []string) error {
-	flags := newFlags("sizes")
-	prefix := flags.String("prefix", "c", "slugs starting with this")
-	flags.Parse(args)
-	race, err := loadRace(root)
-	if err != nil {
-		return err
-	}
-	do, err := newDigitalOcean()
-	if err != nil {
-		return err
-	}
-	sizes, err := do.sizes(ctx)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%-22s %5s %8s %9s %9s  %-36s regions (*%s)\n", "slug", "vcpus", "memory", "$/hour",
-		"$/month", "description", race.Cloud.Region)
-	for _, size := range sizes {
-		if !strings.HasPrefix(size.Slug, *prefix) {
-			continue
-		}
-		regions := "unavailable"
-		if size.Available {
-			marked := make([]string, 0, len(size.Regions))
-			for _, region := range size.Regions {
-				if region == race.Cloud.Region {
-					region = "*" + region
-				}
-				marked = append(marked, region)
-			}
-			slices.Sort(marked)
-			regions = strings.Join(marked, " ")
-		}
-		fmt.Printf("%-22s %5d %6dMi %9.4f %9.2f  %-36s %s\n", size.Slug, size.VCPUs, size.MemoryMiB,
-			size.PriceHourly, size.PriceMonthly, size.Description, regions)
-	}
-	return nil
 }
