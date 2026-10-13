@@ -158,7 +158,7 @@ IndexPage :: [].{
 			{ done : Str, flare : Bool, items : List(Str), text : Str },
 		),
 		nav : List({ current : Bool, href : Str, label : Str }),
-		racer : List({ items : List(Str), text : Str }),
+		racer : List({ countdown : Bool, items : List(Str), text : Str }),
 		ready : Bool,
 		sections : List({ action : Str, current : Bool, href : Str, label : Str }),
 		started : Str,

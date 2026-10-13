@@ -199,3 +199,24 @@ const firePalette = (() => {
     }
   });
 })();
+
+// The time left to push before the daily build takes fourneau's and roux's
+// masters (Store.nothing_new says why `data-utc` is 17 minutes early),
+// counted in the reader's browser; past it, the next day's.
+(() => {
+  const countdown = document.querySelector(".racer .countdown");
+  if (!countdown) return;
+  const [hour, minute] = countdown.dataset.utc.split(":").map(Number);
+  const pad = (n) => String(n).padStart(2, "0");
+  const tick = () => {
+    const now = new Date();
+    const deadline = new Date(now);
+    deadline.setUTCHours(hour, minute, 0, 0);
+    if (deadline <= now) deadline.setUTCDate(deadline.getUTCDate() + 1);
+    const left = Math.floor((deadline - now) / 1000);
+    const h = Math.floor(left / 3600), m = Math.floor(left / 60) % 60, s = left % 60;
+    countdown.textContent = `${h}h ${pad(m)}m ${pad(s)}s left to push`;
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
