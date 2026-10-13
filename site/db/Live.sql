@@ -7,25 +7,26 @@
 -- name: racing :one
 SELECT id, started_at FROM runs WHERE status = 'racing' ORDER BY started_at DESC LIMIT 1;
 
--- A run's newest result: what landed, and its best rate (the best
--- round's, or the ladder's highest rate achieved). One (three were cut off on a phone; it scrolls instead).
--- name: newest :many(1)
+-- Each class's newest result: what landed, and its best rate (the best
+-- round's, or the ladder's highest rate achieved). One a class, under its
+-- bar (three were cut off on a phone; each
+-- scrolls instead).
+-- name: newest :many(32)
 -- @param run_id : Str
--- @column class_label : Str
 -- @column workload : Str
 -- @column valid : Bool
 -- @column best_rps : F64
-SELECT r.class, coalesce(c.label, r.class) AS class_label,
-  coalesce(w.title, r.workload) AS workload, r.competitor, r.valid,
+SELECT r.class, coalesce(w.title, r.workload) AS workload, r.competitor, r.valid,
   coalesce((SELECT max(o.rps) FROM rounds o WHERE o.run_id = r.run_id AND o.class = r.class
       AND o.workload = r.workload AND o.competitor = r.competitor),
     (SELECT max(s.achieved_rps) FROM open_steps s WHERE s.run_id = r.run_id AND s.class = r.class
       AND s.workload = r.workload AND s.competitor = r.competitor), 0.0) AS best_rps
-FROM results r
-LEFT JOIN run_classes c ON c.run_id = r.run_id AND c.name = r.class
+FROM (SELECT x.*, row_number() OVER (PARTITION BY x.class
+        ORDER BY x.updated_at DESC, x.workload, x.competitor DESC) AS n
+      FROM results x WHERE x.run_id = :run_id) AS r
 LEFT JOIN run_workloads w ON w.run_id = r.run_id AND w.name = r.workload
-WHERE r.run_id = :run_id
-ORDER BY r.updated_at DESC, r.class, r.workload, r.competitor DESC LIMIT 1;
+WHERE r.n = 1
+ORDER BY r.class;
 
 -- Each class of a racing run: results in, results the previous run had
 -- (0 for a class it did not race), and the seconds left. Each result of

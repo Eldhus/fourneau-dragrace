@@ -459,10 +459,13 @@ details.history .h2c { margin-top: 18px; border-top: 0; }
   .racer .class-bar { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; }
   .racer .class-bar .meter { order: 1; flex: 1 0 100%; }
 }
-/* The newest result, one line: still when it fits, else scrolling right
-   to left as a marquee does, round and round (three lines were cut off on a phone). demo.js measures it and, when it
-   is wider, adds the second copy that follows it in. */
-.racer .ticker { display: block; overflow: hidden; white-space: nowrap; margin-top: 6px; color: #fff3d6; }
+/* Each class's newest result, under its bar, one line: still when it
+   fits, else scrolling right to left as a marquee does, round and round
+   (three lines were cut off on a phone). demo.js
+   measures it and, when it is wider, adds the second copy that follows
+   it in. On a desktop it starts where the bar does. */
+.racer .ticker { display: block; overflow: hidden; white-space: nowrap; margin: 2px 0 4px calc(12ch + 12px); color: #fff3d6; }
+@media (max-width: 560px) { .racer .ticker { margin-left: 0; } }
 /* Its own width, not the banner's: a turn moves exactly one copy. */
 .racer .ticker-text { display: inline-block; width: max-content; }
 .racer .ticker.moving .ticker-text { padding-right: 4em; animation: marquee var(--marquee-seconds, 12s) linear infinite; }

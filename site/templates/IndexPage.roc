@@ -160,10 +160,16 @@ IndexPage :: [].{
 		id : Str,
 		live : List(
 			{
-				classes : List({ label : Str, share : Str, times : Str }),
+				classes : List(
+					{
+						label : Str,
+						newest : List(Str),
+						share : Str,
+						times : Str,
+					},
+				),
 				done : Str,
 				flare : Bool,
-				items : List(Str),
 				text : Str,
 			},
 		),

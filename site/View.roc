@@ -210,17 +210,18 @@ View :: [].{
 	}
 
 	## The race page's live banner while a run races (LiveRace.rocstache): one sentence (results in, of how many, and
-	## the time left as HH:MM), the newest results as its items, and the
-	## flare when a result has just landed; `done` names the flare's canvas,
-	## so each result's is a new element and its animation runs.
-	## `classes`: a bar per server class racing,
-	## filled by its results in of those expected, with its time elapsed and
-	## the estimate left, or how long it took once over. `items`: the newest
-	## result only, one line that scrolls when it is wider than the banner.
-	LiveBanner : { text : Str, items : List(Str), classes : List(ClassBar), flare : Bool, done : Str }
+	## the time left as HH:MM), and the flare when a result has just
+	## landed; `done` names the flare's canvas, so each result's is a new
+	## element and its animation runs. `classes`: a bar per server class
+	## racing, filled by its results in of those
+	## expected, with its time elapsed and the estimate left, or how long it
+	## took once over, and under it the class's newest result.
+	LiveBanner : { text : Str, classes : List(ClassBar), flare : Bool, done : Str }
 	## `share`: the bar's fill, 0 to 1; `times`: "00:42 elapsed · about
-	## 00:31 left", or "done in 01:52".
-	ClassBar : { label : Str, share : Str, times : Str }
+	## 00:31 left", or "done in 01:52"; `newest`: the class's newest result,
+	## one line that scrolls when it is wider than the banner (none before
+	## the first lands).
+	ClassBar : { label : Str, share : Str, times : Str, newest : List(Str) }
 
 	live_banner : List(Live.Newest), List(Live.Progress), Bool -> LiveBanner
 	live_banner = |newest, classes, flare| {
@@ -239,19 +240,14 @@ View :: [].{
 			} else {
 				"Racing now · ${done.to_str()} of ${expected.to_str()} results in · about ${View.clock(left)} left"
 			}
-		items = newest.map(
-			|n| {
-				rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
-				"${n.competitor} ${n.workload} on ${n.class_label}: ${rate}"
-			},
-		)
-		{ text, items, classes: classes.map(class_bar), flare, done: done.to_str() }
+		{ text, classes: classes.map(|c| class_bar(c, newest.keep_if(|n| n.class == c.class))), flare, done: done.to_str() }
 	}
 
 	## A class's bar. A class the previous run did not race has no estimate:
-	## its bar stays empty until it is over, and only its time is said.
-	class_bar : Live.Progress -> ClassBar
-	class_bar = |c| {
+	## its bar stays empty until it is over, and only its time is said. Its
+	## result says no class: it is under the class's name.
+	class_bar : Live.Progress, List(Live.Newest) -> ClassBar
+	class_bar = |c, newest| {
 		share =
 			if c.over 1.0
 			else if c.expected <= 0 0.0
@@ -261,7 +257,11 @@ View :: [].{
 			if c.over "done in ${View.clock(c.elapsed_seconds)}"
 			else if c.expected <= 0 "${View.clock(c.elapsed_seconds)} elapsed"
 			else "${View.clock(c.elapsed_seconds)} elapsed · about ${View.clock(c.left_seconds)} left"
-		{ label: c.label, share: Format.two_decimals(share), times }
+		said = newest.map(|n| {
+			rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
+			"${n.competitor} ${n.workload}: ${rate}"
+		})
+		{ label: c.label, share: Format.two_decimals(share), times, newest: said }
 	}
 
 	## Seconds as hours and minutes, HH:MM, rounded up to the minute: a
@@ -1183,18 +1183,21 @@ expect View.clock(0.0) == "00:00" and View.clock(1.0) == "00:01" and View.clock(
 expect View.clock(61.0) == "00:02" and View.clock(4320.0) == "01:12" and View.clock(36000.0) == "10:00"
 
 expect {
-	newest = [{ class: "smallest", class_label: "512MB/1vCPU", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 }]
+	newest = [
+		{ class: "a", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 },
+		{ class: "b", workload: "Churn", competitor: "go", valid: Bool.False, best_rps: 0.0 },
+	]
 	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds, elapsed_seconds: 2520.0 }
 	banner = View.live_banner(newest, [progress("a", 41, 59, 300.0), progress("b", 40, 59, 4320.0), progress("c", 30, 0, 0.0)], Bool.True)
-	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.items == ["roux Echo 4 KiB on 512MB/1vCPU: 35,297 req/s"] and banner.done == "111"
+	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.done == "111"
 	and banner.classes == [
-		{ label: "a", share: "0.69", times: "00:42 elapsed · about 00:05 left" },
-		{ label: "b", share: "0.68", times: "00:42 elapsed · about 01:12 left" },
-		{ label: "c", share: "0.00", times: "00:42 elapsed" },
+		{ label: "a", share: "0.69", times: "00:42 elapsed · about 00:05 left", newest: ["roux Echo 4 KiB: 35,297 req/s"] },
+		{ label: "b", share: "0.68", times: "00:42 elapsed · about 01:12 left", newest: ["go Churn: DNF"] },
+		{ label: "c", share: "0.00", times: "00:42 elapsed", newest: [] },
 	]
 }
 
 expect {
 	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0, elapsed_seconds: 6720.0 }], Bool.False)
-	all_in.text == "Racing now · all 59 results in, finishing" and all_in.classes == [{ label: "a", share: "1.00", times: "done in 01:52" }]
+	all_in.text == "Racing now · all 59 results in, finishing" and all_in.classes == [{ label: "a", share: "1.00", times: "done in 01:52", newest: [] }]
 }
