@@ -197,6 +197,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
    under the value instead of squeezing the bar off its whisker. */
 .drag .bar { flex: none; }
 .drag .dnf { color: var(--gold); }
+/* Not raced in this section (basic-webserver over TLS): the row and its
+   legend entry kept, so both sections are alike, and quiet. The legend's
+   says so by its hollow swatch, not a word: a word would widen it and
+   wrap the legend in one section only. */
+.drag .na, .legend .na { color: var(--text-3); }
+.legend .na .swatch { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
 @keyframes launch { from { transform: scaleX(0); } }
 
 .chart-scroll { overflow-x: auto; }

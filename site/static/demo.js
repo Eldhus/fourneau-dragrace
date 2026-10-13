@@ -172,7 +172,10 @@ const firePalette = (() => {
 // matched by `data-chart` (View.chart_key): Echo 4 KiB over HTTP/1.1 and
 // over HTTP/2 + TLS are one chart. One the other side lacks gives way to
 // the next one it has. (The section tabs went back to
-// the top.)
+// the top.) Between sections every chart is where it was already, at every
+// width (the same captions, rows and legends: View.as_test, the "n/a"
+// rows), so this moves nothing there; between classes on a
+// phone, the machines' lines above the charts can differ by a line.
 (() => {
   let kept = null;
   document.addEventListener("datastar-fetch", (event) => {
