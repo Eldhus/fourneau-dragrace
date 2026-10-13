@@ -139,16 +139,17 @@ func racerProvision(ctx context.Context, root string, args []string) error {
 
 // guardConfigFor allows any size up to hourlyMaxUSD an hour, in race.json's
 // region and image, under the month's cap, so a class added to race.json
-// needs no install.
-func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64) GuardConfig {
+// needs no install; each droplet names the admin key.
+func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64, adminKeyID int) GuardConfig {
 	return GuardConfig{Region: race.Cloud.Region, Image: race.Cloud.Image, Tag: race.Cloud.Tag,
 		HourlyMaxUSD: hourlyMaxUSD, MonthlyCapUSD: capUSD, DropletsMax: 6,
 		AgeMaxMinutes: race.Cloud.MaxAgeMinutes, Socket: "/run/dragrace-guard/guard.sock",
-		Ledger: "/var/lib/dragrace-guard/ledger.json"}
+		Ledger: "/var/lib/dragrace-guard/ledger.json", AdminKeyID: adminKeyID}
 }
 
 // racerInstall sets the racer up, as cook: the guard (this binary, pinned)
-// and its config, the racer's first binary and config, the units, and the
+// and its config (with the admin key's id, looked up on the account), the
+// racer's first binary and config, the units, and the
 // two secrets as encrypted credentials, each sent on SSH's standard input:
 // the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring) and the
 // racer token from the keyring.
@@ -175,7 +176,11 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	guardConfig := guardConfigFor(race, *hourlyMaxUSD, *capUSD)
+	adminKeyID, err := do.adminKeyID(ctx)
+	if err != nil {
+		return err
+	}
+	guardConfig := guardConfigFor(race, *hourlyMaxUSD, *capUSD, adminKeyID)
 	if err := guardConfig.check(); err != nil {
 		return err
 	}

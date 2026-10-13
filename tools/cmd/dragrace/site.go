@@ -249,7 +249,7 @@ func provisionHost(ctx context.Context, root string, request hostRequest) (strin
 	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
 		return "", err
 	}
-	key, err := do.ensureKey(ctx, "fourneau-dragrace-admin", strings.TrimSpace(string(admin)))
+	key, err := do.ensureKey(ctx, adminKeyName, strings.TrimSpace(string(admin)))
 	if err != nil {
 		return "", err
 	}

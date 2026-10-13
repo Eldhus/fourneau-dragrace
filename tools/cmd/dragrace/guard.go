@@ -21,9 +21,10 @@ import (
 // The guard holds the DigitalOcean token on the racer, and nothing else
 // does. The racer asks
 // it over a Unix socket for the few things a race needs; it refuses a
-// size, region or image the owner's config does not allow, more droplets
-// alive than allowed, and any droplet that could take the month's spend
-// past the cap. It deletes its droplets past their age, whatever the
+// size, region or image the owner's config does not allow, any
+// DigitalOcean SSH key (it names the owner's admin key itself), more
+// droplets alive than allowed, and any droplet that could take the month's
+// spend past the cap. It deletes its droplets past their age, whatever the
 // racer does. Installed by the owner, never updated by a build.
 
 // GuardConfig is the owner's, on the racer's disk (/etc/dragrace-guard).
@@ -40,12 +41,19 @@ type GuardConfig struct {
 	AgeMaxMinutes int     `json:"age_max_minutes"`
 	Socket        string  `json:"socket"`
 	Ledger        string  `json:"ledger"`
+	// The owner's admin key on the account (racer install looks it up): the
+	// one DigitalOcean key a race droplet names, set by the guard, so no
+	// root password is emailed. The run's own key is in the user data.
+	AdminKeyID int `json:"admin_key_id"`
 }
 
 func (config GuardConfig) check() error {
 	var problems []string
 	if config.Region == "" || config.Image == "" || config.Tag == "" {
 		problems = append(problems, "region, image and tag are required")
+	}
+	if config.AdminKeyID <= 0 {
+		problems = append(problems, "admin_key_id is required")
 	}
 	if config.HourlyMaxUSD <= 0 || config.HourlyMaxUSD > guardHourlyUSDMax {
 		problems = append(problems, fmt.Sprintf("hourly_max_usd: above 0, at most %d", guardHourlyUSDMax))
@@ -173,6 +181,9 @@ func (guard *Guard) allow(request DropletRequest, priceNow float64) error {
 		return fmt.Errorf("%w: tags %v, not [%s]", errRefused, request.Tags, config.Tag)
 	case !strings.HasPrefix(request.Name, "dragrace-"):
 		return fmt.Errorf("%w: name %q", errRefused, request.Name)
+	case len(request.SSHKeys) != 0:
+		return fmt.Errorf("%w: ssh_keys %v (the guard names the admin key alone)", errRefused,
+			request.SSHKeys)
 	}
 	now := guard.now()
 	alive := 0
@@ -253,6 +264,7 @@ func (guard *Guard) createDroplet(ctx context.Context, request DropletRequest) (
 		return Droplet{}, err
 	}
 	request.Monitoring = false
+	request.SSHKeys = []int{guard.config.AdminKeyID}
 	droplet, err := guard.provider.createDroplet(ctx, request)
 	if err != nil {
 		return droplet, err
@@ -483,48 +495,6 @@ func (guard *Guard) handler() http.Handler {
 		}
 		reply(w, struct{}{}, guard.deleteDroplet(r.Context(), number))
 	})
-	mux.HandleFunc("POST /keys", func(w http.ResponseWriter, r *http.Request) {
-		var key SSHKey
-		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&key); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if !strings.HasPrefix(key.Name, sshKeyPrefix) {
-			reply(w, nil, fmt.Errorf("%w: a key named %q", errRefused, key.Name))
-			return
-		}
-		made, err := guard.provider.createKey(r.Context(), key.Name, key.PublicKey)
-		reply(w, made, err)
-	})
-	mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
-		keys, err := guard.provider.keys(r.Context())
-		ours := []SSHKey{}
-		for _, key := range keys {
-			if strings.HasPrefix(key.Name, sshKeyPrefix) {
-				ours = append(ours, key)
-			}
-		}
-		reply(w, ours, err)
-	})
-	mux.HandleFunc("DELETE /keys/{id}", func(w http.ResponseWriter, r *http.Request) {
-		number, err := id(r)
-		if err != nil {
-			http.Error(w, "not a key", http.StatusBadRequest)
-			return
-		}
-		keys, err := guard.provider.keys(r.Context())
-		if err != nil {
-			reply(w, nil, err)
-			return
-		}
-		for _, key := range keys {
-			if key.ID == number && strings.HasPrefix(key.Name, sshKeyPrefix) {
-				reply(w, struct{}{}, guard.provider.deleteKey(r.Context(), number))
-				return
-			}
-		}
-		reply(w, nil, fmt.Errorf("%w: key %d is not a race key", errRefused, number))
-	})
 	return mux
 }
 
@@ -600,22 +570,6 @@ func (guard *GuardClient) dropletsTagged(ctx context.Context, _ string) ([]Dropl
 
 func (guard *GuardClient) deleteDroplet(ctx context.Context, id int) error {
 	return guard.call(ctx, http.MethodDelete, fmt.Sprintf("/droplets/%d", id), nil, nil)
-}
-
-func (guard *GuardClient) createKey(ctx context.Context, name, public string) (SSHKey, error) {
-	var key SSHKey
-	err := guard.call(ctx, http.MethodPost, "/keys", SSHKey{Name: name, PublicKey: public}, &key)
-	return key, err
-}
-
-func (guard *GuardClient) keys(ctx context.Context) ([]SSHKey, error) {
-	var keys []SSHKey
-	err := guard.call(ctx, http.MethodGet, "/keys", nil, &keys)
-	return keys, err
-}
-
-func (guard *GuardClient) deleteKey(ctx context.Context, id int) error {
-	return guard.call(ctx, http.MethodDelete, fmt.Sprintf("/keys/%d", id), nil, nil)
 }
 
 func (guard *GuardClient) sizes(ctx context.Context) ([]Size, error) {

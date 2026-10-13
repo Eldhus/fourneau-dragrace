@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"slices"
@@ -105,38 +104,12 @@ type DropletRequest struct {
 	IPv6       bool     `json:"ipv6"`
 }
 
-// createDroplet asks for a droplet. A key registered a moment before can
-// be refused as an "invalid key identifier" until DigitalOcean has it
-// everywhere (the same request
-// with a fresh key passes seconds later), so that refusal alone is
-// retried, a bounded number of times.
 func (do *DigitalOcean) createDroplet(ctx context.Context, request DropletRequest) (Droplet, error) {
 	var response struct {
 		Droplet Droplet `json:"droplet"`
 	}
-	var err error
-	for attempt := range keyPropagationAttemptsMax {
-		err = do.call(ctx, http.MethodPost, "/v2/droplets", request, &response)
-		if err == nil || !keyNotYetKnown(err) {
-			return response.Droplet, err
-		}
-		log.Printf("droplet refused (attempt %d of %d): its new key is not known yet; waiting",
-			attempt+1, keyPropagationAttemptsMax)
-		select {
-		case <-ctx.Done():
-			return response.Droplet, ctx.Err()
-		case <-time.After(5 * time.Second):
-		}
-	}
+	err := do.call(ctx, http.MethodPost, "/v2/droplets", request, &response)
 	return response.Droplet, err
-}
-
-const keyPropagationAttemptsMax = 6
-
-// keyNotYetKnown is DigitalOcean's refusal of a key it has not finished
-// registering.
-func keyNotYetKnown(err error) bool {
-	return strings.Contains(err.Error(), "invalid key identifiers")
 }
 
 func (do *DigitalOcean) droplet(ctx context.Context, id int) (Droplet, error) {
@@ -165,14 +138,11 @@ type SSHKey struct {
 	PublicKey string `json:"public_key"`
 }
 
-func (do *DigitalOcean) createKey(ctx context.Context, name, public string) (SSHKey, error) {
-	var response struct {
-		Key SSHKey `json:"ssh_key"`
-	}
-	body := map[string]string{"name": name, "public_key": public}
-	err := do.call(ctx, http.MethodPost, "/v2/account/keys", body, &response)
-	return response.Key, err
-}
+// adminKeyName is the owner's admin key on the account, as a provision
+// registers it. Every droplet names it in ssh_keys: DigitalOcean then
+// emails no root password. A race droplet's own key is in its user data
+// (raceUserData), never registered.
+const adminKeyName = "fourneau-dragrace-admin"
 
 // ensureKey registers a public key, or returns the registration it already
 // has: DigitalOcean refuses the same key twice, and a second provision
@@ -187,7 +157,28 @@ func (do *DigitalOcean) ensureKey(ctx context.Context, name, public string) (SSH
 			return key, nil
 		}
 	}
-	return do.createKey(ctx, name, public)
+	var response struct {
+		Key SSHKey `json:"ssh_key"`
+	}
+	body := map[string]string{"name": name, "public_key": public}
+	err = do.call(ctx, http.MethodPost, "/v2/account/keys", body, &response)
+	return response.Key, err
+}
+
+// adminKeyID is the admin key's id: what racer install writes into the
+// guard's config, and what an ad-hoc session's droplets name.
+func (do *DigitalOcean) adminKeyID(ctx context.Context) (int, error) {
+	keys, err := do.keys(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, key := range keys {
+		if key.Name == adminKeyName {
+			return key.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("DigitalOcean has no SSH key named %s (a provision registers it)",
+		adminKeyName)
 }
 
 func (do *DigitalOcean) keys(ctx context.Context) ([]SSHKey, error) {
@@ -196,10 +187,6 @@ func (do *DigitalOcean) keys(ctx context.Context) ([]SSHKey, error) {
 	}
 	err := do.call(ctx, http.MethodGet, "/v2/account/keys?per_page=200", nil, &response)
 	return response.Keys, err
-}
-
-func (do *DigitalOcean) deleteKey(ctx context.Context, id int) error {
-	return do.call(ctx, http.MethodDelete, fmt.Sprintf("/v2/account/keys/%d", id), nil, nil)
 }
 
 // Size is one droplet size and where it can be made.

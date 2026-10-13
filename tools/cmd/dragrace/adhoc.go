@@ -41,9 +41,8 @@ import (
 )
 
 const (
-	adhocHome      = "/root/dragrace"
-	adhocReapUnit  = "dragrace-adhoc-reap"
-	adhocKeyPrefix = sshKeyPrefix + "adhoc-"
+	adhocHome     = "/root/dragrace"
+	adhocReapUnit = "dragrace-adhoc-reap"
 	// Its own tag: the nightly race's guard and racer never see a session,
 	// and `adhoc down -all` sweeps it.
 	adhocTag = "fourneau-dragrace-adhoc"
@@ -311,7 +310,6 @@ func exportPath(ctx context.Context, repository, commit, path, dir string) error
 type adhocSession struct {
 	Class      string        `json:"class"`
 	Region     string        `json:"region"`
-	KeyID      int           `json:"key_id"`
 	Server     adhocNode     `json:"server"`
 	Loader     adhocNode     `json:"loader"`
 	Created    time.Time     `json:"created"`
@@ -481,30 +479,27 @@ func logMachines(session *adhocSession, reused bool) {
 	}
 }
 
-func makeSession(ctx context.Context, root string, do Provider, race Race, class ServerClass,
+// makeSession makes the pair: as a race's, root's key (a new one,
+// sessionKey) in their user data, and the admin key in ssh_keys.
+func makeSession(ctx context.Context, root string, do *DigitalOcean, race Race, class ServerClass,
 	up upFlags) (*adhocSession, error) {
 	os.Remove(sessionKey(root))
 	os.Remove(sessionKey(root) + ".pub")
 	os.Remove(filepath.Join(adhocDir(root), "known_hosts"))
-	name := adhocKeyPrefix + strconv.FormatInt(time.Now().Unix(), 10)
-	if err := run(ctx, adhocDir(root), nil, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", name,
-		"-f", sessionKey(root)); err != nil {
-		return nil, err
-	}
-	public, err := os.ReadFile(sessionKey(root) + ".pub")
+	_, public, err := newKeyPair(ctx, adhocDir(root), "dragrace-adhoc")
 	if err != nil {
 		return nil, err
 	}
-	key, err := do.createKey(ctx, name, strings.TrimSpace(string(public)))
+	adminKeyID, err := do.adminKeyID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	session := &adhocSession{Class: class.Name, Region: up.region, KeyID: key.ID,
+	session := &adhocSession{Class: class.Name, Region: up.region,
 		Created: time.Now().UTC(), Used: time.Now().UTC(), IdleMinute: up.idle}
 	create := func(role, size string) (adhocNode, error) {
 		droplet, err := do.createDroplet(ctx, DropletRequest{
 			Name: "dragrace-adhoc-" + role, Region: up.region, Size: size, Image: race.Cloud.Image,
-			SSHKeys: []int{key.ID}, Tags: []string{adhocTag}, UserData: raceUserData,
+			SSHKeys: []int{adminKeyID}, Tags: []string{adhocTag}, UserData: raceUserData(public),
 		})
 		return adhocNode{ID: droplet.ID, Size: size}, err
 	}
@@ -567,8 +562,7 @@ func makeSession(ctx context.Context, root string, do Provider, race Race, class
 	return session, session.save(root)
 }
 
-// deleteSession deletes the droplets and the key, retrying, and forgets
-// the session.
+// deleteSession deletes the droplets, retrying, and forgets the session.
 func deleteSession(ctx context.Context, root string, do Provider, session *adhocSession) {
 	ctx = context.WithoutCancel(ctx)
 	for _, node := range []adhocNode{session.Server, session.Loader} {
@@ -586,11 +580,6 @@ func deleteSession(ctx context.Context, root string, do Provider, session *adhoc
 		}
 		exec.Command("ssh", "-o", "ControlPath="+session.machine(root, node).Control, "-O", "exit",
 			"x").Run()
-	}
-	if session.KeyID != 0 {
-		if err := do.deleteKey(ctx, session.KeyID); err != nil {
-			log.Printf("adhoc: deleting key %d: %v (adhoc down -all will)", session.KeyID, err)
-		}
 	}
 	os.Remove(sessionPath(root))
 }
@@ -618,7 +607,7 @@ func armReaper(root string, idle int) {
 func adhocDown(ctx context.Context, root string, args []string) error {
 	flags := newFlags("adhoc down")
 	ifIdle := flags.Bool("if-idle", false, "only when unused for the session's idle minutes (the timer)")
-	all := flags.Bool("all", false, "and every ad-hoc droplet and key on the account (a lost session's)")
+	all := flags.Bool("all", false, "and every ad-hoc droplet on the account (a lost session's)")
 	flags.Parse(args)
 	unlock, err := lockSession(root, !*ifIdle)
 	if err != nil {
@@ -658,8 +647,8 @@ func adhocDown(ctx context.Context, root string, args []string) error {
 }
 
 // sweepAdhoc deletes every droplet with the ad-hoc tag but the ones just
-// deleted (one may still be listed just after its delete), and
-// every ad-hoc key: what a session lost from out/adhoc left behind.
+// deleted (one may still be listed just after its delete): what a session
+// lost from out/adhoc left behind.
 func sweepAdhoc(ctx context.Context, do Provider, deleted []int) error {
 	droplets, err := do.dropletsTagged(ctx, adhocTag)
 	if err != nil {
@@ -672,18 +661,6 @@ func sweepAdhoc(ctx context.Context, do Provider, deleted []int) error {
 		log.Printf("adhoc: deleting droplet %d %s (created %s)", droplet.ID, droplet.Name, droplet.CreatedAt)
 		if err := do.deleteDroplet(ctx, droplet.ID); err != nil {
 			return err
-		}
-	}
-	keys, err := do.keys(ctx)
-	if err != nil {
-		return err
-	}
-	for _, key := range keys {
-		if strings.HasPrefix(key.Name, adhocKeyPrefix) {
-			log.Printf("adhoc: deleting key %d %s", key.ID, key.Name)
-			if err := do.deleteKey(ctx, key.ID); err != nil {
-				return err
-			}
 		}
 	}
 	return nil

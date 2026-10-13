@@ -700,7 +700,7 @@ func (racer *Racer) forget() {
 }
 
 // recover ends a run a previous racer did not finish (interrupted), and
-// deletes every race droplet and key it may have left.
+// deletes every race droplet it may have left.
 func (racer *Racer) recover(ctx context.Context) {
 	if racer.config.State == "" {
 		return
@@ -715,10 +715,6 @@ func (racer *Racer) recover(ctx context.Context) {
 		droplets, _ := racer.provider.dropletsTagged(ctx, "")
 		for _, droplet := range droplets {
 			racer.provider.deleteDroplet(ctx, droplet.ID)
-		}
-		keys, _ := racer.provider.keys(ctx)
-		for _, key := range keys {
-			racer.provider.deleteKey(ctx, key.ID)
 		}
 	}
 	end := EndPost{Status: "interrupted", Reason: "the racer stopped during the run",

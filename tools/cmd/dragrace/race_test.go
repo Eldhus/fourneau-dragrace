@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -285,19 +284,6 @@ func TestCoresApart(t *testing.T) {
 	}
 	if err := checkCoresApart("0,4", "1-3,5-7", spread); err != nil {
 		t.Fatalf("spread siblings, whole cores: %v", err)
-	}
-}
-
-// Only DigitalOcean's refusal of a not-yet-registered key is retried;
-// any other refusal (a bad size, a quota) fails at once.
-func TestKeyNotYetKnown(t *testing.T) {
-	refused := fmt.Errorf(`DigitalOcean POST /v2/droplets: 422 Unprocessable Entity: {"id":"unprocessable_entity","message":"59891906 are invalid key identifiers for Droplet creation."}`)
-	if !keyNotYetKnown(refused) {
-		t.Fatalf("a new key's refusal must be retried")
-	}
-	quota := fmt.Errorf(`DigitalOcean POST /v2/droplets: 422 Unprocessable Entity: {"message":"creating this/these droplet(s) will exceed your droplet limit"}`)
-	if keyNotYetKnown(quota) {
-		t.Fatalf("a quota refusal must not be retried")
 	}
 }
 

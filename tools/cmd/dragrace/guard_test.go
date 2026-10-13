@@ -19,7 +19,7 @@ type fakeDigitalOcean struct {
 	mutex    sync.Mutex
 	next     int
 	droplets map[int]Droplet
-	keyList  []SSHKey
+	requests []DropletRequest // each create, as it reached DigitalOcean
 	prices   map[string]float64
 }
 
@@ -32,6 +32,7 @@ func newFakeDigitalOcean() *fakeDigitalOcean {
 func (fake *fakeDigitalOcean) createDroplet(_ context.Context, request DropletRequest) (Droplet, error) {
 	fake.mutex.Lock()
 	defer fake.mutex.Unlock()
+	fake.requests = append(fake.requests, request)
 	fake.next++
 	droplet := Droplet{ID: fake.next, Name: request.Name, Status: "active", Tags: request.Tags,
 		SizeSlug: request.Size}
@@ -77,33 +78,6 @@ func (fake *fakeDigitalOcean) deleteDroplet(_ context.Context, id int) error {
 	return nil
 }
 
-func (fake *fakeDigitalOcean) createKey(_ context.Context, name, public string) (SSHKey, error) {
-	fake.mutex.Lock()
-	defer fake.mutex.Unlock()
-	fake.next++
-	key := SSHKey{ID: fake.next, Name: name, PublicKey: public}
-	fake.keyList = append(fake.keyList, key)
-	return key, nil
-}
-
-func (fake *fakeDigitalOcean) keys(context.Context) ([]SSHKey, error) {
-	fake.mutex.Lock()
-	defer fake.mutex.Unlock()
-	return append([]SSHKey(nil), fake.keyList...), nil
-}
-
-func (fake *fakeDigitalOcean) deleteKey(_ context.Context, id int) error {
-	fake.mutex.Lock()
-	defer fake.mutex.Unlock()
-	for i, key := range fake.keyList {
-		if key.ID == id {
-			fake.keyList = append(fake.keyList[:i], fake.keyList[i+1:]...)
-			return nil
-		}
-	}
-	return fmt.Errorf("DigitalOcean: 404 not found")
-}
-
 func (fake *fakeDigitalOcean) sizes(context.Context) ([]Size, error) {
 	var sizes []Size
 	for slug, price := range fake.prices {
@@ -120,6 +94,7 @@ func testGuard(t *testing.T, capUSD float64) (*Guard, *fakeDigitalOcean, *time.T
 		Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "fourneau-dragrace-race",
 		HourlyMaxUSD: 0.13, MonthlyCapUSD: capUSD, DropletsMax: 4, AgeMaxMinutes: 180,
 		Socket: filepath.Join(t.TempDir(), "guard.sock"), Ledger: filepath.Join(t.TempDir(), "ledger.json"),
+		AdminKeyID: 42,
 	}}
 	if err := guard.config.check(); err != nil {
 		t.Fatal(err)
@@ -129,7 +104,8 @@ func testGuard(t *testing.T, capUSD float64) (*Guard, *fakeDigitalOcean, *time.T
 
 func raceDroplet(size string) DropletRequest {
 	return DropletRequest{Name: "dragrace-server-x", Region: "lon1", Size: size,
-		Image: "ubuntu-26-04-x64", Tags: []string{"fourneau-dragrace-race"}}
+		Image: "ubuntu-26-04-x64", SSHKeys: []int{}, Tags: []string{"fourneau-dragrace-race"},
+		UserData: raceUserData("ssh-ed25519 AAAA dragrace-race")}
 }
 
 func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
@@ -142,6 +118,7 @@ func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
 		"image":         func() DropletRequest { r := raceDroplet("c-4"); r.Image = "debian"; return r }(),
 		"tag":           func() DropletRequest { r := raceDroplet("c-4"); r.Tags = nil; return r }(),
 		"name":          func() DropletRequest { r := raceDroplet("c-4"); r.Name = "miner"; return r }(),
+		"an SSH key":    func() DropletRequest { r := raceDroplet("c-4"); r.SSHKeys = []int{7}; return r }(),
 	}
 	for name, request := range cases {
 		if _, err := guard.createDroplet(context.Background(), request); !errors.Is(err, errRefused) {
@@ -153,6 +130,24 @@ func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
 	}
 	if _, err := guard.createDroplet(context.Background(), raceDroplet("c-4")); err != nil {
 		t.Fatalf("an allowed droplet: %v", err)
+	}
+	// The guard names the admin key; the run's key goes in the user data,
+	// untouched.
+	made := fake.requests[0]
+	if len(made.SSHKeys) != 1 || made.SSHKeys[0] != 42 || made.UserData != raceDroplet("c-4").UserData {
+		t.Fatalf("made with ssh_keys %v and user data %q", made.SSHKeys, made.UserData)
+	}
+}
+
+// A race droplet's user data gives root the run's key, as cloud-init reads
+// it: one JSON (so YAML) string in a list.
+func TestRaceUserDataHasTheRunsKey(t *testing.T) {
+	data := raceUserData("ssh-ed25519 AAAA dragrace-race")
+	for _, want := range []string{"#cloud-config\n", "\ndisable_root: false\n", "\nssh_pwauth: false\n",
+		"\nssh_authorized_keys: [\"ssh-ed25519 AAAA dragrace-race\"]\n"} {
+		if !strings.Contains(data, want) {
+			t.Fatalf("%q missing from:\n%s", want, data)
+		}
 	}
 }
 
@@ -279,15 +274,9 @@ func TestGuardOverItsSocket(t *testing.T) {
 	if err := client.deleteDroplet(ctx, 7); !errors.Is(err, errRefused) {
 		t.Fatalf("deleting another droplet: %v", err)
 	}
-	if _, err := client.createKey(ctx, "admin-key", "ssh-ed25519 AAAA"); !errors.Is(err, errRefused) {
-		t.Fatalf("a key not the race's: %v", err)
-	}
-	key, err := client.createKey(ctx, sshKeyPrefix+"1", "ssh-ed25519 AAAA")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.deleteKey(ctx, key.ID); err != nil {
-		t.Fatal(err)
+	if made := fake.requests[0]; len(made.SSHKeys) != 1 || made.SSHKeys[0] != guard.config.AdminKeyID ||
+		made.UserData != raceDroplet("c-2").UserData {
+		t.Fatalf("made over the socket with ssh_keys %v, user data %q", made.SSHKeys, made.UserData)
 	}
 	if err := client.deleteDroplet(ctx, made.ID); err != nil {
 		t.Fatal(err)
@@ -314,7 +303,7 @@ func TestGuardRefusalsBeforeADroplet(t *testing.T) {
 	cloud := Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180, Servers: two}
 	prices := map[string]float64{"s-1vcpu-512mb-10gb": 0.006, "c-2": 0.0625, "c-4": 0.125,
 		"s-2vcpu-2gb-amd": 0.0312, "c-8": 0.25, "c-16": 0.5}
-	ceiling := guardConfigFor(Race{Cloud: cloud}, 0.25, 25)
+	ceiling := guardConfigFor(Race{Cloud: cloud}, 0.25, 25, 42)
 	if problems := guardRefusals(cloud, prices, ceiling); len(problems) != 0 {
 		t.Fatalf("the race the guard was installed for: %v", problems)
 	}
@@ -391,15 +380,18 @@ func TestGuardAllowsAnySizeUnderItsCeiling(t *testing.T) {
 func TestGuardConfigHasACeiling(t *testing.T) {
 	race := Race{Cloud: Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180,
 		Servers: []ServerClass{{Name: "a", Size: "c-2", LoaderSize: "c-4"}}}}
-	config := guardConfigFor(race, 0.25, 25)
+	config := guardConfigFor(race, 0.25, 25, 42)
 	if err := config.check(); err != nil {
 		t.Fatal(err)
 	}
-	if config.HourlyMaxUSD != 0.25 {
-		t.Fatalf("ceiling %v", config.HourlyMaxUSD)
+	if config.HourlyMaxUSD != 0.25 || config.AdminKeyID != 42 {
+		t.Fatalf("ceiling %v, admin key %d", config.HourlyMaxUSD, config.AdminKeyID)
 	}
-	if err := guardConfigFor(race, 20, 25).check(); err == nil {
+	if err := guardConfigFor(race, 20, 25, 42).check(); err == nil {
 		t.Fatal("a ceiling of $20 an hour, a zero too many, accepted")
+	}
+	if err := guardConfigFor(race, 0.25, 25, 0).check(); err == nil {
+		t.Fatal("a guard with no admin key for its droplets accepted")
 	}
 	for _, unit := range racerUnits() {
 		if strings.Contains(unit, "digitalocean-token") && !strings.Contains(unit, "User=guard") {

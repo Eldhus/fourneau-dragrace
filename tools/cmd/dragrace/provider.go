@@ -15,9 +15,6 @@ type Provider interface {
 	droplet(ctx context.Context, id int) (Droplet, error)
 	dropletsTagged(ctx context.Context, tag string) ([]Droplet, error)
 	deleteDroplet(ctx context.Context, id int) error
-	createKey(ctx context.Context, name, public string) (SSHKey, error)
-	keys(ctx context.Context) ([]SSHKey, error)
-	deleteKey(ctx context.Context, id int) error
 	sizes(ctx context.Context) ([]Size, error)
 }
 

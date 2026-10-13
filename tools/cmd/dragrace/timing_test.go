@@ -29,7 +29,7 @@ func testFleet() *Fleet {
 	start := time.Now().Add(-10 * time.Minute)
 	fleet := &Fleet{loaders: map[string]Droplet{"a": {ID: 1}, "b": {ID: 3}},
 		servers: map[string]Droplet{"a": {ID: 2}, "b": {ID: 4}}, created: []int{1, 2, 3, 4},
-		lives: map[int]*dropletLife{}, key: SSHKey{ID: 9}}
+		lives: map[int]*dropletLife{}}
 	for id, role := range map[int]string{1: "loader", 2: "server", 3: "loader", 4: "server"} {
 		class := "a"
 		if id > 2 {
@@ -41,7 +41,7 @@ func testFleet() *Fleet {
 }
 
 // A class done releases its own pair, once; the race's end deletes the
-// rest and the key, once, however often it is called.
+// rest, once, however often it is called.
 func TestFleetReleasesEachClassOnce(t *testing.T) {
 	api := &fakeAPI{}
 	do := &DigitalOcean{client: &http.Client{Transport: api}}
@@ -54,7 +54,7 @@ func TestFleetReleasesEachClassOnce(t *testing.T) {
 	fleet.destroy(do)
 	fleet.destroy(do)
 	want := "DELETE /v2/droplets/1,DELETE /v2/droplets/2,DELETE /v2/droplets/3," +
-		"DELETE /v2/droplets/4,DELETE /v2/account/keys/9"
+		"DELETE /v2/droplets/4"
 	if got := strings.Join(api.calls, ","); got != want {
 		t.Fatalf("after the race:\n got %s\nwant %s", got, want)
 	}

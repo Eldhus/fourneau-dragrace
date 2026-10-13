@@ -89,7 +89,7 @@ func waitSSH(ctx context.Context, machine SSHMachine) error {
 	return fmt.Errorf("%s: no SSH after 5 minutes", machine.Host)
 }
 
-// newKeyPair makes an ed25519 key for one run, in dir.
+// newKeyPair makes an ed25519 key for one run or ad-hoc session, in dir.
 func newKeyPair(ctx context.Context, dir, comment string) (private, public string, err error) {
 	private = filepath.Join(dir, "key")
 	if err := run(ctx, dir, nil, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", comment,

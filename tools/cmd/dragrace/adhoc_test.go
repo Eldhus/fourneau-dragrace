@@ -57,7 +57,7 @@ func TestCompare(t *testing.T) {
 	}
 }
 
-// `adhoc down -all` deletes every ad-hoc droplet and key, and nothing of the
+// `adhoc down -all` deletes every ad-hoc droplet, and nothing of the
 // nightly race's or anyone else's; a droplet the session's delete already
 // asked for is not asked twice.
 func TestSweepAdhoc(t *testing.T) {
@@ -66,9 +66,6 @@ func TestSweepAdhoc(t *testing.T) {
 	session, _ := fake.createDroplet(ctx, DropletRequest{Name: "session", Tags: []string{adhocTag}})
 	lost, _ := fake.createDroplet(ctx, DropletRequest{Name: "lost", Tags: []string{adhocTag}})
 	race, _ := fake.createDroplet(ctx, DropletRequest{Name: "race", Tags: []string{"race"}})
-	fake.createKey(ctx, adhocKeyPrefix+"1", "a")
-	raceKey, _ := fake.createKey(ctx, sshKeyPrefix+"2", "b")
-	owner, _ := fake.createKey(ctx, "admin-key", "c")
 	if err := sweepAdhoc(ctx, fake, []int{session.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -79,9 +76,5 @@ func TestSweepAdhoc(t *testing.T) {
 		if _, err := fake.droplet(ctx, id); err != nil {
 			t.Fatalf("droplet %d deleted", id)
 		}
-	}
-	keys, _ := fake.keys(ctx)
-	if len(keys) != 2 || keys[0].ID != raceKey.ID || keys[1].ID != owner.ID {
-		t.Fatalf("keys left: %+v", keys)
 	}
 }

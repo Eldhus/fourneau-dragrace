@@ -2,18 +2,27 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-// raceUserData prepares a race droplet: nothing else running (no apt timers),
-// and the network limits a load test needs, the same on every droplet.
-const raceUserData = `#cloud-config
+// raceUserData prepares a race droplet: root's login by the run's own key
+// (public, made where the race is driven), no password login, nothing else
+// running (no apt timers), and the network limits a load test needs, the
+// same on every droplet. The key is cloud-init's to install, so
+// DigitalOcean never has it: nothing to register before a race or delete
+// after (DigitalOcean's own ssh_keys name only the owner's admin key).
+func raceUserData(public string) string {
+	keys, _ := json.Marshal([]string{public}) // a JSON list is a YAML flow sequence
+	return `#cloud-config
+disable_root: false
+ssh_pwauth: false
+ssh_authorized_keys: ` + string(keys) + `
 runcmd:
   - systemctl stop unattended-upgrades apt-daily.timer apt-daily-upgrade.timer snapd || true
   - systemctl disable unattended-upgrades apt-daily.timer apt-daily-upgrade.timer || true
@@ -23,16 +32,14 @@ runcmd:
   - sysctl -w net.ipv4.tcp_tw_reuse=1
   - sysctl -w fs.file-max=2097152
 `
-
-const sshKeyPrefix = "fourneau-dragrace-"
+}
 
 // Fleet is one race's droplets and key: per class in race.json a server
 // and its own loader, all in one region on its private network (the
 // racer's raceCloud).
 type Fleet struct {
 	dir      string
-	key      SSHKey
-	private  string             // the key's private half, in dir
+	private  string             // the run's key's private half, in dir
 	loaders  map[string]Droplet // by class name
 	servers  map[string]Droplet // by class name
 	created  []int
@@ -119,26 +126,22 @@ func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 	if err != nil {
 		return fleet, err
 	}
-	name := sshKeyPrefix + strconv.FormatInt(time.Now().Unix(), 10)
-	private, public, err := newKeyPair(ctx, fleet.dir, name)
+	private, public, err := newKeyPair(ctx, fleet.dir, "dragrace-race")
 	if err != nil {
 		return fleet, err
 	}
 	fleet.private = private
-	fleet.key, err = do.createKey(ctx, name, public)
-	if err != nil {
-		return fleet, err
-	}
 	create := func(role, class, size string) (Droplet, error) {
 		requested := time.Now()
 		droplet, err := do.createDroplet(ctx, DropletRequest{
-			Name:     "dragrace-" + role + "-" + class,
-			Region:   race.Cloud.Region,
-			Size:     size,
-			Image:    race.Cloud.Image,
-			SSHKeys:  []int{fleet.key.ID},
+			Name:   "dragrace-" + role + "-" + class,
+			Region: race.Cloud.Region,
+			Size:   size,
+			Image:  race.Cloud.Image,
+			// None: the guard names the admin key.
+			SSHKeys:  []int{},
 			Tags:     []string{race.Cloud.Tag},
-			UserData: raceUserData,
+			UserData: raceUserData(public),
 		})
 		if err == nil {
 			fleet.created = append(fleet.created, droplet.ID)
@@ -188,8 +191,9 @@ func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 	return fleet, nil
 }
 
-// destroy deletes the droplets and the key, retrying, even after an
-// interrupt: a droplet left running costs money every second.
+// destroy deletes the droplets, retrying, even after an interrupt (a
+// droplet left running costs money every second), then the run's key
+// pair's directory.
 // Called once a race is over, so its results hold every droplet's life,
 // and again by a defer, for a race that ended early: the second does
 // nothing.
@@ -198,15 +202,8 @@ func (fleet *Fleet) destroy(do Provider) {
 		return
 	}
 	fleet.destroyed = true
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
 	for _, id := range fleet.created {
 		fleet.delete(do, id)
-	}
-	if fleet.key.ID != 0 {
-		if err := do.deleteKey(ctx, fleet.key.ID); err != nil {
-			log.Printf("deleting key %d: %v (left on the account)", fleet.key.ID, err)
-		}
 	}
 	if fleet.dir != "" {
 		os.RemoveAll(fleet.dir)
