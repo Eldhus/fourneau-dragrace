@@ -477,9 +477,8 @@ func measure(ctx context.Context, race Race, workload Workload, target Target,
 // snapshots of the server and of the loader, one shell call each, the
 // server's nearest the load: before it, the loader's first; after it,
 // the server's first. Even so a window outlasts the load by the shell
-// calls' round trips (from GitHub's runner to the droplets, about six
-// seconds of 26, which read every CPU figure 23% low), so
-// rates are taken over oha's own duration (ServerCost.over).
+// calls' round trips, so rates are taken over oha's own duration
+// (ServerCost.over).
 func snapshots(ctx context.Context, target Target, pid string, before bool) (server, loader Snapshot, err error) {
 	takeServer := func() error {
 		text, err := target.Server.Shell(ctx, snapshotCommand(pid))

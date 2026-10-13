@@ -679,9 +679,9 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	race.Rounds, race.WarmupSeconds, race.MeasureSeconds = *rounds, adhocWarmup, adhocMeasure
-	// The nightly's ladder is each server's own (a share of its own best),
-	// which suits a league table; an A/B wants every variant at the same
-	// rates, so the ladder is climbed here after the rounds (`-open`).
+	// race.json's ladder is a share of each server's own best, which suits
+	// a league table; an A/B wants every variant at the same rates, so the
+	// ladder is climbed here after the rounds (`-open`).
 	ladder := race.OpenLoop
 	race.OpenLoop = OpenLoop{}
 	var picked []Workload

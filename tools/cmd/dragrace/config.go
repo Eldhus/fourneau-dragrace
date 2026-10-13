@@ -236,7 +236,7 @@ type Cloud struct {
 // is what runs out (checkSizes).
 type ServerClass struct {
 	Name string `json:"name"`
-	// Label is the class's tab on the site (a size: small, medium);
+	// Label is the class's tab on the site (its size: 512MB/1vCPU);
 	// Title, its heading, says what the class is for.
 	Label      string `json:"label"`
 	Title      string `json:"title"`

@@ -264,8 +264,9 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 
 // racerIdleTest fails with racerBusyStatus while the racer races a run (its
 // `racing` file: racer.remember). In the same command as the restart, so a
-// run can start only in the instant between. A racer restarted while it
-// waits for a build records nothing: the request stays and is taken again.
+// run can start only in the instant between. A racer restarted before it
+// has recorded its run records nothing: the request stays and is taken
+// again.
 const (
 	racerBusyStatus = 75
 	racerIdleTest   = "if sudo test -e /var/lib/dragrace-racer/racing; then exit 75; fi"

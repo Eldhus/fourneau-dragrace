@@ -9,9 +9,7 @@ import (
 
 // The owner's secrets for self-hosting live in their keyring
 // (secret-tool, service fourneau-dragrace), never in a file or on a
-// command line: the racer and manual tokens, made here when missing, and
-// the GitHub token the owner stores. They travel to a host
-// over SSH, on standard input.
+// command line: the racer and manual tokens, made here when missing. They travel to a host over SSH, on standard input.
 
 const keyringService = "fourneau-dragrace"
 
