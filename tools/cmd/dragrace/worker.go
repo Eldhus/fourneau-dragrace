@@ -26,8 +26,7 @@ type WorkerConfig struct {
 	Seed  int64       `json:"seed"`
 	Site  string      `json:"site"`
 	Token string      `json:"token"`
-	// The server's private address; "" races on this machine (a test of
-	// the worker: race.json's local CPUs).
+	// The server's private address.
 	ServerHost string `json:"server_host"`
 	Key        string `json:"key"`
 	KnownHosts string `json:"known_hosts"`
@@ -43,8 +42,9 @@ func commandWorker(ctx context.Context, root string, args []string) error {
 	if err := readJSON(*path, &config); err != nil {
 		return err
 	}
-	if config.RunID == "" || config.Site == "" || config.Token == "" || config.Results == "" {
-		return fmt.Errorf("%s: run_id, site, token and results are required", *path)
+	if config.RunID == "" || config.Site == "" || config.Token == "" || config.ServerHost == "" ||
+		config.Results == "" {
+		return fmt.Errorf("%s: run_id, site, token, server_host and results are required", *path)
 	}
 	return runWorker(ctx, root, config)
 }
@@ -90,29 +90,19 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	}
 	loader := LocalMachine{}
 	const home = "/root/dragrace"
-	target := Target{Class: config.Class, Loader: loader, Report: poster.send}
-	var server Machine = loader
-	if config.ServerHost == "" {
-		target.ServerHome, target.LoaderHome = outDir(root), filepath.Join(outDir(root), "loader")
-		target.Address = "127.0.0.1"
-		target.ServerCPUs, target.LoaderCPUs = race.Local.ServerCPUs, race.Local.LoaderCPUs
-		target.LoaderThreads = len(cpuSet(race.Local.LoaderCPUs))
-	} else {
-		server = SSHMachine{User: "root", Host: config.ServerHost, Key: config.Key,
-			KnownHosts: config.KnownHosts}
-		target.ServerHome, target.LoaderHome = home, home+"/loader"
-		target.Address = config.ServerHost
-		for _, competitor := range competitors {
-			binary := filepath.Join(binDir(root), competitor.Name)
-			if err := server.Put(ctx, binary, home+"/bin/"+competitor.Name); err != nil {
-				return err
-			}
-		}
-		if _, err := server.Shell(ctx, "chmod +x "+home+"/bin/*"); err != nil {
+	server := SSHMachine{User: "root", Host: config.ServerHost, Key: config.Key,
+		KnownHosts: config.KnownHosts}
+	target := Target{Class: config.Class, Server: server, Loader: loader, ServerHome: home,
+		LoaderHome: home + "/loader", Address: config.ServerHost, Report: poster.send}
+	for _, competitor := range competitors {
+		binary := filepath.Join(binDir(root), competitor.Name)
+		if err := server.Put(ctx, binary, home+"/bin/"+competitor.Name); err != nil {
 			return err
 		}
 	}
-	target.Server = server
+	if _, err := server.Shell(ctx, "chmod +x "+home+"/bin/*"); err != nil {
+		return err
+	}
 	if err := loader.Put(ctx, filepath.Join(binDir(root), "oha"), target.LoaderHome+"/oha"); err != nil {
 		return err
 	}
@@ -120,9 +110,7 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 		return err
 	}
 	loaderInfo := machineInfo(ctx, loader, "loader", config.Class.Name, config.Class.LoaderSize)
-	if config.ServerHost != "" {
-		target.LoaderThreads = loaderInfo.CPUs
-	}
+	target.LoaderThreads = loaderInfo.CPUs
 	serverInfo := machineInfo(ctx, server, "server", config.Class.Name, config.Class.Size)
 	machines := []MachineInfo{loaderInfo, serverInfo}
 	if err := site.post(ctx, "/api/runs/"+config.RunID+"/machines", machines, nil); err != nil {

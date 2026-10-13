@@ -37,14 +37,12 @@ type RacerConfig struct {
 // with -ldflags), so the racer knows a newer build of itself.
 var buildCommit = ""
 
-// Racer is one racer: its site, GitHub, and the droplets' provider. A
-// local racer (a test) races on this machine, the checkout as its build.
+// Racer is one racer: its site, GitHub, and the droplets' provider.
 type Racer struct {
 	config   RacerConfig
 	site     *SiteClient
 	github   *GitHub
 	provider Provider
-	local    string // the checkout, for a local racer; "" in the cloud
 }
 
 // Request is one thing asked of the racer, as the site lists it.
@@ -80,7 +78,7 @@ type RunPost struct {
 	Trigger     string       `json:"trigger"`
 	Status      string       `json:"status"`
 	Reason      string       `json:"reason"`
-	WhereRaced  string       `json:"where_raced"`
+	WhereRaced  string       `json:"where_raced"` // "cloud", the only place a racer races
 	StartedAt   string       `json:"started_at"`
 	WorkerToken string       `json:"worker_token"`
 	Commits     []CommitPost `json:"commits"`
@@ -167,11 +165,10 @@ type EndPost struct {
 
 func commandRacer(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace racer serve|check|once [-config F]")
+		return fmt.Errorf("usage: dragrace racer serve|check [-config F]")
 	}
 	flags := newFlags("racer " + args[0])
 	path := flags.String("config", "/etc/dragrace-racer/config.json", "the owner's config")
-	local := flags.String("local", "", "race on this machine, this checkout as the build (a test)")
 	flags.Parse(args[1:])
 	var config RacerConfig
 	if err := readJSON(*path, &config); err != nil {
@@ -185,15 +182,10 @@ func commandRacer(ctx context.Context, args []string) error {
 		return fmt.Errorf("the site and its racer token (RACER_TOKEN) are required")
 	}
 	racer := &Racer{config: config, site: newSiteClient(config.Site, token),
-		github: newGitHub(config.Repository), local: *local}
-	if racer.local == "" {
-		racer.provider = newGuardClient(config.Guard)
-	}
+		github: newGitHub(config.Repository), provider: newGuardClient(config.Guard)}
 	switch args[0] {
 	case "check":
 		return racer.site.post(ctx, "/api/requests?kind=check", nil, nil)
-	case "once":
-		return racer.once(ctx)
 	case "serve":
 		return racer.serve(ctx)
 	}
@@ -240,7 +232,7 @@ func (racer *Racer) serve(ctx context.Context) error {
 		} else {
 			refused = 0
 		}
-		if !handled && racer.local == "" && time.Since(updateAt) > 10*time.Minute {
+		if !handled && time.Since(updateAt) > 10*time.Minute {
 			updateAt = time.Now()
 			if err := racer.update(ctx); err != nil {
 				log.Printf("update: %v", err)
@@ -250,15 +242,6 @@ func (racer *Racer) serve(ctx context.Context) error {
 			return nil
 		}
 	}
-}
-
-// once takes the oldest request, if there is one.
-func (racer *Racer) once(ctx context.Context) error {
-	handled, err := racer.handleNext(ctx)
-	if err == nil && !handled {
-		log.Printf("no request waiting")
-	}
-	return err
 }
 
 func (racer *Racer) handleNext(ctx context.Context) (bool, error) {
@@ -281,9 +264,8 @@ func (racer *Racer) handleNext(ctx context.Context) (bool, error) {
 	return true, err
 }
 
-// Tonight is what a check would race now: its commits, its build (none
-// for a local racer, which races its checkout), and whether it is new
-// since the newest finished race.
+// Tonight is what a check would race now: its commits, its build, and
+// whether it is new since the newest finished race.
 type Tonight struct {
 	Commits map[string]string
 	Build   Build
@@ -291,25 +273,14 @@ type Tonight struct {
 	Raced   map[string]string
 }
 
-// tonight is, for a racer in the cloud, the newest build of the commit it
-// runs from: the one the site serves, which it updated itself to (the daily
-// build of new fourneau or roux commits makes another build of the same
-// commit). New when its race key is not the last race's, which is the race
-// key of the build with the last race's commits; with no such build (pruned, or from before race
-// keys) it counts as new. A change to the site or the tool alone keeps the
-// race key: no race. For a local racer, the checkout's commits, new when
-// any differs.
+// tonight is the newest build of the commit the racer runs from: the one
+// the site serves, which it updated itself to (the daily build of new
+// fourneau or roux commits makes another build of the same commit). New
+// when its race key is not the last race's, which is the race key of the
+// build with the last race's commits; with no such build (pruned, or from
+// before race keys) it counts as new. A change to the site or the tool
+// alone keeps the race key: no race.
 func (racer *Racer) tonight(ctx context.Context, raced map[string]string) (Tonight, error) {
-	if racer.local != "" {
-		fingerprint, err := fingerprintOf(racer.local)
-		if err != nil {
-			return Tonight{}, err
-		}
-		heads := map[string]string{"fourneau-dragrace": fingerprint.Dragrace,
-			"fourneau": fingerprint.Fourneau, "roux": fingerprint.Roux}
-		_, anyNew := commitsPost(heads, raced)
-		return Tonight{Commits: heads, New: anyNew, Raced: raced}, nil
-	}
 	builds, err := racer.github.builds(ctx)
 	if err != nil {
 		return Tonight{}, err
@@ -373,13 +344,9 @@ func (racer *Racer) handle(ctx context.Context, request Request, raced map[strin
 	if request.AskedBy == "owner" {
 		trigger = "manual"
 	}
-	where := "cloud"
-	if racer.local != "" {
-		where = "local"
-	}
 	started := time.Now().UTC()
-	run := RunPost{ID: runID(where, started), RequestID: request.ID, Trigger: trigger,
-		WhereRaced: where, StartedAt: started.Format(time.RFC3339)}
+	run := RunPost{ID: runID("cloud", started), RequestID: request.ID, Trigger: trigger,
+		WhereRaced: "cloud", StartedAt: started.Format(time.RFC3339)}
 	tonight, err := racer.tonight(ctx, raced)
 	if err != nil {
 		return racer.notRaced(ctx, run, "failed", "tonight's build: "+err.Error())
@@ -419,19 +386,9 @@ func (racer *Racer) notRaced(ctx context.Context, run RunPost, status, reason st
 	return nil
 }
 
-// build is the checkout to race: this one, for a local racer; otherwise
-// tonight's build, its race.tar.gz downloaded and unpacked.
+// build is the checkout to race: tonight's build, its race.tar.gz
+// downloaded and unpacked.
 func (racer *Racer) build(ctx context.Context, id string, tonight Tonight) (string, error) {
-	if racer.local != "" {
-		tools, err := loadToolchain(ctx, racer.local)
-		if err != nil {
-			return "", err
-		}
-		if err := copyFile(tools.Oha, filepath.Join(binDir(racer.local), "oha")); err != nil {
-			return "", err
-		}
-		return racer.local, nil
-	}
 	build := tonight.Build
 	dir := filepath.Join(racer.config.State, "runs", id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -489,23 +446,6 @@ func pruneRuns(dir string, keep int) {
 		os.RemoveAll(filepath.Join(dir, names[0]))
 		names = names[1:]
 	}
-}
-
-// copyFile copies an executable, written beside and renamed over: a
-// program running from `to` keeps its file ("text file busy" otherwise),
-// and no reader sees half.
-func copyFile(from, to string) error {
-	bytes, err := os.ReadFile(from)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(to+".partial", bytes, 0o755); err != nil {
-		return err
-	}
-	return os.Rename(to+".partial", to)
 }
 
 // racePost is race.json and versions.json, as the site keeps them.
@@ -592,9 +532,6 @@ func (racer *Racer) race(ctx context.Context, root string, run RunPost, watch st
 	if err != nil {
 		return racer.notRaced(ctx, run, "failed", err.Error())
 	}
-	if racer.local != "" {
-		run.Race.Classes = []ServerClassPost{{Name: "local", Label: "local", Title: "this computer"}}
-	}
 	run.Status, run.WorkerToken = "racing", randomToken()
 	if err := racer.site.post(ctx, "/api/runs", run, nil); err != nil {
 		return fmt.Errorf("%w: %w", errRunNotRecorded, err)
@@ -602,13 +539,7 @@ func (racer *Racer) race(ctx context.Context, root string, run RunPost, watch st
 	racer.remember(run.ID)
 	defer racer.forget()
 	timing := Timing{BuildSeconds: buildSeconds}
-	var results []Result
-	var raceErr error
-	if racer.local != "" {
-		results, raceErr = racer.raceLocal(ctx, root, run, seed, &timing)
-	} else {
-		results, raceErr = racer.raceCloud(ctx, root, run, race, seed, &timing)
-	}
+	results, raceErr := racer.raceCloud(ctx, root, run, race, seed, &timing)
 	// Every result again, as the workers kept them: whatever a worker could
 	// not post is posted now, the rest replaces itself.
 	end := context.WithoutCancel(ctx)
@@ -637,33 +568,6 @@ func (racer *Racer) race(ctx context.Context, root string, run RunPost, watch st
 	}
 	log.Printf("run %s: %s %s", run.ID, status, reason)
 	return raceErr
-}
-
-// raceLocal races on this machine: one worker, in this process.
-func (racer *Racer) raceLocal(ctx context.Context, root string, run RunPost, seed int64,
-	timing *Timing) ([]Result, error) {
-	file := filepath.Join(outDir(root), "worker-results.json")
-	os.Remove(file)
-	raced := time.Now()
-	err := runWorker(ctx, root, WorkerConfig{RunID: run.ID,
-		Class: ServerClass{Name: "local", Label: "local", Title: "this computer"},
-		Seed:  seed, Site: racer.site.base, Token: run.WorkerToken, Results: file})
-	timing.RacingSeconds = time.Since(raced).Seconds()
-	timing.Classes = []ClassTiming{{Class: "local", Seconds: timing.RacingSeconds}}
-	results, readErr := readResults(file)
-	if err == nil {
-		err = readErr
-	}
-	return results, err
-}
-
-func readResults(path string) ([]Result, error) {
-	var results []Result
-	bytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return results, json.Unmarshal(bytes, &results)
 }
 
 // workerTimeFor is how long a class's worker may run: until a quarter hour

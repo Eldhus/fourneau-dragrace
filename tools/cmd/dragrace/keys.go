@@ -284,6 +284,23 @@ func toStore(root, name, key string) error {
 	return pruneStore(store, name, os.Remove)
 }
 
+// copyFile copies an executable, written beside and renamed over: a
+// program running from `to` keeps its file ("text file busy" otherwise),
+// and no reader sees half.
+func copyFile(from, to string) error {
+	bytes, err := os.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(to+".partial", bytes, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(to+".partial", to)
+}
+
 // pruneStore keeps the newest used storeKeep of name's entries (NAME-KEY,
 // the key 64 hex characters) and removes the rest.
 func pruneStore(store, name string, remove func(string) error) error {

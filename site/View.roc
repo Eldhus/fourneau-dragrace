@@ -83,7 +83,7 @@ View :: [].{
 	Chart : { key : Str, title : Str, variant : List(Str), empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
 	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
 	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
-	History : { waiting : Bool, note : Str, sections : List(Section), section : Str, classes : List(Charts) }
+	History : { waiting : Bool, sections : List(Section), section : Str, classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
 
@@ -186,17 +186,13 @@ View :: [].{
 		}
 	}
 
-	## Every cloud race's best rounds (local ones only while no cloud race
-	## exists), a chart per server class and workload of one section, and
-	## h2c's below; two races at least.
+	## Every race's best rounds, a chart per server class and workload of
+	## one section, and h2c's below; two races at least.
 	history : Data.Run, List(Data.Entry), Str -> History
 	history = |run, entries, wanted| {
-		cloud = entries.keep_if(|entry| entry.id.ends_with("-cloud"))
-		shown = if cloud.is_empty() entries else cloud
-		note = if cloud.is_empty() "No cloud race yet: these are local races." else ""
 		sections = sections_of(run)
 		section = chosen_section(sections, wanted)
-		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(shown, class.name, workload, run.race.competitors))
+		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(entries, class.name, workload, run.race.competitors))
 		classes = classes_of(run).map(|class| {
 			name: class.name,
 			label: class.label,
@@ -204,7 +200,7 @@ View :: [].{
 			charts: charted(section, class),
 			h2c: charted("h2c", class),
 		})
-		{ waiting: List.len(shown) < 2, note, sections, section, classes }
+		{ waiting: List.len(entries) < 2, sections, section, classes }
 	}
 
 	## The race page's live banner while a run races (LiveRace.rocstache): one sentence (results in, of how many, and
@@ -292,8 +288,9 @@ commit : Str, Str, Str -> View.Commit
 commit = |name, repository, sha| { name, short: Format.short(sha), url: "${repository}/commit/${sha}" }
 
 ## The server classes a race ran, in race.json's order (smallest first),
-## then any its results name that race.json does not (a local race). Not
-## the results' order: the database sorts those by name, which put
+## then, by its name alone, any its results name that race.json does not
+## (none so far: kept so a stored run still shows whole). Not the
+## results' order: the database sorts those by name, which puts
 ## dedicated-2 before smallest.
 classes_of : Data.Run -> List(Data.ServerClass)
 classes_of = |run| {
@@ -308,7 +305,7 @@ classes_of = |run| {
 	listed.concat(others).map(|name|
 		match run.race.cloud.servers.find_first(|server| server.name == name) {
 			Ok(server) => server
-			Err(_) => { name, label: "local", title: "This computer (a local race)" }
+			Err(_) => { name, label: name, title: name }
 		})
 }
 
@@ -453,10 +450,8 @@ strip = |run, class, workload| {
 		.sort_with(|a, b| if a.best_rps > b.best_rps Before else if a.best_rps < b.best_rps After else Same)
 	# The scale ends at the fastest round, so every whisker fits.
 	most = results.fold(0.0, |best, r| if r.valid and round_range(r).fastest > best round_range(r).fastest else best)
-	# A local race's traffic is loopback: no network limit applies.
-	local = class == "local"
-	rows = results.map(|r| row(r, most, local))
-	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, rows, table: results.map(|r| table_row(r, local)) }
+	rows = results.map(|r| row(r, most))
+	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, rows, table: results.map(|r| table_row(r)) }
 }
 
 ## Which chart a workload's is, the same in every class and section: its
@@ -503,8 +498,8 @@ expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2+TLS", "128 
 expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 connections, one request each"]
 expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections"]
 
-row : Data.Result, F64, Bool -> View.Row
-row = |result, most, local|
+row : Data.Result, F64 -> View.Row
+row = |result, most|
 	if !result.valid or most <= 0.0 {
 		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", p99: "", p99_tip: "", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
@@ -522,16 +517,16 @@ row = |result, most, local|
 			p99: Format.two_figures(result.median_p99_ms),
 			p99_tip: "p99 ${Format.latency(result.median_p99_ms)} ms, the rounds' median",
 			ranged: (fastest - slowest) / most >= whisker_share_min,
-			hollow: !saturated(result, local),
-			tip: "${result.competitor}: ${value} req/s, the best of ${rounds} rounds (the slowest ${Format.thousands(slowest)}, ${Format.thousands(spread)}% below), limited by ${limited_by(result, local)}; the rounds' median p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
+			hollow: !saturated(result),
+			tip: "${result.competitor}: ${value} req/s, the best of ${rounds} rounds (the slowest ${Format.thousands(slowest)}, ${Format.thousands(spread)}% below), limited by ${limited_by(result)}; the rounds' median p95 ${Format.latency(result.median_p95_ms)}, p99 ${Format.latency(result.median_p99_ms)}, p99.9 ${Format.latency(result.median_p999_ms)} ms",
 		}
 	}
 
 ## The table: the rate the bar's (the best round), the percentiles the
 ## rounds' medians (Data.Result says why); what the machines did is the
 ## fastest round's, the one the bar shows.
-table_row : Data.Result, Bool -> View.TableRow
-table_row = |result, local| {
+table_row : Data.Result -> View.TableRow
+table_row = |result| {
 	rounds = result.rounds
 	rss = rounds.fold(0.0, |top, r| if r.rss_kib > top r.rss_kib else top)
 	best = best_round(result)
@@ -547,7 +542,7 @@ table_row = |result, local| {
 		cpu: Format.one_decimal(best.cpu_busy_pct),
 		loader: Format.one_decimal(best.loader_cpu_busy_pct),
 		net: "${Format.thousands(best.net_rx_mbps)} / ${Format.thousands(best.net_tx_mbps)}",
-		limit: limited_by(result, local),
+		limit: limited_by(result),
 		spread: Format.one_decimal(spread_pct(result)),
 		steal: Format.one_decimal(best.steal_pct),
 		rss: "${Format.one_decimal(rss / 1024.0)} MiB",
@@ -794,7 +789,7 @@ clock = |stamp| Str.from_utf8_lossy(List.sublist(Str.to_utf8(stamp), { start: 11
 expect clock("2026-10-06T13:58:49Z") == "13:58"
 
 ## "53 min · $0.45": how long the race took and what its droplets cost
-## (the cost only for a cloud race).
+## (the cost only when droplets ran).
 took : { seconds : F64, cost_usd : F64 } -> Str
 took = |timing| {
 	minutes = (timing.seconds / 60.0).round_to_u64_try() ?? 0
@@ -1034,8 +1029,8 @@ expect F64.abs(log10(7.0) - 0.8450980400142568) < 0.0000000001 and F64.abs(log10
 ## DigitalOcean documents for these droplets (where retransmits began).
 ## None of them: the closed loop's connections and their
 ## round trips were the limit (the server was under-driven).
-limits : Data.Result, Bool -> List(Str)
-limits = |result, local| {
+limits : Data.Result -> List(Str)
+limits = |result| {
 	r = best_round(result)
 	cpu = r.cpu_busy_pct
 	loader = r.loader_cpu_busy_pct
@@ -1047,13 +1042,13 @@ limits = |result, local| {
 	at_link = net >= network_limit_mbps or (net >= 1000.0 and drops >= 0.01)
 	List.concat(
 		List.concat(if cpu >= cpu_limit_pct ["server CPU"] else [], if loader >= cpu_limit_pct ["loader"] else []),
-		if !local and at_link ["network"] else [],
+		if at_link ["network"] else [],
 	)
 }
 
-limited_by : Data.Result, Bool -> Str
-limited_by = |result, local| {
-	found = limits(result, local)
+limited_by : Data.Result -> Str
+limited_by = |result| {
+	found = limits(result)
 	if found.is_empty() "connections (nothing saturated)" else Str.join_with(found, ", ")
 }
 
@@ -1066,11 +1061,10 @@ network_limit_mbps = 1400.0
 expect {
 	round = |cpu, loader, net| { rps: 1.0, p99_ms: 1.0, cpu_busy_pct: cpu, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: loader, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: 0.0, load_seconds: 20.0 }
 	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, best_rps: 1.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
-	limited_by(result([round(99.0, 98.0, 240.0)]), Bool.False) == "server CPU, loader"
-	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.False) == "network"
-	and limited_by(result([round(88.0, 64.0, 1510.0)]), Bool.True) == "connections (nothing saturated)"
-	and limited_by(result([round(64.0, 52.0, 190.0)]), Bool.False) == "connections (nothing saturated)"
-	and !saturated(result([round(64.0, 52.0, 190.0)]), Bool.False)
+	limited_by(result([round(99.0, 98.0, 240.0)])) == "server CPU, loader"
+	and limited_by(result([round(88.0, 64.0, 1510.0)])) == "network"
+	and limited_by(result([round(64.0, 52.0, 190.0)])) == "connections (nothing saturated)"
+	and !saturated(result([round(64.0, 52.0, 190.0)]))
 }
 
 ## A whisker narrower than this share of the strip's top bar is a few
@@ -1082,8 +1076,8 @@ whisker_share_min = 0.02
 ## did not is drawn as an outline ("server not saturated"): the loader, the
 ## network or too few connections set it, and the table says which. A
 ## server at its CPU's limit that also met the network is saturated.
-saturated : Data.Result, Bool -> Bool
-saturated = |result, local| limits(result, local).any(|limit| limit == "server CPU")
+saturated : Data.Result -> Bool
+saturated = |result| limits(result).any(|limit| limit == "server CPU")
 
 ## The slowest and the fastest round.
 round_range : Data.Result -> { slowest : F64, fastest : F64 }
@@ -1105,9 +1099,9 @@ spread_pct = |result| {
 expect {
 	at = |net, retransmits| { rps: 35000.0, p99_ms: 200.0, cpu_busy_pct: 93.0, steal_pct: 0.0, rss_kib: 0.0, loader_cpu_busy_pct: 26.0, net_rx_mbps: net, net_tx_mbps: 0.0, tcp_retransmits: retransmits, load_seconds: 20.0 }
 	result = |rounds| { class: "c", workload: "w", competitor: "x", valid: Bool.True, note: "", rounds, best_rps: 35000.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [] }
-	limited_by(result([at(1322.0, 47363.0)]), Bool.False) == "server CPU, network"
-	and saturated(result([at(1322.0, 47363.0)]), Bool.False)
-	and limited_by(result([at(1322.0, 100.0)]), Bool.False) == "server CPU"
+	limited_by(result([at(1322.0, 47363.0)])) == "server CPU, network"
+	and saturated(result([at(1322.0, 47363.0)]))
+	and limited_by(result([at(1322.0, 100.0)])) == "server CPU"
 }
 
 ## A machine's memory as the kernel has it, "457 MiB" or "3.8 GiB";

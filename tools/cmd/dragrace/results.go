@@ -15,7 +15,7 @@ import (
 // without this repository at that commit.
 type Run struct {
 	ID          string        `json:"id"`
-	Where       string        `json:"where"` // "cloud" or "local"
+	Where       string        `json:"where"` // "local" or "adhoc"
 	StartedAt   time.Time     `json:"started_at"`
 	FinishedAt  time.Time     `json:"finished_at"`
 	Seed        int64         `json:"seed"`

@@ -3,7 +3,6 @@
 <p>Each race&rsquo;s best round, race by race. A line that jumps is a commit, or another CPU under the same size: each race&rsquo;s data, <code>/data/runs/ID.json</code> (the ID is on each point), names both. The <a href="/data/index.json">index</a> lists the races.</p>
 </article>
 <section id="history" class="results">
-{{?waiting}}<p class="pending">// HISTORY NEEDS TWO RACES // check back after the next nightly</p>{{/waiting}}{{^waiting}}<p class="machines">{{ note }}</p>
-{{> HistoryClasses}}{{/waiting}}
+{{?waiting}}<p class="pending">// HISTORY NEEDS TWO RACES // check back after the next nightly</p>{{/waiting}}{{^waiting}}{{> HistoryClasses}}{{/waiting}}
 </section>
 {{> Bottom}}

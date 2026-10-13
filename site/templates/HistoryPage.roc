@@ -68,7 +68,6 @@ HistoryPage :: [].{
 		),
 		home : Bool,
 		nav : List({ current : Bool, href : Str, label : Str }),
-		note : Str,
 		sections : List({ action : Str, current : Bool, href : Str, label : Str }),
 		tabs : List({ action : Str, current : Bool, href : Str, label : Str }),
 		title : Str,

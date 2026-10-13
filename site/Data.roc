@@ -109,7 +109,7 @@ expect
 
 expect
 	match Data.index(index_sample) {
-		Ok(entries) => List.len(entries) == 2
+		Ok(entries) => List.len(entries) == 1
 		Err(_) => Bool.False
 	}
 

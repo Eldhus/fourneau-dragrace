@@ -31,7 +31,6 @@
 //	dragrace guard [-config F]      the racer's DigitalOcean token and budget
 //	dragrace racer serve            take the site's requests and race them
 //	dragrace racer check            ask the site for a check (the 05:00 timer)
-//	dragrace racer once -local DIR  take one request, racing on this machine
 //	dragrace host-agent             deploy the newest build's site (a timer)
 //	dragrace version                the commit build.yml built this from
 //
@@ -147,7 +146,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | adhoc race|down | diff |
   bundle | worker | site build|dev|provision|install-server|race-now |
-  guard | racer serve|check|once|provision|install | host-agent |
+  guard | racer serve|check|provision|install | host-agent |
   hosts check | version
 See README.md.`)
 	os.Exit(2)
