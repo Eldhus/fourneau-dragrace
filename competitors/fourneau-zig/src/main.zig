@@ -1,7 +1,9 @@
 //! The fourneau-zig competitor: fourneau's server with a Zig handler, one
 //! shard per CPU (shared nothing), on fourneau's io_uring port.
 //!
-//!   fourneau-zig [--address A] [--port P]
+//! Started as the race starts every competitor (CONTRIBUTING.md, "The
+//! contract"): ROUX_ADDRESS, ROUX_PORT, ROUX_DATABASE, and ROUX_TLS_CERT
+//! and ROUX_TLS_KEY for HTTPS, the names roux's host reads.
 
 const std = @import("std");
 const assert = std.debug.assert;
@@ -11,7 +13,7 @@ const Template = @import("template.zig").Template;
 const datastar = @import("datastar.zig");
 const conduit = @import("conduit.zig");
 
-/// The shard's connection to the conduit workload's database (`--database`).
+/// The shard's connection to the conduit workload's database (`ROUX_DATABASE`).
 threadlocal var shard_db: ?conduit.Db = null;
 
 /// The templates workload's page: a head, a row per dish, a tail.
@@ -216,7 +218,7 @@ const Options = struct {
     port: u16 = 8080,
     /// The conduit workload's database; "" for none.
     database: [:0]const u8 = "",
-    /// HTTPS (`--tls-cert`, `--tls-key`): fourneau's TLS 1.3, its keys to
+    /// HTTPS (`ROUX_TLS_CERT`, `ROUX_TLS_KEY`): fourneau's TLS 1.3, its keys to
     /// the kernel (kTLS), HTTP/2 by ALPN. No session resumption: fourneau
     /// has none.
     https: fourneau.https.Options = .{},
@@ -225,23 +227,12 @@ const Options = struct {
 
 pub fn main(init: std.process.Init.Minimal) !void {
     var options: Options = .{};
-    var args = init.args.iterate();
-    _ = args.skip();
-    for (0..8) |_| {
-        const arg = args.next() orelse break;
-        const value = args.next() orelse return error.Usage;
-        if (std.mem.eql(u8, arg, "--address")) {
-            options.address = value;
-        } else if (std.mem.eql(u8, arg, "--port")) {
-            options.port = try std.fmt.parseInt(u16, value, 10);
-        } else if (std.mem.eql(u8, arg, "--database")) {
-            options.database = value;
-        } else if (std.mem.eql(u8, arg, "--tls-cert")) {
-            options.https.cert = value;
-        } else if (std.mem.eql(u8, arg, "--tls-key")) {
-            options.https.key = value;
-        } else return error.Usage;
-    }
+    const environ = init.environ;
+    if (environ.getPosix("ROUX_ADDRESS")) |value| options.address = value;
+    if (environ.getPosix("ROUX_PORT")) |value| options.port = try std.fmt.parseInt(u16, value, 10);
+    if (environ.getPosix("ROUX_DATABASE")) |value| options.database = value;
+    options.https.cert = environ.getPosix("ROUX_TLS_CERT");
+    options.https.key = environ.getPosix("ROUX_TLS_KEY");
     try options.https.check();
     const startup_io = std.Io.Threaded.global_single_threaded.io();
     options.tls = try fourneau.https.context(std.heap.page_allocator, startup_io, options.https);

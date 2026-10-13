@@ -2,48 +2,9 @@
   "title": "roux",
   "language": "Roc",
   "framework": "roux: a Roc platform whose host is fourneau",
-  "build": [
-    {
-      "cwd": ".",
-      "argv": [
-        "cp",
-        "workloads/conduit/schema.sql",
-        "competitors/roux/db/schema.sql"
-      ]
-    },
-    {
-      "cwd": "competitors/roux",
-      "argv": [
-        "{roux}/zig-out/bin/roux-db",
-        "gen",
-        "db"
-      ]
-    },
-    {
-      "cwd": "competitors/roux",
-      "argv": [
-        "{roux}/zig-out/bin/roux",
-        "build",
-        "--roc={roc}",
-        "--output={out}/roux",
-        "main.roc"
-      ]
-    }
-  ],
-  "run": {
-    "argv": [
-      "{bin}"
-    ],
-    "env": {
-      "ROUX_ADDRESS": "{address}",
-      "ROUX_PORT": "{port}",
-      "ROUX_DATABASE": "{db}"
-    },
-    "tls": {
-      "env": {
-        "ROUX_TLS_CERT": "{cert}",
-        "ROUX_TLS_KEY": "{key}"
-      }
-    }
-  }
+  "build": {
+    "argv": ["roux", "build", "--roc=roc", "main.roc"],
+    "binary": "main"
+  },
+  "tls": true
 }

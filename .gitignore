@@ -1,7 +1,10 @@
 out/
+# The competitors' builds (competitor.json's build.binary).
+competitors/go/dragrace-go
 competitors/axum/target/
 competitors/fourneau-zig/zig-out/
 competitors/fourneau-zig/.zig-cache/
+competitors/basic-webserver/main
 .zig-cache/
 site/data/
 tools/dragrace

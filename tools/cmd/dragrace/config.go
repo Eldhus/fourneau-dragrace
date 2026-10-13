@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 )
 
 // Download is a pinned file: oha (race.json), Zig and roc (RouxPins).
@@ -186,16 +185,6 @@ func (workload Workload) kind() string {
 	return "closed"
 }
 
-// hasMixed says whether a race needs the conduit database.
-func (race Race) hasMixed() bool {
-	for _, workload := range race.Workloads {
-		if workload.Mixed != nil {
-			return true
-		}
-	}
-	return false
-}
-
 type Cloud struct {
 	Region        string        `json:"region"`
 	Image         string        `json:"image"`
@@ -222,7 +211,9 @@ type Local struct {
 	LoaderCPUs string `json:"loader_cpus"`
 }
 
-// Competitor is competitors/NAME/competitor.json: how to build and run it.
+// Competitor is competitors/NAME/competitor.json: how to build it, and
+// whether it serves TLS. Every competitor is started the same way
+// (startServer): its binary, with roux's variables in its environment.
 type Competitor struct {
 	Name      string `json:"-"`
 	Title     string `json:"title"`
@@ -231,55 +222,19 @@ type Competitor struct {
 	// Inputs are what its build reads by path outside its directory,
 	// relative to this repository (fourneau-zig: fourneau, and roux's
 	// vendored SQLite): they make its key (keys.go).
-	Inputs []string `json:"inputs"`
-	Build  []Step   `json:"build"`
-	Run    RunSpec  `json:"run"`
+	Inputs []string        `json:"inputs"`
+	Build  CompetitorBuild `json:"build"`
+	// TLS: it serves HTTPS on the same port when given a certificate and
+	// key. false: it sits the TLS workloads out.
+	TLS bool `json:"tls"`
 }
 
-// opensDatabase: the competitor's command names {db}, so it opens the
-// seeded database at start whatever the race's workloads.
-func (competitor Competitor) opensDatabase() bool {
-	names := func(args []string, env map[string]string) bool {
-		for _, arg := range args {
-			if strings.Contains(arg, "{db}") {
-				return true
-			}
-		}
-		for _, value := range env {
-			if strings.Contains(value, "{db}") {
-				return true
-			}
-		}
-		return false
-	}
-	run := competitor.Run
-	return names(run.Argv, run.Env) || run.TLS != nil && names(run.TLS.Argv, run.TLS.Env)
-}
-
-// needsDatabase: the server gets the seeded database, for a mixed workload
-// or for a competitor that opens it at start.
-func needsDatabase(race Race, competitors []Competitor) bool {
-	return race.hasMixed() || slices.ContainsFunc(competitors, Competitor.opensDatabase)
-}
-
-type Step struct {
-	Cwd  string            `json:"cwd"`
-	Argv []string          `json:"argv"`
-	Env  map[string]string `json:"env"`
-}
-
-type RunSpec struct {
-	Argv []string          `json:"argv"`
-	Env  map[string]string `json:"env"`
-	// TLS is how the competitor serves HTTPS on the same port: arguments
-	// appended and environment added ({cert}, {key}: PEM files). Absent:
-	// it serves no TLS, and sits the TLS workloads out.
-	TLS *RunTLS `json:"tls,omitempty"`
-}
-
-type RunTLS struct {
-	Argv []string          `json:"argv"`
-	Env  map[string]string `json:"env"`
+// CompetitorBuild is one command, run in competitors/NAME
+// (buildCompetitor), that writes Binary, a path in that directory.
+type CompetitorBuild struct {
+	Argv   []string          `json:"argv"`
+	Env    map[string]string `json:"env"`
+	Binary string            `json:"binary"`
 }
 
 func readJSON(path string, into any) error {
@@ -337,6 +292,10 @@ func loadCompetitors(root string, names []string) ([]Competitor, error) {
 		path := filepath.Join(root, "competitors", name, "competitor.json")
 		if err := readJSON(path, &competitor); err != nil {
 			return nil, err
+		}
+		if len(competitor.Build.Argv) == 0 || !filepath.IsLocal(competitor.Build.Binary) {
+			return nil, fmt.Errorf("%s: build.argv and build.binary, a path in its directory, "+
+				"must be set", path)
 		}
 		competitor.Name = name
 		competitors = append(competitors, competitor)

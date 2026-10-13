@@ -28,7 +28,8 @@ const (
 )
 
 // putCertificate makes the race's certificate and key and puts them in
-// the server's home, where {cert} and {key} name them.
+// the server's home, where ROUX_TLS_CERT and ROUX_TLS_KEY name them
+// (startServer).
 func putCertificate(ctx context.Context, target Target) error {
 	certPEM, keyPEM, err := newCertificate(target.Address, time.Now())
 	if err != nil {

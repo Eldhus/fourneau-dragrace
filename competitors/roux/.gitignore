@@ -1,6 +1,6 @@
-# roux build's working files, and its binary when built here by hand.
+# roux build's working files, and its binary.
 .roux/
 main
-# Made by the build: roux-db from db/*.sql, and the workload's schema copied.
+# Made by the build: roux-db from db/*.sql against db/schema.sql (the
+# workload's, by a link).
 db/*.roc
-db/schema.sql

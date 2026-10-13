@@ -5,13 +5,13 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -43,17 +43,26 @@ var dishes = []Dish{
 	{"Pylsa með öllu", 120}, {"Flatkaka & hangikjöt", 210}, {"1 < 2 > 0 pie", 160},
 }
 
+// environment is a variable the race sets (CONTRIBUTING.md, "The contract"), or
+// otherwise when it is unset.
+func environment(name, otherwise string) string {
+	if value, set := os.LookupEnv(name); set {
+		return value
+	}
+	return otherwise
+}
+
 func main() {
-	address := flag.String("address", "127.0.0.1", "address to listen on")
-	port := flag.String("port", "8080", "port to listen on")
-	database := flag.String("database", "", "the conduit workload's SQLite database")
-	tlsCert := flag.String("tls-cert", "", "serve HTTPS with this certificate (PEM)")
-	tlsKey := flag.String("tls-key", "", "and this key (PEM)")
-	flag.Parse()
+	address := environment("ROUX_ADDRESS", "127.0.0.1")
+	port := environment("ROUX_PORT", "8080")
+	// The conduit workload's SQLite database.
+	database := os.Getenv("ROUX_DATABASE")
+	// HTTPS with this certificate and key (PEM).
+	tlsCert, tlsKey := os.Getenv("ROUX_TLS_CERT"), os.Getenv("ROUX_TLS_KEY")
 
 	mux := http.NewServeMux()
-	if *database != "" {
-		conduit, err := openConduit(*database)
+	if database != "" {
+		conduit, err := openConduit(database)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -72,14 +81,14 @@ func main() {
 	})
 	mux.HandleFunc("GET /sse", datastar)
 	server := &http.Server{
-		Addr:              net.JoinHostPort(*address, *port),
+		Addr:              net.JoinHostPort(address, port),
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       30 * time.Second,
 	}
 	server.Protocols = new(http.Protocols)
 	server.Protocols.SetHTTP1(true)
-	if *tlsCert != "" {
+	if tlsCert != "" {
 		// HTTPS, as the race asks of every competitor (CONTRIBUTING.md, "The contract"):
 		// TLS 1.3, X25519, no session resumption, HTTP/2 by ALPN.
 		server.Protocols.SetHTTP2(true)
@@ -89,7 +98,7 @@ func main() {
 			SessionTicketsDisabled: true,
 		}
 		log.Printf("go on https://%s", server.Addr)
-		log.Fatal(server.ListenAndServeTLS(*tlsCert, *tlsKey))
+		log.Fatal(server.ListenAndServeTLS(tlsCert, tlsKey))
 	}
 	// HTTP/2 by prior knowledge (h2c) beside HTTP/1.1, as net/http offers it.
 	server.Protocols.SetUnencryptedHTTP2(true)

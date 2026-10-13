@@ -27,7 +27,7 @@ import (
 // competitorKeyRecipe changes whenever what a key covers, or how a
 // competitor is built (buildCompetitor), changes: no binary stored under
 // an older recipe is ever taken for a newer one.
-const competitorKeyRecipe = "competitor-key 3"
+const competitorKeyRecipe = "competitor-key 4"
 
 // storeKeep is how many binaries the store keeps for each competitor, the
 // newest used first.
@@ -38,9 +38,9 @@ const storeKeep = 3
 // track, uncommitted changes included: its own pins too, go.mod,
 // rust-toolchain.toml, Cargo.lock); each of its `inputs`, the trees its
 // build reads by path outside its directory (fourneau-zig: fourneau, and
-// roux's vendored SQLite); the machine image; and the tools its steps
-// name: {roux} the roux and fourneau checkouts (rouxIdentity) and roc,
-// {roc} roc, {zig} Zig.
+// roux's vendored SQLite); the machine image; and the pinned tools its
+// build runs with (pinned): roux the roux and fourneau checkouts
+// (rouxIdentity), roc, Zig.
 func competitorKey(ctx context.Context, root string, tools Toolchain, competitor Competitor) (string,
 	error) {
 	hash := sha256.New()
@@ -64,41 +64,39 @@ func competitorKey(ctx context.Context, root string, tools Toolchain, competitor
 		part("input "+input, tree)
 	}
 	part("image", machineImage(ctx))
-	uses := competitor.uses()
-	if uses["roux"] {
+	pinned := competitor.pinned(tools)
+	if pinned["roux"] != "" {
 		roux, err := rouxIdentity(ctx, tools)
 		if err != nil {
 			return "", err
 		}
 		part("roux", roux)
 	}
-	if uses["roux"] || uses["roc"] {
+	if pinned["roc"] != "" {
 		part("roc", tools.Used.Roc)
 	}
-	if uses["zig"] {
+	if pinned["zig"] != "" {
 		part("zig", tools.Used.Zig)
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// uses is which of the toolchain's placeholders the competitor's build
-// steps name.
-func (competitor Competitor) uses() map[string]bool {
-	uses := map[string]bool{}
-	for _, step := range competitor.Build {
-		texts := append([]string{step.Cwd}, step.Argv...)
-		for _, value := range step.Env {
-			texts = append(texts, value)
-		}
-		for _, name := range []string{"roux", "roc", "zig"} {
-			for _, text := range texts {
-				if strings.Contains(text, "{"+name+"}") {
-					uses[name] = true
-				}
-			}
-		}
+// pinned is the pinned tools a competitor's build runs with, by name: the
+// one its command starts (zig, roc or roux), and roc with roux, which runs
+// it. Only these go on its PATH (buildCompetitor), so its key covers every
+// pinned tool it can reach; Go and cargo pin themselves (go.mod,
+// rust-toolchain.toml), in its directory.
+func (competitor Competitor) pinned(tools Toolchain) map[string]string {
+	switch competitor.Build.Argv[0] {
+	case "zig":
+		return map[string]string{"zig": tools.Zig}
+	case "roc":
+		return map[string]string{"roc": tools.Roc}
+	case "roux":
+		return map[string]string{"roux": filepath.Join(tools.Roux, "zig-out", "bin", "roux"),
+			"roc": tools.Roc}
 	}
-	return uses
+	return map[string]string{}
 }
 
 // treeHash hashes the files under sub that git tracks or would track

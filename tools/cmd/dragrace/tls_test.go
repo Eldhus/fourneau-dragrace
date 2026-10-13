@@ -96,7 +96,7 @@ func TestOhaCommandOverTLS(t *testing.T) {
 
 func TestOffers(t *testing.T) {
 	plain := Competitor{Name: "basic-webserver"}
-	secure := Competitor{Name: "go", Run: RunSpec{TLS: &RunTLS{}}}
+	secure := Competitor{Name: "go", TLS: true}
 	tlsWorkload := Workload{TLS: true}
 	if plain.offers(tlsWorkload) || !plain.offers(Workload{}) {
 		t.Error("a competitor without TLS sits out the TLS workloads only")

@@ -18,8 +18,8 @@ import templates/Menu
 ## (compiled to bytecode linked into the app by roux build, which the
 ## host's renderer runs as the response is sent; `Menu.roc` is its
 ## contract and `Menu.template`) renders them per request.
-## The conduit workload's database: ROUX_DATABASE says where (the race's
-## `{db}`), in WAL mode with synchronous=NORMAL (the contract).
+## The conduit workload's database: ROUX_DATABASE says where, as the race
+## starts every server, in WAL mode with synchronous=NORMAL (the contract).
 Context : { menu : Menu.Ctx, db : Sqlite.Db }
 
 program = { init!, respond! }

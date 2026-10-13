@@ -155,7 +155,7 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 		LoaderCPUs:    race.Local.LoaderCPUs,
 		LoaderThreads: len(cpuSet(race.Local.LoaderCPUs)),
 	}
-	if err := putConduitSeed(ctx, root, race, competitors, target); err != nil {
+	if err := putConduitSeed(ctx, root, target); err != nil {
 		return err
 	}
 	run.Machines = []MachineInfo{machineInfo(ctx, machine, "server", "local", "this computer")}

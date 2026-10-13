@@ -771,7 +771,8 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 
 	competitors := make([]Competitor, len(variants))
 	for i, v := range variants {
-		// How to run it: its competitor.json at its own dragrace commit.
+		// Whether it serves TLS: its competitor.json at its own dragrace
+		// commit.
 		specRoot := filepath.Join(adhocDir(root), "spec", v.key)
 		os.RemoveAll(specRoot)
 		if err := exportPath(ctx, dirs["dragrace"], v.commits["dragrace"],
@@ -824,9 +825,9 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	runResult := Run{ID: runID("adhoc", time.Now().UTC()), Where: "adhoc",
 		StartedAt: time.Now().UTC(), Seed: time.Now().UnixNano(), Race: race,
 		Machines: session.Machines}
-	// The competitors open the seeded database at start (each start a fresh
-	// copy of it), RealWorld raced or not.
-	if err := putConduitSeed(ctx, root, race, competitors, target); err != nil {
+	// Every start is on a fresh copy of the seeded database, conduit raced
+	// or not.
+	if err := putConduitSeed(ctx, root, target); err != nil {
 		return err
 	}
 	raced := time.Now()

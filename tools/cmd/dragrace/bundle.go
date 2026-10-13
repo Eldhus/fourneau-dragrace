@@ -62,10 +62,9 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	raceFiles := []bundled{{"race.json", filepath.Join(root, "race.json")},
 		{"out/toolchain.json", toolchainRecord(root)},
 		{"out/bin/oha", oha}, {"out/bin/dragrace", self}}
+	// The seeded database every server is started on (startServer).
+	raceFiles = append(raceFiles, bundled{"out/conduit/conduit.db", conduitDatabase(root)})
 	trees := []bundledTree{{"workloads", filepath.Join(root, "workloads")}}
-	if race.hasMixed() {
-		raceFiles = append(raceFiles, bundled{"out/conduit/conduit.db", conduitDatabase(root)})
-	}
 	for _, name := range race.Competitors {
 		raceFiles = append(raceFiles,
 			bundled{"competitors/" + name + "/competitor.json",

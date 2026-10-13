@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
-	"maps"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -112,7 +111,7 @@ func validKey(competitor string, mode Mode) string {
 // offers says whether a competitor races a workload: one with no HTTPS
 // mode sits the TLS workloads out, with no result.
 func (competitor Competitor) offers(workload Workload) bool {
-	return workload.mode() == plainMode || competitor.Run.TLS != nil
+	return workload.mode() == plainMode || competitor.TLS
 }
 
 func (race Race) hasTLS() bool {
@@ -233,42 +232,33 @@ func putBodies(ctx context.Context, race Race, target Target, seed int64) (map[i
 
 func startServer(ctx context.Context, race Race, competitor Competitor, target Target,
 	mode Mode) (string, error) {
-	values := map[string]string{
-		"bin":     target.ServerHome + "/bin/" + competitor.Name,
-		"address": target.Address,
-		"port":    strconv.Itoa(race.Port),
-		"db":      target.ServerHome + "/" + conduitDatabaseName,
-		"cert":    target.ServerHome + "/" + certificateName,
-		"key":     target.ServerHome + "/" + keyName,
+	// Every server the same way (CONTRIBUTING.md, "The contract"): its binary,
+	// told where to serve by the variables roux's host reads, on a fresh
+	// copy of the seeded database. SIGPIPE ignored, as systemd starts a
+	// service: a server that leaves it at the default dies when a client
+	// closes a connection it is writing to (basic-webserver does).
+	// Go's and Rust's runtimes never die of it on a socket already, and
+	// fourneau's sends carry MSG_NOSIGNAL.
+	if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
+		return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
 	}
-	if race.hasMixed() || competitor.opensDatabase() {
-		if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
-			return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
-		}
-	}
-	env, argv := competitor.Run.Env, competitor.Run.Argv
+	env := []string{"ROUX_ADDRESS=" + target.Address, "ROUX_PORT=" + strconv.Itoa(race.Port),
+		"ROUX_DATABASE=" + target.ServerHome + "/" + conduitDatabaseName}
 	if mode == tlsMode {
-		if competitor.Run.TLS == nil {
+		if !competitor.TLS {
 			return "", fmt.Errorf("%s serves no TLS", competitor.Name)
 		}
-		env = maps.Clone(env)
-		if env == nil {
-			env = map[string]string{}
-		}
-		maps.Copy(env, competitor.Run.TLS.Env)
-		argv = slices.Concat(argv, competitor.Run.TLS.Argv)
+		env = append(env, "ROUX_TLS_CERT="+target.ServerHome+"/"+certificateName,
+			"ROUX_TLS_KEY="+target.ServerHome+"/"+keyName)
 	}
 	var command strings.Builder
 	command.WriteString("cd " + quote(target.ServerHome) + " && ")
-	command.WriteString("ulimit -n $(ulimit -Hn); ")
-	command.WriteString("env")
-	for key, value := range env {
-		command.WriteString(" " + quote(key+"="+expand(value, values)))
+	command.WriteString("ulimit -n $(ulimit -Hn); trap '' PIPE; env")
+	for _, variable := range env {
+		command.WriteString(" " + quote(variable))
 	}
 	command.WriteString(" nohup " + target.taskset(target.ServerCPUs))
-	for _, arg := range argv {
-		command.WriteString(quote(expand(arg, values)) + " ")
-	}
+	command.WriteString(quote(target.ServerHome+"/bin/"+competitor.Name) + " ")
 	command.WriteString("> " + quote(competitor.Name+".log") + " 2>&1 < /dev/null & echo $!")
 	pid, err := target.Server.Shell(ctx, command.String())
 	if err != nil {

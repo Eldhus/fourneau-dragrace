@@ -1,0 +1,1 @@
+../../../workloads/conduit/schema.sql

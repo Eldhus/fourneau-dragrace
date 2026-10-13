@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -42,17 +44,12 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	race, err := loadRace(root)
-	if err != nil {
+	// Every server is given the seeded database (startServer).
+	if err := buildConduitDatabase(ctx, root); err != nil {
 		return err
 	}
-	if race.hasMixed() {
-		if err := buildConduitDatabase(ctx, root); err != nil {
-			return err
-		}
-	}
 	// Each by its key (keys.go): from the store when it has the key, else
-	// built and stored. The keys are taken before any step runs, as the
+	// built and stored. The keys are taken before any build runs, as the
 	// checkout was, and recorded for the bundle.
 	keys := map[string]string{}
 	for _, competitor := range competitors {
@@ -80,37 +77,36 @@ func buildAll(ctx context.Context, root string, tools Toolchain, competitors []C
 	return writeCompetitorKeys(root, keys)
 }
 
-// buildCompetitor runs one competitor's build steps in root, into root's
-// out/bin.
+// buildCompetitor runs one competitor's build command in its directory and
+// copies the binary it names to root's out/bin/NAME. The pinned tools it
+// may run (pinned) come first on its PATH, and a command that starts one
+// gets the pinned one.
 func buildCompetitor(ctx context.Context, root string, tools Toolchain, competitor Competitor) error {
 	out := binDir(root)
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	// No {fourneau}: a tree read by path is an input (keys.go), named in
-	// competitor.json, so its key covers it.
-	values := map[string]string{
-		"out":  out,
-		"zig":  tools.Zig,
-		"roc":  tools.Roc,
-		"roux": tools.Roux,
+	dir := filepath.Join(root, "competitors", competitor.Name)
+	pinned := competitor.pinned(tools)
+	env := maps.Clone(competitor.Build.Env)
+	if env == nil {
+		env = map[string]string{}
 	}
-	for _, step := range competitor.Build {
-		dir := expand(step.Cwd, values)
-		if !filepath.IsAbs(dir) {
-			dir = filepath.Join(root, dir)
-		}
-		argv := make([]string, len(step.Argv))
-		for i, arg := range step.Argv {
-			argv[i] = expand(arg, values)
-		}
-		if err := run(ctx, dir, step.Env, argv...); err != nil {
-			return fmt.Errorf("building %s: %w", competitor.Name, err)
-		}
+	path := []string{}
+	for _, name := range slices.Sorted(maps.Keys(pinned)) {
+		path = append(path, filepath.Dir(pinned[name]))
 	}
-	binary := filepath.Join(out, competitor.Name)
-	if _, err := os.Stat(binary); err != nil {
-		return fmt.Errorf("building %s: no %s afterwards", competitor.Name, binary)
+	env["PATH"] = strings.Join(append(path, os.Getenv("PATH")), string(os.PathListSeparator))
+	argv := slices.Clone(competitor.Build.Argv)
+	if tool, found := pinned[argv[0]]; found {
+		argv[0] = tool
+	}
+	if err := run(ctx, dir, env, argv...); err != nil {
+		return fmt.Errorf("building %s: %w", competitor.Name, err)
+	}
+	if err := copyFile(filepath.Join(dir, competitor.Build.Binary),
+		filepath.Join(out, competitor.Name)); err != nil {
+		return fmt.Errorf("building %s: %w", competitor.Name, err)
 	}
 	return nil
 }

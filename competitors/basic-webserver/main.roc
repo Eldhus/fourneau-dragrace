@@ -23,7 +23,7 @@ import Conduit
 Dish : { name : Str, price : U32 }
 
 ## The templates workload's dishes, made once by `init!`; the conduit
-## workload's database (DRAGRACE_DATABASE: the race's `{db}`), a pool in
+## workload's database (ROUX_DATABASE, as the race starts every server), a pool in
 ## WAL mode with synchronous=NORMAL, as the contract says.
 Context : { dishes : List(Dish), db : Sqlite.Db }
 
@@ -35,8 +35,8 @@ echo_bytes_max = 1024 * 1024
 
 init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64)])
 init! = || {
-	host = Env.var_str!("DRAGRACE_ADDRESS") ? |_| Exit(2)
-	port_text = Env.var_str!("DRAGRACE_PORT") ? |_| Exit(2)
+	host = Env.var_str!("ROUX_ADDRESS") ? |_| Exit(2)
+	port_text = Env.var_str!("ROUX_PORT") ? |_| Exit(2)
 	port = U16.from_str(port_text) ? |_| Exit(2)
 	config =
 		Server.default_config
@@ -49,7 +49,7 @@ init! = || {
 			.with_request_body_limit(echo_bytes_max)
 			# Every connection may hold an SSE stream (default 256).
 			.with_sse_limits({ max_streams: 1024, max_event_bytes: 64 * 1024 })
-	database = Env.var_str!("DRAGRACE_DATABASE") ? |_| Exit(2)
+	database = Env.var_str!("ROUX_DATABASE") ? |_| Exit(2)
 	db = Sqlite.open!({ ..Sqlite.default_config(Path.utf8(database)), max_connections: 32, busy_timeout_ms: 5_000, synchronous: Normal }) ? |_| Exit(3)
 	Ok({ config, context: { dishes: menu_dishes, db } })
 }

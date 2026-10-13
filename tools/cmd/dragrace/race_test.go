@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCanonicalEntities(t *testing.T) {
@@ -333,5 +337,80 @@ func TestHostFiles(t *testing.T) {
 	if !strings.Contains(racerUnits()["/etc/systemd/system/dragrace-racer-check.timer"],
 		"OnCalendar=*-*-* 05:00:00 America/New_York") {
 		t.Fatalf("the check must come after the updates' window")
+	}
+}
+
+// Every server is started the same way: its binary, roux's variables (the
+// TLS pair in TLS mode only), a fresh copy of the seeded database, and
+// SIGPIPE ignored (basic-webserver dies of one). A script
+// stands in for the server and writes down what it was given.
+func TestStartServer(t *testing.T) {
+	home := t.TempDir()
+	script := "#!/bin/sh\n" +
+		`echo "$ROUX_ADDRESS $ROUX_PORT $ROUX_DATABASE ${ROUX_TLS_CERT:-no} ${ROUX_TLS_KEY:-no}"` + "\n" +
+		`cat "$ROUX_DATABASE"` + "\n" +
+		`grep '^SigIgn:' /proc/$$/status` + "\n" +
+		"echo done\n"
+	for path, text := range map[string]string{"bin/x": script, conduitSeedName: "seed\n"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(home, path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(home, path), []byte(text), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	race := Race{Port: 8123}
+	target := Target{Server: LocalMachine{}, ServerHome: home, Address: "127.0.0.1"}
+	given := func(competitor Competitor, mode Mode) []string {
+		t.Helper()
+		os.Remove(filepath.Join(home, "x.log"))
+		if _, err := startServer(context.Background(), race, competitor, target, mode); err != nil {
+			t.Fatal(err)
+		}
+		for range 50 {
+			log, _ := os.ReadFile(filepath.Join(home, "x.log"))
+			if lines := strings.Split(strings.TrimSpace(string(log)), "\n"); lines[len(lines)-1] == "done" {
+				return lines
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Fatal("the server never wrote it down")
+		return nil
+	}
+	database := home + "/" + conduitDatabaseName
+	lines := given(Competitor{Name: "x"}, plainMode)
+	if lines[0] != "127.0.0.1 8123 "+database+" no no" || lines[1] != "seed" {
+		t.Fatalf("plain: %q", lines)
+	}
+	fields := strings.Fields(lines[2])
+	ignored, err := strconv.ParseUint(fields[len(fields)-1], 16, 64)
+	if err != nil || ignored&(1<<(13-1)) == 0 { // SIGPIPE is 13
+		t.Fatalf("SIGPIPE not ignored: %q", lines[2])
+	}
+	lines = given(Competitor{Name: "x", TLS: true}, tlsMode)
+	if lines[0] != "127.0.0.1 8123 "+database+" "+home+"/"+certificateName+" "+home+"/"+keyName {
+		t.Fatalf("TLS: %q", lines)
+	}
+	_, err = startServer(context.Background(), race, Competitor{Name: "x"}, target, tlsMode)
+	if err == nil {
+		t.Fatal("a competitor with no TLS started in TLS mode")
+	}
+}
+
+// The competitors in the race build with one command each, which names
+// the binary it writes; basic-webserver alone serves no TLS.
+func TestCompetitorsLoad(t *testing.T) {
+	race, err := loadRace("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitors, err := loadCompetitors("../../..", race.Competitors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, competitor := range competitors {
+		if competitor.TLS == (competitor.Name == "basic-webserver") {
+			t.Errorf("%s: tls %t", competitor.Name, competitor.TLS)
+		}
 	}
 }

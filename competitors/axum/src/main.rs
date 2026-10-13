@@ -99,12 +99,10 @@ async fn echo(body: Bytes) -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "application/octet-stream")], body)
 }
 
-fn argument(name: &str, default: &str) -> String {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter()
-        .position(|a| a == name)
-        .and_then(|i| args.get(i + 1).cloned())
-        .unwrap_or_else(|| default.to_string())
+/// A variable the race sets (CONTRIBUTING.md, "The contract"), or `default`
+/// when it is unset.
+fn environment(name: &str, default: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| default.to_string())
 }
 
 /// HTTPS, as the race asks of every competitor (CONTRIBUTING.md, "The contract"): TLS 1.3,
@@ -115,10 +113,10 @@ async fn serve_tls(listener: tokio::net::TcpListener, app: Router, cert: &str, k
     use std::sync::Arc;
     use tokio_rustls::rustls;
     let certs = CertificateDer::pem_file_iter(cert)
-        .expect("--tls-cert")
+        .expect("ROUX_TLS_CERT")
         .collect::<Result<Vec<_>, _>>()
-        .expect("--tls-cert");
-    let key = PrivateKeyDer::from_pem_file(key).expect("--tls-key");
+        .expect("ROUX_TLS_CERT");
+    let key = PrivateKeyDer::from_pem_file(key).expect("ROUX_TLS_KEY");
     let mut provider = rustls::crypto::aws_lc_rs::default_provider();
     provider.kx_groups = vec![rustls::crypto::aws_lc_rs::kx_group::X25519];
     // AES-128-GCM, as Go's server and browsers choose: rustls follows the
@@ -154,9 +152,9 @@ async fn serve_tls(listener: tokio::net::TcpListener, app: Router, cert: &str, k
 
 #[tokio::main]
 async fn main() {
-    let address = argument("--address", "127.0.0.1");
-    let port: u16 = argument("--port", "8080").parse().expect("--port");
-    let database = argument("--database", "");
+    let address = environment("ROUX_ADDRESS", "127.0.0.1");
+    let port: u16 = environment("ROUX_PORT", "8080").parse().expect("ROUX_PORT");
+    let database = environment("ROUX_DATABASE", "");
     let mut app = Router::new()
         .route("/plaintext", get(plaintext))
         .route("/echo", post(echo))
@@ -164,14 +162,14 @@ async fn main() {
         .route("/sse", get(datastar))
         .layer(axum::extract::DefaultBodyLimit::max(1 << 20));
     if !database.is_empty() {
-        let conduit = conduit::open(&database).await.expect("--database");
+        let conduit = conduit::open(&database).await.expect("ROUX_DATABASE");
         app = app.merge(conduit::routes(conduit));
     }
     let listener = tokio::net::TcpListener::bind((address.as_str(), port)).await.unwrap();
-    let tls_cert = argument("--tls-cert", "");
+    let tls_cert = environment("ROUX_TLS_CERT", "");
     if !tls_cert.is_empty() {
         println!("axum on https://{address}:{port}");
-        serve_tls(listener, app, &tls_cert, &argument("--tls-key", "")).await;
+        serve_tls(listener, app, &tls_cert, &environment("ROUX_TLS_KEY", "")).await;
         return;
     }
     println!("axum on http://{address}:{port}");

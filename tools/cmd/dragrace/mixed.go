@@ -93,15 +93,10 @@ const (
 	conduitDatabaseName = "conduit.db"
 )
 
-// putConduitSeed puts the seeded database on the server, if the race has
-// a mixed workload or a competitor opens it at start (needsDatabase); made
-// here first if no build made it (a race whose workloads have no mixed
-// one: `build` makes it only for a mixed workload).
-func putConduitSeed(ctx context.Context, root string, race Race, competitors []Competitor,
-	target Target) error {
-	if !needsDatabase(race, competitors) {
-		return nil
-	}
+// putConduitSeed puts the seeded database on the server: every server is
+// started on a copy of it (startServer). Made here first if no build made
+// it (adhoc builds no database).
+func putConduitSeed(ctx context.Context, root string, target Target) error {
 	if _, err := os.Stat(conduitDatabase(root)); err != nil {
 		if err := buildConduitDatabase(ctx, root); err != nil {
 			return err
@@ -139,9 +134,9 @@ func mixedLoop(ctx context.Context, race Race, competitors []Competitor, target 
 	return nil
 }
 
-// freshDatabase is the server's script to start from the seed again: a
-// race with a mixed workload starts every server (each round too) on a
-// fresh copy of the seeded database, `{db}` in its arguments.
+// freshDatabase is the server's script to start from the seed again: every
+// server is started (each round too) on a fresh copy of the seeded
+// database, ROUX_DATABASE in its environment.
 func freshDatabase(target Target) string {
 	return fmt.Sprintf("cd %s && rm -f %s %[2]s-wal %[2]s-shm && cp %s %[2]s",
 		quote(target.ServerHome), conduitDatabaseName, conduitSeedName)

@@ -2,11 +2,10 @@
   "title": "go",
   "language": "Go",
   "framework": "net/http, the standard library",
-  "build": [
-    { "cwd": "competitors/go", "argv": ["go", "build", "-trimpath", "-o", "{out}/go", "."], "env": { "CGO_ENABLED": "0", "GOAMD64": "v3" } }
-  ],
-  "run": {
-    "argv": ["{bin}", "--address", "{address}", "--port", "{port}", "--database", "{db}"],
-    "tls": { "argv": ["--tls-cert", "{cert}", "--tls-key", "{key}"] }
-  }
+  "build": {
+    "argv": ["go", "build", "-trimpath", "-o", "dragrace-go"],
+    "env": { "CGO_ENABLED": "0", "GOAMD64": "v3" },
+    "binary": "dragrace-go"
+  },
+  "tls": true
 }

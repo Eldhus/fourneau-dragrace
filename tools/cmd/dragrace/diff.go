@@ -344,7 +344,6 @@ func commandDiff(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	race.Competitors = strings.Split(*names, ",")
-	race.Workloads = nil // no SSE check, no conduit database
 	cases := selectCases(*only)
 	tools, err := loadToolchain(ctx, root)
 	if err != nil {
@@ -359,6 +358,9 @@ func commandDiff(ctx context.Context, root string, args []string) error {
 	}
 	target := Target{Server: LocalMachine{}, Loader: LocalMachine{}, ServerHome: outDir(root),
 		LoaderHome: filepath.Join(outDir(root), "loader"), Address: "127.0.0.1"}
+	if err := putConduitSeed(ctx, root, target); err != nil {
+		return err
+	}
 	answers := map[string]map[string]DiffAnswer{}
 	for _, competitor := range competitors {
 		got, err := diffCompetitor(ctx, race, competitor, target, cases)

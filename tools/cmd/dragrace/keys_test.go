@@ -59,10 +59,10 @@ func writeFile(t *testing.T, path, text string) {
 func TestCompetitorKey(t *testing.T) {
 	root, tools := keyRepo(t)
 	ctx := context.Background()
-	plain := Competitor{Name: "plain", Build: []Step{{Cwd: "competitors/plain", Argv: []string{"go", "build"}}}}
+	plain := Competitor{Name: "plain", Build: CompetitorBuild{Argv: []string{"go", "build"}}}
 	zig := Competitor{Name: "plain", Inputs: []string{"../fourneau/src"},
-		Build: []Step{{Cwd: "competitors/plain", Argv: []string{"{zig}", "build"}}}}
-	roux := Competitor{Name: "plain", Build: []Step{{Cwd: "{roux}", Argv: []string{"x"}}}}
+		Build: CompetitorBuild{Argv: []string{"zig", "build"}}}
+	roux := Competitor{Name: "plain", Build: CompetitorBuild{Argv: []string{"roux", "build"}}}
 	key := func(competitor Competitor) string {
 		t.Helper()
 		got, err := competitorKey(ctx, root, tools, competitor)
@@ -73,7 +73,7 @@ func TestCompetitorKey(t *testing.T) {
 	}
 	base, baseZig, baseRoux := key(plain), key(zig), key(roux)
 	if base == baseZig || base == baseRoux || baseZig == baseRoux {
-		t.Fatal("the tools a competitor's steps name are not in its key")
+		t.Fatal("the pinned tools a competitor's build runs are not in its key")
 	}
 	if key(plain) != base {
 		t.Fatal("a key is not stable")

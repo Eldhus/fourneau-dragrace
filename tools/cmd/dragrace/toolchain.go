@@ -369,11 +369,3 @@ func fetchUnpinned(ctx context.Context, url, path string) error {
 	}
 	return os.Rename(path+".partial", path)
 }
-
-// expand fills a step's placeholders.
-func expand(text string, values map[string]string) string {
-	for key, value := range values {
-		text = strings.ReplaceAll(text, "{"+key+"}", value)
-	}
-	return text
-}

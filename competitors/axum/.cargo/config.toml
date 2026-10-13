@@ -1,0 +1,9 @@
+# The race's CPU level (CONTRIBUTING.md, The contract): x86-64-v3 with AES and
+# PCLMUL, for Rust and for the C that sqlx's SQLite and aws-lc compile.
+# `cargo build --release --locked` reads it; a RUSTFLAGS or CFLAGS in the
+# environment would take its place.
+[build]
+rustflags = ["-C", "target-cpu=x86-64-v3", "-C", "target-feature=+aes,+pclmulqdq"]
+
+[env]
+CFLAGS = "-march=x86-64-v3 -maes -mpclmul"

@@ -2,14 +2,21 @@
 //! fourneau checkout beside this repository (../fourneau; see
 //! README.md, "Use it").
 //!
-//!   zig build -Doptimize=safe     ReleaseSafe, as fourneau ships
-//!   zig build test                the handler's own tests
+//!   zig build          zig-out/bin/fourneau-zig, as the race builds it
+//!   zig build test     the handler's own tests
 
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    // The race's CPU level (CONTRIBUTING.md, "The contract"): x86-64-v3 with AES
+    // and PCLMUL, so std.crypto's AES-GCM and GHASH are the hardware's.
+    const target = b.standardTargetOptions(.{ .default_target = .{
+        .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64_v3 },
+        .cpu_features_add = std.Target.x86.featureSet(&.{ .aes, .pclmul }),
+    } });
+    // ReleaseSafe, as fourneau ships: assertions on.
+    const optimize = b.option(std.builtin.Optimize, "optimize", "The mode (default safe)") orelse
+        .safe;
     const fourneau = b.dependency("fourneau", .{});
     // The conduit workload's SQLite: the amalgamation roux vendors, in the
     // roux checkout beside this repository (README.md, "Use it"), compiled
