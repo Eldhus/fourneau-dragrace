@@ -389,6 +389,7 @@ race_live! = |db, request| {
 	stream = Sse.start!(request, [])?
 	var $text = ""
 	var $done = ""
+	var $bars = []
 	var $quiet = 0
 	var $reads = 0
 	var $racing = Bool.True
@@ -401,12 +402,14 @@ race_live! = |db, request| {
 			}
 			Racing(run) => {
 				calm = View.live_banner(run.newest, run.classes, Bool.False)
-				if calm.text != $text or calm.done != $done {
+				# The bars' times move by the minute on their own.
+				if calm.text != $text or calm.done != $done or calm.classes != $bars {
 					# The first read draws what the page has; no flare.
 					landed = $done != "" and calm.done != $done
 					Sse.send!(stream, Rocstache.patch!(LiveRace.template(View.live_banner(run.newest, run.classes, landed))))?
 					$text = calm.text
 					$done = calm.done
+					$bars = calm.classes
 					$quiet = 0
 				} else {
 					$quiet = $quiet + 1

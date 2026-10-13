@@ -213,7 +213,14 @@ View :: [].{
 	## the time left as HH:MM), the newest results as its items, and the
 	## flare when a result has just landed; `done` names the flare's canvas,
 	## so each result's is a new element and its animation runs.
-	LiveBanner : { text : Str, items : List(Str), flare : Bool, done : Str }
+	## `classes`: a bar per server class racing,
+	## filled by its results in of those expected, with its time elapsed and
+	## the estimate left, or how long it took once over. `items`: the newest
+	## result only, one line that scrolls when it is wider than the banner.
+	LiveBanner : { text : Str, items : List(Str), classes : List(ClassBar), flare : Bool, done : Str }
+	## `share`: the bar's fill, 0 to 1; `times`: "00:42 elapsed · about
+	## 00:31 left", or "done in 01:52".
+	ClassBar : { label : Str, share : Str, times : Str }
 
 	live_banner : List(Live.Newest), List(Live.Progress), Bool -> LiveBanner
 	live_banner = |newest, classes, flare| {
@@ -238,7 +245,23 @@ View :: [].{
 				"${n.competitor} ${n.workload} on ${n.class_label}: ${rate}"
 			},
 		)
-		{ text, items, flare, done: done.to_str() }
+		{ text, items, classes: classes.map(class_bar), flare, done: done.to_str() }
+	}
+
+	## A class's bar. A class the previous run did not race has no estimate:
+	## its bar stays empty until it is over, and only its time is said.
+	class_bar : Live.Progress -> ClassBar
+	class_bar = |c| {
+		share =
+			if c.over 1.0
+			else if c.expected <= 0 0.0
+			else if c.done >= c.expected 1.0
+			else c.done.to_f64() / c.expected.to_f64()
+		times =
+			if c.over "done in ${View.clock(c.elapsed_seconds)}"
+			else if c.expected <= 0 "${View.clock(c.elapsed_seconds)} elapsed"
+			else "${View.clock(c.elapsed_seconds)} elapsed · about ${View.clock(c.left_seconds)} left"
+		{ label: c.label, share: Format.two_decimals(share), times }
 	}
 
 	## Seconds as hours and minutes, HH:MM, rounded up to the minute: a
@@ -1161,12 +1184,17 @@ expect View.clock(61.0) == "00:02" and View.clock(4320.0) == "01:12" and View.cl
 
 expect {
 	newest = [{ class: "smallest", class_label: "512MB/1vCPU", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 }]
-	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds }
+	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds, elapsed_seconds: 2520.0 }
 	banner = View.live_banner(newest, [progress("a", 41, 59, 300.0), progress("b", 40, 59, 4320.0), progress("c", 30, 0, 0.0)], Bool.True)
 	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.items == ["roux Echo 4 KiB on 512MB/1vCPU: 35,297 req/s"] and banner.done == "111"
+	and banner.classes == [
+		{ label: "a", share: "0.69", times: "00:42 elapsed · about 00:05 left" },
+		{ label: "b", share: "0.68", times: "00:42 elapsed · about 01:12 left" },
+		{ label: "c", share: "0.00", times: "00:42 elapsed" },
+	]
 }
 
 expect {
-	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0 }], Bool.False)
-	all_in.text == "Racing now · all 59 results in, finishing"
+	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0, elapsed_seconds: 6720.0 }], Bool.False)
+	all_in.text == "Racing now · all 59 results in, finishing" and all_in.classes == [{ label: "a", share: "1.00", times: "done in 01:52" }]
 }

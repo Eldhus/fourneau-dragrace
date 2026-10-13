@@ -441,6 +441,38 @@ details.history .h2c { margin-top: 18px; border-top: 0; }
    sits on the banner's bottom edge and reaches above it for the smoke,
    lit onto the panel, never catching a click. */
 .live-wrap { position: relative; }
+/* A bar per server class racing: its name, its
+   results in of those expected, its time elapsed and the estimate left.
+   The times' column is as wide as its longest form ("01:45 elapsed ·
+   about 00:09 left", the type monospaced), so every class's bar ends at
+   the same place. On a phone the bar goes under the name and times, and
+   the times under the name when the two do not fit on one line. */
+.racer .class-bar { display: grid; grid-template-columns: 12ch 1fr 32ch; align-items: center;
+  gap: 2px 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.racer .class-bar .label { color: #fff3d6; white-space: nowrap; }
+.racer .class-bar .times { color: var(--text-2); text-shadow: none; white-space: nowrap; }
+.racer .meter { height: 8px; border: 1px solid rgba(255,215,110,.45); background: rgba(23,11,38,.6); }
+.racer .meter .fill { display: block; height: 100%; width: calc(var(--share) * 100%);
+  background: linear-gradient(90deg, var(--magenta), var(--gold)); box-shadow: 0 0 8px rgba(255,169,77,.5);
+  transition: width .6s steps(6); }
+@media (max-width: 560px) {
+  .racer .class-bar { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; }
+  .racer .class-bar .meter { order: 1; flex: 1 0 100%; }
+}
+/* The newest result, one line: still when it fits, else scrolling right
+   to left as a marquee does, round and round (three lines were cut off on a phone). demo.js measures it and, when it
+   is wider, adds the second copy that follows it in. */
+.racer .ticker { display: block; overflow: hidden; white-space: nowrap; margin-top: 6px; color: #fff3d6; }
+/* Its own width, not the banner's: a turn moves exactly one copy. */
+.racer .ticker-text { display: inline-block; width: max-content; }
+.racer .ticker.moving .ticker-text { padding-right: 4em; animation: marquee var(--marquee-seconds, 12s) linear infinite; }
+@keyframes marquee { to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .racer .ticker .ticker-text { text-overflow: ellipsis; }
+  .racer .ticker { text-overflow: ellipsis; }
+  .racer .ticker.moving .ticker-text { animation: none; padding-right: 0; }
+  .racer .ticker.moving .ticker-text + .ticker-text { display: none; }
+}
 .racer.live .flare {
   position: absolute; left: 0; bottom: 0; width: 100%; height: 260%; z-index: 2;
   image-rendering: pixelated; pointer-events: none; mix-blend-mode: screen; opacity: .8;

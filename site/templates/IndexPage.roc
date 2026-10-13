@@ -159,7 +159,13 @@ IndexPage :: [].{
 		home : Bool,
 		id : Str,
 		live : List(
-			{ done : Str, flare : Bool, items : List(Str), text : Str },
+			{
+				classes : List({ label : Str, share : Str, times : Str }),
+				done : Str,
+				flare : Bool,
+				items : List(Str),
+				text : Str,
+			},
 		),
 		nav : List({ current : Bool, href : Str, label : Str }),
 		racer : List({ countdown : Bool, items : List(Str), text : Str }),

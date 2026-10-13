@@ -164,6 +164,41 @@ const firePalette = (() => {
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["id"] });
 })();
 
+// The live banner's newest result, on one line:
+// still when it fits; wider, a second copy follows it and both scroll
+// right to left, round and round, as a marquee does (style.css), at 40 px
+// a second. Measured again whenever the stream patches the banner, which
+// puts back one copy, and on a resize. A ticker already right is left as
+// it is, so its own changes end here.
+(() => {
+  const fit = (ticker) => {
+    const [first, copy] = ticker.querySelectorAll(".ticker-text");
+    if (!first) return;
+    const moving = ticker.classList.contains("moving");
+    // The text's own width: moving, it carries the gap before its copy.
+    const gap = parseFloat(getComputedStyle(first).paddingRight) || 0;
+    const wide = first.offsetWidth - gap > ticker.clientWidth;
+    const right = wide ? moving && copy && copy.textContent === first.textContent : !moving && !copy;
+    if (!right) {
+      ticker.classList.remove("moving");
+      ticker.querySelectorAll(".ticker-text + .ticker-text").forEach((e) => e.remove());
+      if (!wide) return;
+      const twin = first.cloneNode(true);
+      twin.setAttribute("aria-hidden", "true");
+      ticker.append(twin);
+      ticker.classList.add("moving");
+    }
+    // Its width now, with the gap: the distance one turn covers. Set again
+    // when fonts load: measured in the fallback font, it was a third short.
+    if (wide) ticker.style.setProperty("--marquee-seconds", `${(first.offsetWidth / 40).toFixed(1)}s`);
+  };
+  const fitAll = () => document.querySelectorAll(".racer .ticker").forEach(fit);
+  fitAll();
+  document.fonts.ready.then(fitAll);
+  window.addEventListener("resize", fitAll);
+  new MutationObserver(fitAll).observe(document.body, { childList: true, subtree: true, characterData: true });
+})();
+
 // Switching tabs keeps your place, across sizes and sections alike. The
 // tabs stay at the top of the screen while the results scroll under them
 // (style.css); a click morphs the results in place (Datastar), and the
