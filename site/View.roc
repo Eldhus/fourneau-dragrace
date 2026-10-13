@@ -44,8 +44,9 @@ View :: [].{
 	Machine : { role : Str, items : List(Str) }
 	## A class as one section shows it (its tabs say which), and below, outside the
 	## section's toggle, the h2c comparison (one, or none in a race without
-	## it).
-	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
+	## it). `history`: the address of its history panel's charts, this
+	## class's in this section, fetched when the panel is first opened.
+	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart), h2c : List(H2c), history : Str }
 	## Plaintext three ways: HTTP/1.1, HTTP/2 without TLS (h2c), HTTP/2 and
 	## TLS; each step's change is what HTTP/2, then TLS, cost or gave.
 	## `strips`: the h2c workload's bars, one strip (a template's section
@@ -339,7 +340,8 @@ class_view = |run, class, section| {
 	machines = ordered.map(|m| { role: m.role, items: [m.size, vcpus(m.cpus)].concat(memory(m.memory_mib)).concat([cpu_name(m.cpu), "Linux ${m.kernel}"]) })
 	strips = in_section(closed(run.race.workloads), section).map(|workload| strip(run, class.name, workload))
 	open = open_charts(run, class.name).keep_if(|o| o.section == section).map(|o| o.chart)
-	{ name: class.name, label: class.label, title: class.title, machines, strips, open, h2c: h2c_view(run, class.name) }
+	history = "/history-panel?class=${class.name}&protocol=${section}"
+	{ name: class.name, label: class.label, title: class.title, machines, strips, open, h2c: h2c_view(run, class.name), history }
 }
 
 ## A CPU's model name without its makers' marks and filler words, so a

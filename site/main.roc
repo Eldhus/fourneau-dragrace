@@ -22,9 +22,8 @@ import View
 import Competitors
 import templates/IndexPage
 import templates/LiveRace
-import templates/HistoryPage
 import templates/RaceClasses
-import templates/HistoryClasses
+import templates/HistoryPanel
 import templates/WorkloadsPage
 import templates/CompetitorsPage
 import templates/ContributePage
@@ -66,9 +65,10 @@ respond! = |request, { db, tokens }| {
 	} else {
 		match path {
 			"/" => index!(db, request, wanted)
-			"/history" => history!(db, request, wanted)
+			# History is a panel under the race now.
+			"/history" => Ok(moved("/${query_of(request.target)}"))
 			"/race-classes" => race_classes!(db, request, wanted)
-			"/history-classes" => history_classes!(db, request, wanted)
+			"/history-panel" => history_panel!(db, request, wanted)
 			"/race-live" => race_live!(db, request)
 			"/workloads" => workloads!(db, request)
 			"/competitors" => competitors!(db, request)
@@ -149,32 +149,6 @@ race_tabs = |latest, wanted| {
 	}
 }
 
-history! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
-history! = |db, request, wanted| {
-	base = frame("History", "/history")
-	view = history_view!(db, request, wanted.protocol)?
-	shown = history_tabs(view, wanted)
-	Ok(Rocstache.html(HistoryPage.template({
-		title: base.title,
-		home: base.home,
-		nav: base.nav,
-		waiting: view.waiting,
-		tabs: shown.tabs,
-		sections: shown.sections,
-		classes: shown.classes,
-	})))
-}
-
-## The history page's tabs, its section tabs and the class they show.
-history_tabs = |view, wanted| {
-	current = View.chosen(view.classes.map(|class| class.name), wanted.class, View.default_class)
-	{
-		tabs: View.tabs(view.classes.map(|class| { name: class.name, label: class.label }), current, view.section, "/history"),
-		sections: View.section_tabs(view.sections, view.section, current, "/history"),
-		classes: view.classes.keep_if(|class| class.name == current).map(history_class),
-	}
-}
-
 competitors! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 competitors! = |db, request| {
 	base = frame("Competitors", "/competitors")
@@ -229,10 +203,10 @@ no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], compe
 ## A server class as the race's templates read it: without its tab's
 ## label (the tabs have it), since a template's contract is exactly what
 ## it reads.
-race_class = |class| { name: class.name, title: class.title, machines: class.machines, strips: class.strips, open: class.open, h2c: class.h2c }
+race_class = |class| { name: class.name, title: class.title, machines: class.machines, strips: class.strips, open: class.open, h2c: class.h2c, history: class.history }
 
 ## A server class's history charts as their template reads them.
-history_class = |class| { title: class.title, charts: class.charts, h2c: class.h2c }
+history_class = |class| { charts: class.charts, h2c: class.h2c }
 
 # --- the raw data -------------------------------------------------------------
 
@@ -311,7 +285,6 @@ is_id_byte = |b| (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and 
 
 pages = [
 	{ href: "/", label: "Race" },
-	{ href: "/history", label: "History" },
 	{ href: "/workloads", label: "Workloads" },
 	{ href: "/competitors", label: "Competitors" },
 	{ href: "/contribute", label: "Contribute" },
@@ -368,9 +341,18 @@ path_of = |target|
 		Err(_) => target
 	}
 
+## The target's query with its "?", or "" without one.
+query_of : Str -> Str
+query_of = |target|
+	match target.split_first("?") {
+		Ok(parts) => "?${parts.after}"
+		Err(_) => ""
+	}
+
 expect old_address("/index.html") == "/"
 expect old_address("/about.html") == "/about"
 expect path_of("/history?x=1") == "/history"
+expect query_of("/history?class=smallest&protocol=tls") == "?class=smallest&protocol=tls" and query_of("/history") == ""
 expect is_id_byte(45) and !is_id_byte(47) and !is_id_byte(46)
 expect query_value("/history?class=premium-4", "class") == "premium-4"
 expect query_value("/?x=1&class=smallest", "class") == "smallest"
@@ -395,11 +377,16 @@ race_classes! = |db, request, wanted| {
 	patch!(request, RaceClasses.template({ id: latest.id, tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
 }
 
-history_classes! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
-history_classes! = |db, request, wanted| {
+## The race page's history panel (not a page, so
+## nobody takes it for the app's history): one class's charts in one
+## section, fetched the first time the panel is opened, the race's own
+## patch replacing it closed when a tab is clicked.
+history_panel! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
+history_panel! = |db, request, wanted| {
 	view = history_view!(db, request, wanted.protocol)?
-	shown = history_tabs(view, wanted)
-	patch!(request, HistoryClasses.template({ tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
+	current = View.chosen(view.classes.map(|class| class.name), wanted.class, View.default_class)
+	classes = view.classes.keep_if(|class| class.name == current).map(history_class)
+	patch!(request, HistoryPanel.template({ waiting: view.waiting, classes }))
 }
 
 ## The race page's live banner, kept current while a run races: a Datastar stream per open race page. Every 1.618 s the

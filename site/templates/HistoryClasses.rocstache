@@ -1,8 +1,0 @@
-<div id="history-classes">
-<div class="tabbar"><nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav><nav class="tabs protocol" aria-label="Protocol">{{#sections}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/sections}}</nav></div>
-{{#classes}}<h2 class="class">{{ title }}</h2>
-<div class="strips">
-{{#charts}}{{> HistoryChart}}{{/charts}}</div>
-{{#h2c}}<div class="h2c">{{> HistoryChart}}</div>
-{{/h2c}}{{/classes}}
-</div>

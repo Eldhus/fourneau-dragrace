@@ -72,6 +72,7 @@ IndexPage :: [].{
 						),
 					},
 				),
+				history : Str,
 				machines : List({ items : List(Str), role : Str }),
 				name : Str,
 				open : List(

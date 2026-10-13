@@ -316,7 +316,7 @@ nav.tabs a + a { border-left: 0; }
   .chart { min-width: 0; }
   .chart .end { display: none; }
   .chart .tick, .chart .date { font-size: 20px; }
-  #history .strip { padding: 12px 10px 6px; }
+  #history-panel .strip { padding: 12px 10px 6px; }
   .chart-legend { font-size: 11px; gap: 3px 10px; }
 }
 
@@ -382,6 +382,14 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .intro, .strip figcaption, .workloads .card p { text-wrap: pretty; }
 .h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 .h2c .class { color: var(--cyan); }
+/* History, closed under the race (not a page that
+   reads as the app's history); its charts are fetched when first opened. */
+details.history { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
+details.history > summary { cursor: pointer; font-family: var(--pixel); font-size: 13px;
+  line-height: 1.5; color: var(--text-3); margin: 22px 0 8px; }
+details.history > summary:hover, details.history[open] > summary { color: var(--gold); }
+details.history .h2c { margin-top: 18px; border-top: 0; }
+@media (max-width: 560px) { details.history > summary { font-size: 11px; } }
 .h2c .table { margin-top: 0; }
 /* Plaintext three ways on a phone (for a Pixel
    10's 412 px): four columns, not six. Rates in three figures, each

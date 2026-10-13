@@ -181,7 +181,7 @@ const firePalette = (() => {
   document.addEventListener("datastar-fetch", (event) => {
     const { type, el } = event.detail;
     if (type === "started") {
-      const region = el && el.closest && el.closest("#race-classes, #history-classes");
+      const region = el && el.closest && el.closest("#race-classes");
       if (!region) return;
       const below = region.querySelector(".tabbar").getBoundingClientRect().bottom;
       const charts = [...region.querySelectorAll("[data-chart]")];
