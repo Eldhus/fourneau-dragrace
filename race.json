@@ -30,7 +30,7 @@
       "name": "echo-4k",
       "title": "Echo 4 KiB",
       "summary": "POST /echo with a 4 KiB body, answered with the same bytes: reading bodies and writing larger responses.",
-      "detail": "The body is 4,096 bytes of application/octet-stream, sent back as it came (a server must take up to 64 KiB). Against Plaintext it adds reading a body off the socket and writing a response larger than a packet. On the larger classes the fastest servers fill the droplet's network link and tie there; each round records the traffic, and the race page says when the network was the limit.",
+      "detail": "The body is 4,096 bytes of application/octet-stream, sent back as it came (a server must take up to 64 KiB). Against Plaintext it adds reading a body off the socket and writing a response larger than a packet. On the dedicated class the fastest servers fill the droplet's network link and tie there; each round records the traffic, and the race page says when the network was the limit.",
       "method": "POST",
       "path": "/echo",
       "body_bytes": 4096,
@@ -159,7 +159,7 @@
       {
         "name": "dedicated-2",
         "label": "4GB/2vCPU",
-        "title": "Dedicated cores, no neighbours",
+        "title": "Dedicated cores",
         "size": "c-2",
         "loader_size": "c-4"
       }
