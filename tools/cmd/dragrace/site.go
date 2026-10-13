@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // The site host: one small droplet, up all the time, running the site (a
@@ -177,7 +176,7 @@ WantedBy=timers.target
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups|restore")
+		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now|backups")
 	}
 	switch args[0] {
 	case "build":
@@ -192,8 +191,6 @@ func commandSite(ctx context.Context, root string, args []string) error {
 		return siteRaceNow(ctx, args[1:])
 	case "backups":
 		return siteBackups(ctx, args[1:])
-	case "restore":
-		return siteRestore(ctx, args[1:])
 	}
 	return fmt.Errorf("unknown: dragrace site %s", args[0])
 }
@@ -346,10 +343,6 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	setup := strings.Join(append(hostSetup("22", "80", "443"),
 		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
 		"rm /tmp/dragrace-host-agent",
-		// The layout before self-hosting: the rrsync deploy user and its data.
-		"(id deploy >/dev/null 2>&1 && sudo userdel -r deploy || true)",
-		"sudo rm -rf /srv/dragrace",
-		"(test -L "+siteHome+"/current || sudo rm -rf "+siteHome+")",
 		"sudo install -d -m 755 "+siteHome,
 		"sudo install -d -m 700 -o site -g site "+siteState+" "+siteState+"/secrets "+
 			siteState+"/backups",
@@ -414,13 +407,10 @@ func hostFiles() map[string]string {
 	}
 }
 
-// hostRetired are files an install deletes: the old reboot timer's
-// (the timer, its service, and the moved update time), and the racer's
-// GitHub token, which started builds until the builds became daily.
+// hostRetired are files an install deletes: the racer's GitHub token, which
+// started builds until the builds became daily. Once `racer install` has run on a build after a5204c0,
+// this and its uses (hostSetup, hosts.go's probe) can go.
 var hostRetired = []string{
-	"/etc/systemd/system/dragrace-reboot.timer",
-	"/etc/systemd/system/dragrace-reboot.service",
-	"/etc/systemd/system/apt-daily-upgrade.timer.d/10-dragrace.conf",
 	"/etc/credstore.encrypted/github-token",
 }
 
@@ -428,7 +418,7 @@ var hostRetired = []string{
 // cloud-init waited for (DigitalOcean's per-instance script can replace
 // the machine id late, and the racer's credentials, encrypted before it,
 // would stop decrypting at the next restart), sshd
-// reloaded, the retired reboot timer gone, a 512 MiB swap file (a 512 MB droplet thrashed in its
+// reloaded, the retired files gone, a 512 MiB swap file (a 512 MB droplet thrashed in its
 // first boot's package checks), and Ubuntu's update-notifier and motd
 // timers off (nobody logs in to read them; on the racer they took a CPU
 // for minutes).
@@ -459,11 +449,8 @@ func hostSetup(ports ...string) []string {
 		"grep -q '^GRUB_FORCE_PARTUUID=[0-9a-f-]\\{36\\}$' /etc/default/grub.d/40-force-partuuid.cfg",
 		"sudo update-grub 2>/dev/null",
 		"sudo sshd -t && sudo systemctl reload ssh",
-		"(sudo systemctl disable --now dragrace-reboot.timer 2>/dev/null; true)",
 		"sudo rm -f " + strings.Join(hostRetired, " "),
-		"(sudo rmdir /etc/systemd/system/apt-daily-upgrade.timer.d 2>/dev/null; true)",
 		"sudo systemctl daemon-reload",
-		"sudo systemctl restart apt-daily-upgrade.timer",
 		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +
 			"sudo mkswap -q /swapfile))",
 		"(swapon --show=NAME --noheadings | grep -q /swapfile || sudo swapon /swapfile)",
@@ -550,69 +537,3 @@ func siteBackups(ctx context.Context, args []string) error {
 	}
 	return do.enableBackups(ctx, droplets[0].ID)
 }
-
-// siteRestore puts one of DigitalOcean's backups in place of the site
-// host's disk, with the owner's token. Without -backup it lists them and
-// restores nothing. Written when the site host's reboot
-// came up to a kernel panic; afterwards, `site install-server` again
-// (what the backup's disk predates). The database loses what was written
-// after the backup.
-func siteRestore(ctx context.Context, args []string) error {
-	flags := newFlags("site restore")
-	backup := flags.Int("backup", 0, "the backup's id (none: list them)")
-	flags.Parse(args)
-	do, err := newDigitalOcean()
-	if err != nil {
-		return err
-	}
-	droplets, err := do.dropletsTagged(ctx, "fourneau-dragrace-site")
-	if err != nil {
-		return err
-	}
-	if len(droplets) != 1 {
-		return fmt.Errorf("%d droplets tagged fourneau-dragrace-site, want 1", len(droplets))
-	}
-	backups, err := do.backups(ctx, droplets[0].ID)
-	if err != nil {
-		return err
-	}
-	if *backup == 0 {
-		for _, each := range backups {
-			fmt.Printf("%d  %s  %s\n", each.ID, each.CreatedAt, each.Name)
-		}
-		return nil
-	}
-	known := false
-	for _, each := range backups {
-		known = known || each.ID == *backup
-	}
-	if !known {
-		return fmt.Errorf("-backup %d is not one of droplet %d's backups", *backup, droplets[0].ID)
-	}
-	action, err := do.restore(ctx, droplets[0].ID, *backup)
-	if err != nil {
-		return err
-	}
-	log.Printf("restoring droplet %d from backup %d (action %d)", droplets[0].ID, *backup, action)
-	for range restoreChecksMax {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(15 * time.Second):
-		}
-		status, err := do.actionStatus(ctx, action)
-		if err != nil {
-			return err
-		}
-		switch status {
-		case "completed":
-			fmt.Printf("restored; next: dragrace site install-server -host <site>\n")
-			return nil
-		case "errored":
-			return fmt.Errorf("the restore (action %d) errored", action)
-		}
-	}
-	return fmt.Errorf("the restore (action %d) is not done after %d checks", action, restoreChecksMax)
-}
-
-const restoreChecksMax = 160 // 15 s apart: 40 minutes

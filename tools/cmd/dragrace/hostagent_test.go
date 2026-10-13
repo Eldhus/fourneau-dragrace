@@ -50,7 +50,8 @@ func TestHostAgentDeploysAndRollsBack(t *testing.T) {
 	published, home := t.TempDir(), t.TempDir()
 	restarts, broken := 0, ""
 	agent := &HostAgent{config: HostConfig{Repository: "Eldhus/fourneau-dragrace", Home: home,
-		Service: "dragrace-site.service", Health: "https://site/api/health"},
+		Service: "dragrace-site.service", Health: "https://site/api/health",
+		Database: filepath.Join(home, "site.db"), User: "site"},
 		fetch: func(_ context.Context, url, path string) error {
 			bytes, err := os.ReadFile(filepath.Join(published, filepath.Base(url)))
 			if err != nil {
@@ -319,7 +320,7 @@ func TestHostAgentRefusesATarballThatIsNotTheBuilds(t *testing.T) {
 	published, home := t.TempDir(), t.TempDir()
 	publishSite(t, published, "one")
 	os.WriteFile(filepath.Join(published, "site.tar.gz"), []byte("tampered"), 0o644)
-	agent := &HostAgent{config: HostConfig{Home: home},
+	agent := &HostAgent{config: HostConfig{Home: home, Database: filepath.Join(home, "site.db"), User: "site"},
 		fetch: func(_ context.Context, url, path string) error {
 			bytes, _ := os.ReadFile(filepath.Join(published, filepath.Base(url)))
 			return os.WriteFile(path, bytes, 0o644)

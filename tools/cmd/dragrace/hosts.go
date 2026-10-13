@@ -169,8 +169,7 @@ func probeScript(want hostWant) string {
 	lines := []string{
 		"for f in " + strings.Join(all, " ") + "; do sudo test -e $f || echo missing $f; done",
 		"sudo sha256sum " + strings.Join(paths, " ") + " 2>/dev/null | awk '{print \"sha\", $1, $2}'",
-		"for f in " + strings.Join(hostRetired, " ") + " /etc/systemd/system/apt-daily-upgrade.timer.d; " +
-			"do sudo test -e $f && echo retired $f; done",
+		"for f in " + strings.Join(hostRetired, " ") + "; do sudo test -e $f && echo retired $f; done",
 		"sudo ufw status | sed -n 1p | sed 's/^/ufw /'",
 		"sudo ufw status | awk '$2==\"ALLOW\" && $1!~/v6/ {print \"port\", $1}'",
 		"echo partuuid $(findmnt -no PARTUUID /) $(sed -n 's/^GRUB_FORCE_PARTUUID=//p' " +

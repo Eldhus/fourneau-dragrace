@@ -39,8 +39,7 @@ type HostConfig struct {
 	// The site's health, as the agent asks it (its certificate is for the
 	// host's address).
 	Health string `json:"health"`
-	// The site's database and the user it runs as, for migrations; empty in
-	// a config from before 2026-10-12, which migrates nothing.
+	// The site's database and the user it runs as, for migrations.
 	Database string `json:"database"`
 	User     string `json:"user"`
 }
@@ -55,6 +54,9 @@ func commandHostAgent(ctx context.Context, args []string) error {
 	var config HostConfig
 	if err := readJSON(*path, &config); err != nil {
 		return err
+	}
+	if config.Database == "" || config.User == "" {
+		return fmt.Errorf("%s: database and user are required (site install-server writes them)", *path)
 	}
 	agent := &HostAgent{config: config, fetch: httpFetch, restart: systemctlRestart,
 		stop: systemctlStop, healthy: httpHealthy,
@@ -134,11 +136,6 @@ func (agent *HostAgent) deploy(ctx context.Context) error {
 	log.Printf("deploying site %s (dragrace %s, roux %s)", id, short(info.Commits["fourneau-dragrace"]),
 		short(info.Commits["roux"]))
 	pending := pendingMigrations(current, release)
-	if len(pending) > 0 && agent.config.Database == "" {
-		log.Printf("site %s carries migrations %v, but this agent's config names no database: "+
-			"site install-server again", id, pending)
-		pending = nil
-	}
 	backup := ""
 	if len(pending) > 0 {
 		backup = filepath.Join(filepath.Dir(agent.config.Database), "backups", "pre-migration-"+id+".db")
@@ -201,9 +198,6 @@ func (agent *HostAgent) writeJournal(journal deployJournal) error {
 }
 
 func (agent *HostAgent) removeJournal() error {
-	if agent.config.Database == "" {
-		return nil // no migrations, so no journal
-	}
 	if err := os.Remove(agent.journalPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -217,9 +211,6 @@ func (agent *HostAgent) removeJournal() error {
 // start (a reboot is the likely cause, not the build). Found is whether
 // there was one; a failure leaves the journal for the next run.
 func (agent *HostAgent) finishInterrupted(ctx context.Context) (found bool, err error) {
-	if agent.config.Database == "" {
-		return false, nil
-	}
 	var journal deployJournal
 	if err := readJSON(agent.journalPath(), &journal); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -319,8 +310,8 @@ func (agent *HostAgent) migrate(ctx context.Context, release string, pending []s
 
 // pendingMigrations are the migrations release carries that current does
 // not, by name, in order. None when current carries no migrations
-// directory: a release from before 2026-10-12, whose database's migrations
-// are unknown (the first release that carries them deploys without any).
+// directory: what its database has run is then unknown, so nothing is run
+// (every release carries one; bundle.go packs site/migrations).
 func pendingMigrations(current, release string) []string {
 	if current == "" {
 		return nil // a first site makes its database from schema.sql
