@@ -65,8 +65,6 @@ respond! = |request, { db, tokens }| {
 	} else {
 		match path {
 			"/" => index!(db, request, wanted)
-			# History is a panel under the race now.
-			"/history" => Ok(moved("/${query_of(request.target)}"))
 			"/race-classes" => race_classes!(db, request, wanted)
 			"/history-panel" => history_panel!(db, request, wanted)
 			"/race-live" => race_live!(db, request)
@@ -340,19 +338,9 @@ path_of = |target|
 		Ok(parts) => parts.before
 		Err(_) => target
 	}
-
-## The target's query with its "?", or "" without one.
-query_of : Str -> Str
-query_of = |target|
-	match target.split_first("?") {
-		Ok(parts) => "?${parts.after}"
-		Err(_) => ""
-	}
-
 expect old_address("/index.html") == "/"
 expect old_address("/about.html") == "/about"
 expect path_of("/history?x=1") == "/history"
-expect query_of("/history?class=smallest&protocol=tls") == "?class=smallest&protocol=tls" and query_of("/history") == ""
 expect is_id_byte(45) and !is_id_byte(47) and !is_id_byte(46)
 expect query_value("/history?class=premium-4", "class") == "premium-4"
 expect query_value("/?x=1&class=smallest", "class") == "smallest"
