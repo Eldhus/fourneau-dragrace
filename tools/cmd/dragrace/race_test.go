@@ -439,10 +439,13 @@ func TestHostFiles(t *testing.T) {
 // Every server is started the same way: its binary, roux's variables (the
 // TLS pair in TLS mode only), a fresh copy of the seeded database, and
 // SIGPIPE ignored (basic-webserver dies of one). A script
-// stands in for the server and writes down what it was given.
+// stands in for the server and writes down what it was given. A bash
+// script: Ubuntu's /bin/sh, dash, puts SIGPIPE back to the default as it
+// starts, so the stand-in would report it unignored where a real server is
+// not (on GitHub's runner; Arch's /bin/sh is bash).
 func TestStartServer(t *testing.T) {
 	home := t.TempDir()
-	script := "#!/bin/sh\n" +
+	script := "#!/usr/bin/env bash\n" +
 		`echo "$ROUX_ADDRESS $ROUX_PORT $ROUX_DATABASE ${ROUX_TLS_CERT:-no} ${ROUX_TLS_KEY:-no}"` + "\n" +
 		`cat "$ROUX_DATABASE"` + "\n" +
 		`grep '^SigIgn:' /proc/$$/status` + "\n" +
