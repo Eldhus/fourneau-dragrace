@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// Provider is what a race asks of DigitalOcean: DigitalOcean itself (a
-// race from the owner's machine, the token in its environment), or the
-// guard (the racer: guard.go holds the token and the budget, and the racer
-// asks it over a Unix socket).
+// Provider is what a race asks of DigitalOcean: DigitalOcean itself (an
+// ad-hoc session, the owner's token), or the guard (the racer: guard.go
+// holds the token and the budget, and the racer asks it over a Unix
+// socket).
 type Provider interface {
 	createDroplet(ctx context.Context, request DropletRequest) (Droplet, error)
 	droplet(ctx context.Context, id int) (Droplet, error)

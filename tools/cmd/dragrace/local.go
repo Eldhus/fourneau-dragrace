@@ -34,7 +34,7 @@ func (LocalMachine) Put(ctx context.Context, local, remote string) error {
 	return os.WriteFile(remote, bytes, 0o755)
 }
 
-// raceFlags are the flags both races take.
+// raceFlags are race local's flags.
 type raceFlags struct {
 	serverCPUs  string
 	loaderCPUs  string

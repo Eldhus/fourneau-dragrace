@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,79 +26,9 @@ runcmd:
 
 const sshKeyPrefix = "fourneau-dragrace-"
 
-// commandRaceCloud races on fresh droplets: per class in race.json a server
-// and its own loader, all in one region on its private network, the
-// classes at the same time (each pair is its own two machines; racing them
-// one after another would keep every droplet up three times as long). Every
-// droplet and the run's SSH key are deleted when the race ends, however it
-// ends; `dragrace reap` catches what a killed process could not.
-func commandRaceCloud(ctx context.Context, root string, args []string) error {
-	flags := parseRaceFlags("race cloud", root, args)
-	race, err := loadRace(root)
-	if err != nil {
-		return err
-	}
-	race = flags.narrow(race)
-	do, err := newDigitalOcean()
-	if err != nil {
-		return err
-	}
-	// Before ten minutes of builds and any droplet: every size the race
-	// needs must exist in its region (a region may refuse one only
-	// after everything was built).
-	watch := stopwatch{start: time.Now()}
-	prices, err := checkSizes(ctx, do, race.Cloud)
-	if err != nil {
-		return err
-	}
-	tools, err := loadToolchain(ctx, root)
-	if err != nil {
-		return err
-	}
-	competitors, err := loadCompetitors(root, race.Competitors)
-	if err != nil {
-		return err
-	}
-	if err := buildAll(ctx, root, tools, competitors); err != nil {
-		return err
-	}
-	run, err := newRun(root, "cloud", race)
-	if err != nil {
-		return err
-	}
-	run.Timing.BuildSeconds = watch.since()
-	launched := time.Now()
-	fleet, err := launchFleet(ctx, do, race)
-	// Each class deletes its pair when it is done (raceFleet); this, the
-	// rest, however the race ends.
-	defer fleet.destroy(do)
-	if err != nil {
-		return err
-	}
-	run.Timing.LaunchSeconds = time.Since(launched).Seconds()
-	raced := time.Now()
-	if err := raceFleet(ctx, root, tools, race, competitors, fleet, do, &run); err != nil {
-		return err
-	}
-	run.Timing.RacingSeconds = time.Since(raced).Seconds()
-	// Before the results are saved, so they hold every droplet's life.
-	fleet.destroy(do)
-	run.Timing.Droplets = fleet.costs(prices)
-	for _, droplet := range run.Timing.Droplets {
-		run.Timing.CostUSD += droplet.CostUSD
-	}
-	run.Timing.Seconds = watch.since()
-	run.FinishedAt = time.Now().UTC()
-	path, err := saveRun(flags.results, run)
-	if err != nil {
-		return err
-	}
-	fmt.Print(summaryTable(run))
-	fmt.Println("results:", path)
-	return nil
-}
-
-// Fleet is one race's droplets and key.
+// Fleet is one race's droplets and key: per class in race.json a server
+// and its own loader, all in one region on its private network (the
+// racer's raceCloud).
 type Fleet struct {
 	dir      string
 	key      SSHKey
@@ -277,136 +205,10 @@ func (fleet *Fleet) destroy(do Provider) {
 	}
 	if fleet.key.ID != 0 {
 		if err := do.deleteKey(ctx, fleet.key.ID); err != nil {
-			log.Printf("deleting key %d: %v (dragrace reap will)", fleet.key.ID, err)
+			log.Printf("deleting key %d: %v (left on the account)", fleet.key.ID, err)
 		}
 	}
 	if fleet.dir != "" {
 		os.RemoveAll(fleet.dir)
 	}
-}
-
-// raceFleet races every class on its own pair at once. Each class races
-// into its own Run (same seed), merged afterwards in race.json's order, so
-// the results do not depend on which class finished first.
-func raceFleet(ctx context.Context, root string, tools Toolchain, race Race,
-	competitors []Competitor, fleet *Fleet, do Provider, run *Run) error {
-	classes := race.Cloud.Servers
-	parts := make([]Run, len(classes))
-	errs := make([]error, len(classes))
-	seconds := make([]float64, len(classes))
-	var wait sync.WaitGroup
-	for i, class := range classes {
-		parts[i] = Run{Seed: run.Seed}
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			started := time.Now()
-			errs[i] = raceClass(ctx, root, tools, race, competitors, fleet, class, &parts[i])
-			seconds[i] = time.Since(started).Seconds()
-			// Done, however it went: its pair costs money from here on.
-			fleet.releaseClass(do, class.Name)
-			if errs[i] != nil {
-				errs[i] = fmt.Errorf("%s: %w", class.Name, errs[i])
-			}
-		}()
-	}
-	wait.Wait()
-	for i := range classes {
-		run.Machines = append(run.Machines, parts[i].Machines...)
-		run.Results = append(run.Results, parts[i].Results...)
-		run.Timing.Classes = append(run.Timing.Classes,
-			ClassTiming{Class: classes[i].Name, Seconds: seconds[i]})
-	}
-	return errors.Join(errs...)
-}
-
-func raceClass(ctx context.Context, root string, tools Toolchain, race Race,
-	competitors []Competitor, fleet *Fleet, class ServerClass, run *Run) error {
-	const home = "/root/dragrace"
-	loader := fleet.machines[fleet.loaders[class.Name].ID]
-	if err := loader.Put(ctx, tools.Oha, home+"/oha"); err != nil {
-		return err
-	}
-	loaderInfo := machineInfo(ctx, loader, "loader", class.Name, class.LoaderSize)
-	run.Machines = append(run.Machines, loaderInfo)
-	droplet := fleet.servers[class.Name]
-	server := fleet.machines[droplet.ID]
-	for _, competitor := range competitors {
-		binary := filepath.Join(binDir(root), competitor.Name)
-		if err := server.Put(ctx, binary, home+"/bin/"+competitor.Name); err != nil {
-			return err
-		}
-	}
-	if _, err := server.Shell(ctx, "chmod +x "+home+"/bin/*"); err != nil {
-		return err
-	}
-	if needsDatabase(race, competitors) {
-		if err := server.Put(ctx, conduitDatabase(root), home+"/"+conduitSeedName); err != nil {
-			return err
-		}
-	}
-	serverInfo := machineInfo(ctx, server, "server", class.Name, class.Size)
-	run.Machines = append(run.Machines, serverInfo)
-	target := Target{
-		Class:         class,
-		Server:        server,
-		Loader:        loader,
-		ServerHome:    home,
-		LoaderHome:    home,
-		Address:       droplet.address("private"),
-		LoaderThreads: loaderInfo.CPUs,
-	}
-	return raceTarget(ctx, race, competitors, target, run)
-}
-
-// commandReap deletes race droplets older than race.json's max_age_minutes
-// (or all of them, with -all) and this tool's SSH keys as old.
-func commandReap(ctx context.Context, root string, args []string) error {
-	flags := newFlags("reap")
-	all := flags.Bool("all", false, "every race droplet, whatever its age")
-	flags.Parse(args)
-	race, err := loadRace(root)
-	if err != nil {
-		return err
-	}
-	do, err := newDigitalOcean()
-	if err != nil {
-		return err
-	}
-	maxAge := time.Duration(race.Cloud.MaxAgeMinutes) * time.Minute
-	var droplets []Droplet
-	for _, tag := range []string{race.Cloud.Tag, adhocTag} {
-		tagged, err := do.dropletsTagged(ctx, tag)
-		if err != nil {
-			return err
-		}
-		droplets = append(droplets, tagged...)
-	}
-	for _, droplet := range droplets {
-		if *all || time.Since(droplet.CreatedAt) > maxAge {
-			log.Printf("reaping droplet %d %s (created %s)", droplet.ID, droplet.Name, droplet.CreatedAt)
-			if err := do.deleteDroplet(ctx, droplet.ID); err != nil {
-				return err
-			}
-		}
-	}
-	keys, err := do.keys(ctx)
-	if err != nil {
-		return err
-	}
-	for _, key := range keys {
-		stamp, found := strings.CutPrefix(key.Name, sshKeyPrefix)
-		stamp = strings.TrimPrefix(stamp, "adhoc-") // an ad-hoc session's (adhoc.go)
-		seconds, parseErr := strconv.ParseInt(stamp, 10, 64)
-		if !found || parseErr != nil {
-			continue // not ours
-		}
-		if *all || time.Since(time.Unix(seconds, 0)) > maxAge {
-			log.Printf("reaping key %d %s", key.ID, key.Name)
-			if err := do.deleteKey(ctx, key.ID); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

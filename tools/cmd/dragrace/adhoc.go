@@ -11,7 +11,7 @@ package main
 //
 // What makes it fast: the machines are a session, kept warm between races
 // and deleted after 20 minutes unused (a user systemd timer, re-armed by
-// every race; `dragrace reap` is the backstop); a variant is built once
+// every race; `adhoc down -all` the backstop); a variant is built once
 // per content, locally, in its own checkout updated in place, and
 // uploaded once per session, stripped and compressed; every ssh call to
 // the session shares one kept connection; and the race is short and
@@ -45,7 +45,7 @@ const (
 	adhocReapUnit  = "dragrace-adhoc-reap"
 	adhocKeyPrefix = sshKeyPrefix + "adhoc-"
 	// Its own tag: the nightly race's guard and racer never see a session,
-	// and `dragrace reap` sweeps both.
+	// and `adhoc down -all` sweeps it.
 	adhocTag = "fourneau-dragrace-adhoc"
 )
 
@@ -53,7 +53,7 @@ func adhocDir(root string) string { return filepath.Join(outDir(root), "adhoc") 
 
 func commandAdhoc(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: dragrace adhoc race [-workloads W] [-rounds N] VARIANT... | adhoc down")
+		return errors.New("usage: dragrace adhoc race [-workloads W] [-rounds N] VARIANT... | adhoc down [-all]")
 	}
 	switch args[0] {
 	case "race":
@@ -598,7 +598,7 @@ func deleteSession(ctx context.Context, root string, do Provider, session *adhoc
 	}
 	if session.KeyID != 0 {
 		if err := do.deleteKey(ctx, session.KeyID); err != nil {
-			log.Printf("adhoc: deleting key %d: %v (dragrace reap will)", session.KeyID, err)
+			log.Printf("adhoc: deleting key %d: %v (adhoc down -all will)", session.KeyID, err)
 		}
 	}
 	os.Remove(sessionPath(root))
@@ -606,7 +606,7 @@ func deleteSession(ctx context.Context, root string, do Provider, session *adhoc
 
 // armReaper (re)starts a user timer that runs `adhoc down -if-idle` once
 // the session has been idle long enough. A machine asleep runs it on
-// waking; `dragrace reap` (race.json's max_age_minutes) is the backstop.
+// waking; `adhoc down -all` is the backstop.
 func armReaper(root string, idle int) {
 	exec.Command("systemctl", "--user", "stop", adhocReapUnit+".timer").Run()
 	exec.Command("systemctl", "--user", "reset-failed", adhocReapUnit+".service").Run()
@@ -627,6 +627,7 @@ func armReaper(root string, idle int) {
 func adhocDown(ctx context.Context, root string, args []string) error {
 	flags := newFlags("adhoc down")
 	ifIdle := flags.Bool("if-idle", false, "only when unused for the session's idle minutes (the timer)")
+	all := flags.Bool("all", false, "and every ad-hoc droplet and key on the account (a lost session's)")
 	flags.Parse(args)
 	unlock, err := lockSession(root, !*ifIdle)
 	if err != nil {
@@ -638,21 +639,62 @@ func adhocDown(ctx context.Context, root string, args []string) error {
 	}
 	defer unlock()
 	session, err := loadSession(root)
-	if err != nil || session == nil {
+	if err != nil || (session == nil && !*all) {
 		return err
 	}
-	idleFor := time.Since(session.Used)
-	if *ifIdle && idleFor < time.Duration(session.IdleMinute)*time.Minute {
-		armReaper(root, session.IdleMinute-int(idleFor.Minutes()))
-		return nil
+	if session != nil && *ifIdle {
+		idleFor := time.Since(session.Used)
+		if idleFor < time.Duration(session.IdleMinute)*time.Minute {
+			armReaper(root, session.IdleMinute-int(idleFor.Minutes()))
+			return nil
+		}
 	}
 	do, err := adhocProvider(ctx)
 	if err != nil {
 		return err
 	}
-	deleteSession(ctx, root, do, session)
-	exec.Command("systemctl", "--user", "stop", adhocReapUnit+".timer").Run()
-	log.Printf("adhoc: session deleted (it lived %s)", time.Since(session.Created).Round(time.Second))
+	var deleted []int
+	if session != nil {
+		deleteSession(ctx, root, do, session)
+		exec.Command("systemctl", "--user", "stop", adhocReapUnit+".timer").Run()
+		log.Printf("adhoc: session deleted (it lived %s)", time.Since(session.Created).Round(time.Second))
+		deleted = []int{session.Server.ID, session.Loader.ID}
+	}
+	if *all {
+		return sweepAdhoc(ctx, do, deleted)
+	}
+	return nil
+}
+
+// sweepAdhoc deletes every droplet with the ad-hoc tag but the ones just
+// deleted (one may still be listed just after its delete), and
+// every ad-hoc key: what a session lost from out/adhoc left behind.
+func sweepAdhoc(ctx context.Context, do Provider, deleted []int) error {
+	droplets, err := do.dropletsTagged(ctx, adhocTag)
+	if err != nil {
+		return err
+	}
+	for _, droplet := range droplets {
+		if slices.Contains(deleted, droplet.ID) {
+			continue
+		}
+		log.Printf("adhoc: deleting droplet %d %s (created %s)", droplet.ID, droplet.Name, droplet.CreatedAt)
+		if err := do.deleteDroplet(ctx, droplet.ID); err != nil {
+			return err
+		}
+	}
+	keys, err := do.keys(ctx)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if strings.HasPrefix(key.Name, adhocKeyPrefix) {
+			log.Printf("adhoc: deleting key %d %s", key.ID, key.Name)
+			if err := do.deleteKey(ctx, key.ID); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -692,8 +734,7 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 			return fmt.Errorf("no workload %q (%s)", name, workloadNames(root))
 		}
 		if race.Workloads[i].Mixed != nil {
-			return fmt.Errorf("%s is open loop only, not raced ad hoc: a nightly, or "+
-				"`race cloud -workloads %s`", name, name)
+			return fmt.Errorf("%s is open loop only, not raced ad hoc: a nightly races it", name)
 		}
 		picked = append(picked, race.Workloads[i])
 	}

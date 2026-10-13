@@ -7,11 +7,9 @@
 //	dragrace build                  build every competitor into out/bin
 //	dragrace race local [flags]     race on this machine, server and loader on
 //	                                separate CPUs
-//	dragrace race cloud [flags]     race on fresh droplets (DIGITALOCEAN_TOKEN)
 //	dragrace adhoc race|down        builds at any commits raced against
 //	                                each other on a warm pair, in under a
 //	                                minute
-//	dragrace reap                   delete race droplets older than allowed
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site dev               the site rebuilt and reloaded as it is
 //	                                edited (Roc's dev backend; for the UI)
@@ -120,15 +118,11 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		switch args[0] {
 		case "local":
 			return commandRaceLocal(ctx, root, args[1:])
-		case "cloud":
-			return commandRaceCloud(ctx, root, args[1:])
 		}
 	case "adhoc":
 		return commandAdhoc(ctx, root, args)
 	case "diff":
 		return commandDiff(ctx, root, args)
-	case "reap":
-		return commandReap(ctx, root, args)
 	case "site":
 		return commandSite(ctx, root, args)
 	case "worker":
@@ -151,8 +145,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
-  toolchain | build | race local | race cloud | adhoc race|down | diff |
-  reap | bundle | worker | site build|dev|provision|install-server|race-now |
+  toolchain | build | race local | adhoc race|down | diff |
+  bundle | worker | site build|dev|provision|install-server|race-now |
   guard | racer serve|check|once|provision|install | host-agent |
   hosts check | version
 See README.md.`)

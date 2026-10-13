@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -54,6 +55,35 @@ func TestCompare(t *testing.T) {
 	rows = compare(run, "c", []*variant{a, b}, labels)
 	if rows[1].Apart {
 		t.Fatalf("overlapping rounds read apart: %+v", rows[1])
+	}
+}
+
+// `adhoc down -all` deletes every ad-hoc droplet and key, and nothing of the
+// nightly race's or anyone else's; a droplet the session's delete already
+// asked for is not asked twice.
+func TestSweepAdhoc(t *testing.T) {
+	ctx := context.Background()
+	fake := newFakeDigitalOcean()
+	session, _ := fake.createDroplet(ctx, DropletRequest{Name: "session", Tags: []string{adhocTag}})
+	lost, _ := fake.createDroplet(ctx, DropletRequest{Name: "lost", Tags: []string{adhocTag}})
+	race, _ := fake.createDroplet(ctx, DropletRequest{Name: "race", Tags: []string{"race"}})
+	fake.createKey(ctx, adhocKeyPrefix+"1", "a")
+	raceKey, _ := fake.createKey(ctx, sshKeyPrefix+"2", "b")
+	owner, _ := fake.createKey(ctx, "admin-key", "c")
+	if err := sweepAdhoc(ctx, fake, []int{session.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fake.droplet(ctx, lost.ID); err == nil {
+		t.Fatal("the lost session's droplet is still there")
+	}
+	for _, id := range []int{session.ID, race.ID} {
+		if _, err := fake.droplet(ctx, id); err != nil {
+			t.Fatalf("droplet %d deleted", id)
+		}
+	}
+	keys, _ := fake.keys(ctx)
+	if len(keys) != 2 || keys[0].ID != raceKey.ID || keys[1].ID != owner.ID {
+		t.Fatalf("keys left: %+v", keys)
 	}
 }
 

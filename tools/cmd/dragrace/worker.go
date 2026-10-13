@@ -14,10 +14,10 @@ import (
 
 // A worker races one server class from its loader: the racer starts it on the loader droplet with the run's
 // build unpacked as a checkout (race.json, competitors/, out/bin), and a
-// config. It drives the server over the private network, as raceClass
-// does from afar, and posts each result to the site as it grows, through
-// a queue, so a site restarting never holds the race up. Every result is
-// also kept in a file, which the racer posts again when the worker is done.
+// config. It drives the server over the private network, and posts each
+// result to the site as it grows, through a queue, so a site restarting
+// never holds the race up. Every result is also kept in a file, which the
+// racer posts again when the worker is done.
 
 // WorkerConfig is what the racer writes for a worker.
 type WorkerConfig struct {
