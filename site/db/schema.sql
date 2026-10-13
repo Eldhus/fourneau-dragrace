@@ -53,7 +53,11 @@ CREATE TABLE run_commits (
 ) STRICT, WITHOUT ROWID;
 
 -- race.json as raced (a raced run has one): its settings as columns, and
--- the file whole, for what no column holds.
+-- the file whole, for what no column holds. versions_json is versions.json
+-- whole, before it went; '' since 2026-10-13 (each version is a row of
+-- run_versions). A comment inside a CREATE statement is stored in
+-- sqlite_schema, which roux compares with this file, so it changes only with
+-- a migration.
 CREATE TABLE run_settings (
   run_id TEXT PRIMARY KEY REFERENCES runs (id),
   seed INTEGER NOT NULL,
@@ -69,8 +73,6 @@ CREATE TABLE run_settings (
   open_loop_warmup_seconds INTEGER NOT NULL,
   open_loop_measure_seconds INTEGER NOT NULL,
   race_json TEXT NOT NULL,
-  -- versions.json whole, before it went; '' since 2026-10-13 (each
-  -- version is a row of run_versions).
   versions_json TEXT NOT NULL
 ) STRICT;
 
