@@ -23,57 +23,13 @@ import (
 //     it updates itself from the newest build; reaches DigitalOcean only
 //     through the guard's socket (group racer).
 //
-// Its units and the racer's config are files in hosts/racer/ (and
-// hosts/common/); the guard's config is made at the install.
+// Its users are hosts/racer.cloud-init.yaml's, the user data it is made
+// with in DigitalOcean's panel. Its units and the racer's config are files
+// in hosts/racer/ (and hosts/common/); the guard's config is made at the
+// install.
 
 // guardBinary is the guard: this dragrace binary, as installed.
 const guardBinary = "/usr/local/bin/dragrace-guard"
-
-const racerUserData = `#cloud-config
-disable_root: true
-ssh_pwauth: false
-users:
-  - name: cook
-    groups: [sudo]
-    shell: /bin/bash
-    sudo: "ALL=(ALL) NOPASSWD:ALL"
-    ssh_authorized_keys: ["ADMIN_KEY"]
-  - name: racer
-    system: true
-    shell: /usr/sbin/nologin
-  - name: guard
-    system: true
-    shell: /usr/sbin/nologin
-package_update: true
-package_upgrade: true
-packages: [ufw, unattended-upgrades]
-runcmd:
-  - ufw default deny incoming
-  - ufw allow 22/tcp
-  - ufw --force enable
-`
-
-// racerProvision makes the racer droplet, once, with the owner's token.
-func racerProvision(ctx context.Context, root string, args []string) error {
-	flags := newFlags("racer provision")
-	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
-		"the owner's public key, for the cook user (sudo)")
-	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
-	flags.Parse(args)
-	race, err := loadRace(root)
-	if err != nil {
-		return err
-	}
-	host, err := provisionHost(ctx, root, hostRequest{name: "fourneau-dragrace-racer",
-		tag: "fourneau-dragrace-racer", region: race.Cloud.Region, size: *size,
-		adminKey: *adminKey, userData: racerUserData, knownHosts: "racer-known-hosts"})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("\nThe racer is up at %s. Next:\n  dragrace racer install -host %s\n",
-		host, host)
-	return nil
-}
 
 // guardConfigFor allows any size up to hourlyMaxUSD an hour, in race.json's
 // region and image, under the month's cap, so a class added to race.json
@@ -134,6 +90,9 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	}
 	self, err := os.Executable()
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
 		return err
 	}
 	machine := ownerMachine(root, *host, *key, "racer-known-hosts")

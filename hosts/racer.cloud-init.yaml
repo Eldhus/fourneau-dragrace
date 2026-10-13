@@ -1,0 +1,22 @@
+#cloud-config
+disable_root: true
+ssh_pwauth: false
+users:
+  - name: cook
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys: ["ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDe6DWzxM+Fp1EHRoTpFj28vHW7m815Ff555ssV6Gxvjx+Jv8XJeh84pqzJHZzNEQDBVATr/JoGunkSueKBzuCx65CZqg3rmeu6fNv5rkaOACnqH8I42HL5zRx86sZXIKlUQxCDyesDJ77rNuPEoEa4q/ydmXVU8T5ZFtTgY0Yw3Y2XMbduIqiBT/pNb5lixIm3yimODbs6wQQRsfm51VyAsxlUX25YPQCTuT7V+vF7Tqayh7NqR/auhoXZQAk/Ca0VW6hugoKN4Fnjnqwtt9KoABamFRKtBUE0G/dTcXDEgx7cG8I+5J5olFhLGRw0GEZE5NxOHzcFv7ZU6YejjwDO3vKOFfEUtaZ8tfSuKs9FA2UY20Qff91qlaiI7wSrAx69TkwvTyDcXrLJHMCduFSUWCERa6arrv4z/YxQRmbKhlnhQ3OiRuFjjafFByp1i01RjzjLXWKCX5PWv+G0R621WwcwBo5PlXOv6A6gFPZcxVbMBC2heWQTMU1t5FVfwiE= fourneau-dragrace-admin"]
+  - name: racer
+    system: true
+    shell: /usr/sbin/nologin
+  - name: guard
+    system: true
+    shell: /usr/sbin/nologin
+package_update: true
+package_upgrade: true
+packages: [ufw, unattended-upgrades]
+runcmd:
+  - ufw default deny incoming
+  - ufw allow 22/tcp
+  - ufw --force enable

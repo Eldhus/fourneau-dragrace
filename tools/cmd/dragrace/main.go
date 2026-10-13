@@ -13,9 +13,9 @@
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site dev               the site rebuilt and reloaded as it is
 //	                                edited (Roc's dev backend; for the UI)
-//	dragrace site provision|install-server   the 24/7 site droplet, set up
+//	dragrace site install-server    set the 24/7 site droplet up
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
-//	dragrace racer provision|install   the racer droplet, set up
+//	dragrace racer install -host H  set the racer droplet up
 //	dragrace hosts check [-racer H] both hosts against this checkout, read
 //	                                only
 //	dragrace worker [-config F]     race one class from its loader, posting
@@ -84,8 +84,8 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 	case "guard":
 		return commandGuard(ctx, args)
 	case "racer":
-		if len(args) > 0 && (args[0] == "provision" || args[0] == "install") {
-			return errNotService // these set the racer up, from a checkout
+		if len(args) > 0 && args[0] == "install" {
+			return errNotService // sets the racer up, from a checkout
 		}
 		return commandRacer(ctx, args)
 	case "host-agent":
@@ -131,10 +131,7 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 	case "hosts":
 		return commandHosts(ctx, root, args)
 	case "racer":
-		switch args[0] {
-		case "provision":
-			return racerProvision(ctx, root, args[1:])
-		case "install":
+		if args[0] == "install" {
 			return racerInstall(ctx, root, args[1:])
 		}
 	}
@@ -145,8 +142,8 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | adhoc race|down | diff |
-  bundle | worker | site build|dev|provision|install-server|race-now |
-  guard | racer serve|check|provision|install | host-agent |
+  bundle | worker | site build|dev|install-server|race-now |
+  guard | racer serve|check|install | host-agent |
   hosts check | version
 See README.md.`)
 	os.Exit(2)

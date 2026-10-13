@@ -22,7 +22,9 @@ import (
 //   - the host agent (root, a timer, every minute): deploys the newest
 //     build's site, rolling back one that does not answer.
 //
-// Its units and configs are files in hosts/site/ (and hosts/common/).
+// Its users are hosts/site.cloud-init.yaml's, the user data it is made with
+// in DigitalOcean's panel. Its units and configs are files in hosts/site/
+// (and hosts/common/).
 
 // siteName is the site's name (an A record): the host the installs
 // and the check reach, and the one hosts/ names (the certificate's, the host
@@ -39,43 +41,15 @@ const siteState = "/var/lib/dragrace-site"
 // hostAgentBinary is the host agent: this dragrace binary, as installed.
 const hostAgentBinary = "/usr/local/bin/dragrace-host-agent"
 
-// siteUserData makes the users and the firewall, once. The services are
-// install-server's (hosts/site/), so a host made earlier and one made today
-// run the same ones.
-const siteUserData = `#cloud-config
-disable_root: true
-ssh_pwauth: false
-users:
-  - name: cook
-    groups: [sudo]
-    shell: /bin/bash
-    sudo: "ALL=(ALL) NOPASSWD:ALL"
-    ssh_authorized_keys: ["ADMIN_KEY"]
-  - name: site
-    system: true
-    shell: /usr/sbin/nologin
-package_update: true
-package_upgrade: true
-packages: [sqlite3, ufw, unattended-upgrades]
-runcmd:
-  - ufw default deny incoming
-  - ufw allow 22/tcp
-  - ufw allow 80/tcp
-  - ufw allow 443/tcp
-  - ufw --force enable
-`
-
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: dragrace site build|dev|provision|install-server|race-now")
+		return fmt.Errorf("usage: dragrace site build|dev|install-server|race-now")
 	}
 	switch args[0] {
 	case "build":
 		return siteBuildCommand(ctx, root, args[1:])
 	case "dev":
 		return siteDevCommand(ctx, root, args[1:])
-	case "provision":
-		return siteProvision(ctx, root, args[1:])
 	case "install-server":
 		return siteInstallServer(ctx, root, args[1:])
 	case "race-now":
@@ -88,88 +62,8 @@ func commandSite(ctx context.Context, root string, args []string) error {
 // (the hosts' pinned keys).
 func secretsDir(root string) string { return filepath.Join(outDir(root), "secrets") }
 
-// siteProvision makes the site droplet, once. It registers the owner's
-// admin key with DigitalOcean (so no root password is ever emailed), and
-// waits until SSH answers.
-func siteProvision(ctx context.Context, root string, args []string) error {
-	flags := newFlags("site provision")
-	adminKey := flags.String("admin-key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub"),
-		"the owner's public key, for the cook user (sudo)")
-	size := flags.String("size", "s-1vcpu-512mb-10gb", "droplet size")
-	flags.Parse(args)
-	race, err := loadRace(root)
-	if err != nil {
-		return err
-	}
-	// In the races' region, beside the racer and the workers that post to
-	// it (the first site host was in nyc3, from when GitHub's US runner
-	// raced).
-	host, err := provisionHost(ctx, root, hostRequest{name: "fourneau-dragrace-site",
-		tag: "fourneau-dragrace-site", region: race.Cloud.Region, size: *size, adminKey: *adminKey,
-		userData: siteUserData, knownHosts: "site-known-hosts"})
-	if err != nil {
-		return err
-	}
-	fmt.Printf(`
-The site host is up at %s; nothing serves until install-server.
-
-Next: %s's A record
-to %s, then
-  dragrace site install-server
-`, host, siteName, host)
-	return nil
-}
-
-// hostRequest is a 24/7 droplet of the owner's: the site host, the racer.
-type hostRequest struct {
-	name, tag, region, size, adminKey, userData, knownHosts string
-}
-
-func provisionHost(ctx context.Context, root string, request hostRequest) (string, error) {
-	race, err := loadRace(root)
-	if err != nil {
-		return "", err
-	}
-	do, err := newDigitalOcean()
-	if err != nil {
-		return "", err
-	}
-	admin, err := os.ReadFile(request.adminKey)
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
-		return "", err
-	}
-	key, err := do.ensureKey(ctx, adminKeyName, strings.TrimSpace(string(admin)))
-	if err != nil {
-		return "", err
-	}
-	userData := strings.ReplaceAll(request.userData, "ADMIN_KEY", strings.TrimSpace(string(admin)))
-	droplet, err := do.createDroplet(ctx, DropletRequest{
-		Name: request.name, Region: request.region, Size: request.size,
-		Image: race.Cloud.Image, SSHKeys: []int{key.ID}, Tags: []string{request.tag},
-		UserData: userData, Monitoring: true,
-	})
-	if err != nil {
-		return "", err
-	}
-	log.Printf("droplet %d: %s; waiting for it", droplet.ID, request.name)
-	droplet, err = waitActive(ctx, do, droplet.ID)
-	if err != nil {
-		return "", err
-	}
-	host := droplet.address("public")
-	machine := SSHMachine{User: "cook", Host: host, Key: privateFor(request.adminKey),
-		KnownHosts: filepath.Join(secretsDir(root), request.knownHosts)}
-	log.Printf("%s: waiting for SSH, then the first boot (package upgrades: a few minutes)", host)
-	return host, waitSSH(ctx, machine)
-}
-
-// privateFor turns ~/.ssh/id_rsa.pub into ~/.ssh/id_rsa.
-func privateFor(public string) string { return strings.TrimSuffix(public, ".pub") }
-
-// ownerMachine is a host of the owner's, as cook.
+// ownerMachine is a host of the owner's, as cook. Its host key is trusted
+// at the first install and kept in secretsDir, which the installs make.
 func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 	return SSHMachine{User: "cook", Host: host, Key: key,
 		KnownHosts: filepath.Join(secretsDir(root), knownHosts)}
@@ -186,6 +80,9 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags.Parse(args)
 	agent, err := os.Executable()
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
 		return err
 	}
 	machine := ownerMachine(root, siteName, *key, "site-known-hosts")

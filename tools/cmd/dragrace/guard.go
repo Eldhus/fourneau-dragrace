@@ -263,7 +263,6 @@ func (guard *Guard) createDroplet(ctx context.Context, request DropletRequest) (
 	if err := guard.allow(request, price); err != nil {
 		return Droplet{}, err
 	}
-	request.Monitoring = false
 	request.SSHKeys = []int{guard.config.AdminKeyID}
 	droplet, err := guard.provider.createDroplet(ctx, request)
 	if err != nil {

@@ -93,15 +93,14 @@ func (droplet Droplet) address(kind string) string {
 }
 
 type DropletRequest struct {
-	Name       string   `json:"name"`
-	Region     string   `json:"region"`
-	Size       string   `json:"size"`
-	Image      string   `json:"image"`
-	SSHKeys    []int    `json:"ssh_keys"`
-	Tags       []string `json:"tags"`
-	UserData   string   `json:"user_data,omitempty"`
-	Monitoring bool     `json:"monitoring"`
-	IPv6       bool     `json:"ipv6"`
+	Name     string   `json:"name"`
+	Region   string   `json:"region"`
+	Size     string   `json:"size"`
+	Image    string   `json:"image"`
+	SSHKeys  []int    `json:"ssh_keys"`
+	Tags     []string `json:"tags"`
+	UserData string   `json:"user_data,omitempty"`
+	IPv6     bool     `json:"ipv6"`
 }
 
 func (do *DigitalOcean) createDroplet(ctx context.Context, request DropletRequest) (Droplet, error) {
@@ -133,37 +132,15 @@ func (do *DigitalOcean) deleteDroplet(ctx context.Context, id int) error {
 }
 
 type SSHKey struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	PublicKey string `json:"public_key"`
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
-// adminKeyName is the owner's admin key on the account, as a provision
-// registers it. Every droplet names it in ssh_keys: DigitalOcean then
-// emails no root password. A race droplet's own key is in its user data
-// (raceUserData), never registered.
+// adminKeyName is the owner's admin key on the account, as the owner adds
+// it in the panel. Every droplet names it in ssh_keys:
+// DigitalOcean then emails no root password. A race droplet's own key is
+// in its user data (raceUserData), never registered.
 const adminKeyName = "fourneau-dragrace-admin"
-
-// ensureKey registers a public key, or returns the registration it already
-// has: DigitalOcean refuses the same key twice, and a second provision
-// (after a failed first) must not.
-func (do *DigitalOcean) ensureKey(ctx context.Context, name, public string) (SSHKey, error) {
-	keys, err := do.keys(ctx)
-	if err != nil {
-		return SSHKey{}, err
-	}
-	for _, key := range keys {
-		if strings.TrimSpace(key.PublicKey) == public {
-			return key, nil
-		}
-	}
-	var response struct {
-		Key SSHKey `json:"ssh_key"`
-	}
-	body := map[string]string{"name": name, "public_key": public}
-	err = do.call(ctx, http.MethodPost, "/v2/account/keys", body, &response)
-	return response.Key, err
-}
 
 // adminKeyID is the admin key's id: what racer install writes into the
 // guard's config, and what an ad-hoc session's droplets name.
@@ -177,7 +154,7 @@ func (do *DigitalOcean) adminKeyID(ctx context.Context) (int, error) {
 			return key.ID, nil
 		}
 	}
-	return 0, fmt.Errorf("DigitalOcean has no SSH key named %s (a provision registers it)",
+	return 0, fmt.Errorf("DigitalOcean has no SSH key named %s (add yours in the panel)",
 		adminKeyName)
 }
 
