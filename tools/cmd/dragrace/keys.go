@@ -38,10 +38,8 @@ const storeKeep = 3
 // track, uncommitted changes included); versions.json; each of its
 // `inputs`, the trees its build reads by path outside its directory
 // (fourneau-zig: fourneau, and roux's vendored SQLite); the machine image;
-// and the tools its steps name: {roux} the roux build (or the roux and
-// fourneau checkouts) and roc, {roc} roc, {zig} Zig. (Before recipe 2,
-// {zig} stood for fourneau, and roux's SQLite was in no key: found
-// rehearsing build.yml.)
+// and the tools its steps name: {roux} the roux and fourneau checkouts
+// (rouxIdentity) and roc, {roc} roc, {zig} Zig.
 func competitorKey(ctx context.Context, root string, tools Toolchain, competitor Competitor) (string,
 	error) {
 	hash := sha256.New()

@@ -18,9 +18,10 @@ import (
 // roux's own dev server does the work (`roux dev`, roux's
 // tools/roux/dev.zig), which this command's first version (a Go watcher
 // and a proxy) was the testing ground for: content hashes decide what an
-// edit needs, a page's markup compiles one template's object and no Roc,
-// the app restarts, and the host itself serves the reload stream and
-// adds the script to each page, so no proxy. Here: `roux dev` on site/,
+// edit needs (a template's bytecode is reread by the running app, with no
+// compiler and no restart; Roc or a query rebuilds and restarts it), and
+// the host itself serves the reload stream and adds the script to each
+// page, so no proxy. Here: `roux dev` on site/,
 // its static files watched, once the toolchain has built roux's checkout.
 func siteDevCommand(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site dev")

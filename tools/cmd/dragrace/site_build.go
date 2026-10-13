@@ -11,7 +11,7 @@ import (
 // in its SQLite database (site/db: the schema and queries, typed by
 // roux-db). It runs on what it races, so it is built as the roux competitor
 // is, on roux's platform and tools as the toolchain readies them (the
-// checkout beside this one, built, or a roux build): `roux build`, which
+// checkout beside this one, from the store or built): `roux build`, which
 // types the queries, writes each template's contract module, compiles the
 // templates and, with roc, the app, and links one static binary; then the
 // app's expects run.

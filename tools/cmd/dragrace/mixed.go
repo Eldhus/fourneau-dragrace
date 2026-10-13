@@ -18,8 +18,8 @@ import (
 // rates, the same for every competitor, each offered as its parts at their
 // shares, one oha a part, all at once. A competitor climbs until it falls
 // behind (answers under `saturated` of the rate offered, or errors), and
-// each step records the mean latency over every request (the chart), and
-// each part's own numbers.
+// each step records the mean latency over every request, its slowest
+// part's p99 (the chart), and each part's own numbers.
 
 // Mixed is a workload's mixed load (race.json).
 type Mixed struct {

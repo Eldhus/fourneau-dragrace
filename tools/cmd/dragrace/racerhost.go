@@ -150,9 +150,9 @@ func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64) GuardConfig {
 
 // racerInstall sets the racer up, as cook: the guard (this binary, pinned)
 // and its config, the racer's first binary and config, the units, and the
-// three secrets as encrypted credentials, each sent on SSH's standard
-// input: the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring), and
-// the racer and GitHub tokens from the keyring.
+// two secrets as encrypted credentials, each sent on SSH's standard input:
+// the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring) and the
+// racer token from the keyring.
 func racerInstall(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer install")
 	host := flags.String("host", "", "the racer's address")
@@ -272,9 +272,10 @@ const (
 	racerIdleTest   = "if sudo test -e /var/lib/dragrace-racer/racing; then exit 75; fi"
 )
 
-// racerIdleWaits bounds the wait: a minute apart, four hours, past the
-// longest race (a worker's 150 minutes and a build's 40).
-const racerIdleWaits = 240
+// racerIdleWaits bounds the wait: a minute apart, five hours, past the
+// longest race (its droplets' age, race.json's max_age_minutes of 240, and
+// the download, launch and teardown around it).
+const racerIdleWaits = 300
 
 // whenRacerIdle runs start (which begins with racerIdleTest) until the
 // racer is idle and it runs.

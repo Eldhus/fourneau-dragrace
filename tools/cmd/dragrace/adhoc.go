@@ -606,7 +606,7 @@ func deleteSession(ctx context.Context, root string, do Provider, session *adhoc
 
 // armReaper (re)starts a user timer that runs `adhoc down -if-idle` once
 // the session has been idle long enough. A machine asleep runs it on
-// waking; `dragrace reap` (180 minutes) is the backstop.
+// waking; `dragrace reap` (race.json's max_age_minutes) is the backstop.
 func armReaper(root string, idle int) {
 	exec.Command("systemctl", "--user", "stop", adhocReapUnit+".timer").Run()
 	exec.Command("systemctl", "--user", "reset-failed", adhocReapUnit+".service").Run()

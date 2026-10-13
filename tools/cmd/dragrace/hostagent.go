@@ -22,7 +22,7 @@ import (
 // unpacked beside the others, made current, and the site restarted; if it
 // does not answer /api/health within 30 s, the previous one is made
 // current again and that build is never tried again. Installed by the
-// owner (dragrace site install-host), never updated by a build.
+// owner (dragrace site install-server), never updated by a build.
 //
 // A release carries the site's migrations (site/migrations). The site
 // serving answered its health, so its database holds every migration its
