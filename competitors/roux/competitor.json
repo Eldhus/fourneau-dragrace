@@ -2,10 +2,6 @@
   "title": "roux",
   "language": "Roc",
   "framework": "roux: a Roc platform whose host is fourneau",
-  "links": {
-    "roux": "https://github.com/Eldhus/roux",
-    "Roc": "https://www.roc-lang.org"
-  },
   "build": [
     {
       "cwd": ".",
@@ -40,9 +36,9 @@
     ],
     "env": {
       "ROUX_ADDRESS": "{address}",
+      "ROUX_PORT": "{port}",
       "ROUX_DATABASE": "{db}"
     },
-    "fixed_port": 8080,
     "tls": {
       "env": {
         "ROUX_TLS_CERT": "{cert}",

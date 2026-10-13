@@ -18,7 +18,6 @@ type Versions struct {
 	Axum         Note     `json:"axum"`
 	Tokio        Note     `json:"tokio"`
 	DropletImage string   `json:"droplet_image"`
-	RunnerImage  string   `json:"runner_image"`
 	Fourneau     Checkout `json:"fourneau"`
 	Roux         Checkout `json:"roux"`
 }
@@ -252,11 +251,10 @@ type Local struct {
 
 // Competitor is competitors/NAME/competitor.json: how to build and run it.
 type Competitor struct {
-	Name      string            `json:"-"`
-	Title     string            `json:"title"`
-	Language  string            `json:"language"`
-	Framework string            `json:"framework"`
-	Links     map[string]string `json:"links"`
+	Name      string `json:"-"`
+	Title     string `json:"title"`
+	Language  string `json:"language"`
+	Framework string `json:"framework"`
 	// Inputs are what its build reads by path outside its directory,
 	// relative to this repository (fourneau-zig: fourneau, and roux's
 	// vendored SQLite): they make its key (keys.go).
@@ -300,8 +298,6 @@ type Step struct {
 type RunSpec struct {
 	Argv []string          `json:"argv"`
 	Env  map[string]string `json:"env"`
-	// FixedPort: the competitor cannot be told a port (its app names it).
-	FixedPort int `json:"fixed_port"`
 	// TLS is how the competitor serves HTTPS on the same port: arguments
 	// appended and environment added ({cert}, {key}: PEM files). Absent:
 	// it serves no TLS, and sits the TLS workloads out.
@@ -371,9 +367,6 @@ func loadCompetitors(root string, names []string) ([]Competitor, error) {
 			return nil, err
 		}
 		competitor.Name = name
-		if competitor.Run.FixedPort != 0 && competitor.Run.FixedPort != 8080 {
-			return nil, fmt.Errorf("%s: a fixed port must be the race's 8080", name)
-		}
 		competitors = append(competitors, competitor)
 	}
 	return competitors, nil

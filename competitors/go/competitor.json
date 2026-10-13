@@ -2,7 +2,6 @@
   "title": "go",
   "language": "Go",
   "framework": "net/http, the standard library",
-  "links": { "Go": "https://go.dev", "net/http": "https://pkg.go.dev/net/http" },
   "build": [
     { "cwd": "competitors/go", "argv": ["go", "build", "-trimpath", "-o", "{out}/go", "."], "env": { "CGO_ENABLED": "0", "GOAMD64": "v3" } }
   ],

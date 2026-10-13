@@ -2,7 +2,6 @@
   "title": "axum",
   "language": "Rust",
   "framework": "axum 0.8 on tokio's multi-threaded runtime",
-  "links": { "axum": "https://github.com/tokio-rs/axum", "tokio": "https://tokio.rs" },
   "build": [
     { "cwd": "competitors/axum", "argv": ["cargo", "build", "--release", "--locked"], "env": { "RUSTFLAGS": "-C target-cpu=x86-64-v3 -C target-feature=+aes,+pclmulqdq", "CFLAGS": "-march=x86-64-v3 -maes -mpclmul" } },
     { "cwd": ".", "argv": ["cp", "competitors/axum/target/release/dragrace-axum", "{out}/axum"] }

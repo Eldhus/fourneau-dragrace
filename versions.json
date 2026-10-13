@@ -1,5 +1,5 @@
 {
-  "comment": "Every version a race depends on but Zig and roc, which are roux's: its toolchain.json, handed on by each roux build's build.json.",
+  "comment": "Every version a race depends on but Zig and roc, which are roux's (its toolchain.json).",
   "oha": {
     "version": "1.16.0",
     "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64",
@@ -10,7 +10,6 @@
   "axum": { "version": "0.8.9", "pinned_in": "competitors/axum/Cargo.lock" },
   "tokio": { "version": "1.53.2", "pinned_in": "competitors/axum/Cargo.lock" },
   "droplet_image": "ubuntu-26-04-x64",
-  "runner_image": "ubuntu-26.04",
   "fourneau": {
     "comment": "Not pinned on purpose: the nightly races fourneau's master, and records the commit it raced.",
     "repository": "https://github.com/Eldhus/fourneau",
@@ -18,7 +17,7 @@
     "checkout": "../fourneau"
   },
   "roux": {
-    "comment": "Not pinned either: roux's master, built on the fourneau checkout above (its build.zig.zon points there). In CI, a roux build (its platform, tools and build.json) unpacked here instead, and fourneau checked out at the commit it records.",
+    "comment": "Not pinned either: roux's master, built on the fourneau checkout above (its build.zig.zon points there).",
     "repository": "https://github.com/Eldhus/roux",
     "branch": "master",
     "checkout": "../roux"

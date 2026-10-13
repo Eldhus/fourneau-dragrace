@@ -2,10 +2,6 @@
   "title": "basic-webserver",
   "language": "Roc",
   "framework": "basic-webserver 0.17.0: Roc's own platform, a Rust host on hyper and tokio",
-  "links": {
-    "basic-webserver": "https://github.com/roc-lang/basic-webserver",
-    "Roc": "https://www.roc-lang.org"
-  },
   "build": [
     { "cwd": "competitors/basic-webserver", "argv": ["{roc}", "build", "main.roc", "--output={out}/basic-webserver"] }
   ],

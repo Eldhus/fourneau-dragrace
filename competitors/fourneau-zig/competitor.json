@@ -2,7 +2,6 @@
   "title": "fourneau-zig",
   "language": "Zig",
   "framework": "fourneau: io_uring, a fiber per connection, one shard per core",
-  "links": { "fourneau": "https://github.com/Eldhus/fourneau", "Zig": "https://ziglang.org" },
   "inputs": ["../fourneau", "../roux/vendor/sqlite"],
   "build": [
     { "cwd": "competitors/fourneau-zig", "argv": ["{zig}", "build", "-Doptimize=safe", "-Dcpu=x86_64_v3+aes+pclmul", "-p", "{out}/fourneau-zig-prefix"] },

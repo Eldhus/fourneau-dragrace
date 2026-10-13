@@ -2,7 +2,8 @@ app [Context, program] { pf: platform "../../../roux/platform/main.roc" }
 
 # The roux competitor: a Roc app on roux, the Roc platform
 # built on fourneau. Each request runs `respond!` on its connection's
-# fiber; the host listens on ROUX_ADDRESS, the app says the port.
+# fiber; the host listens on ROUX_ADDRESS and ROUX_PORT (the race's), over
+# the app's port.
 
 import pf.Server
 import pf.Rocstache
