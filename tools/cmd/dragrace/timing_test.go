@@ -100,21 +100,3 @@ func TestCostOverTheLoad(t *testing.T) {
 		t.Fatal("no load duration, or one longer than the window: unchanged")
 	}
 }
-
-func TestCorrectWindowOnce(t *testing.T) {
-	round := Round{Seconds: 26, CPUBusyPct: 78, LoaderCPUBusyPct: 50, NetRxMbps: 1000}
-	round.correctWindow(20)
-	if round.CPUBusyPct != 100 || math.Abs(round.LoaderCPUBusyPct-65) > 1e-9 ||
-		math.Abs(round.NetRxMbps-1300) > 1e-9 || round.LoadSeconds != 20 {
-		t.Fatalf("corrected: %+v", round)
-	}
-	round.correctWindow(20)
-	if math.Abs(round.LoaderCPUBusyPct-65) > 1e-9 {
-		t.Fatal("corrected twice")
-	}
-	old := Round{CPUBusyPct: 90}
-	old.correctWindow(20)
-	if old.CPUBusyPct != 90 || old.LoadSeconds != 0 {
-		t.Fatal("a round with no window is left alone")
-	}
-}

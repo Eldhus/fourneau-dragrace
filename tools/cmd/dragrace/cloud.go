@@ -70,7 +70,7 @@ func commandRaceCloud(ctx context.Context, root string, args []string) error {
 	}
 	run.Timing.BuildSeconds = watch.since()
 	launched := time.Now()
-	fleet, err := launchFleet(ctx, do, race, run.ID)
+	fleet, err := launchFleet(ctx, do, race)
 	// Each class deletes its pair when it is done (raceFleet); this, the
 	// rest, however the race ends.
 	defer fleet.destroy(do)
@@ -183,7 +183,7 @@ func (fleet *Fleet) costs(prices map[string]float64) []DropletCost {
 	return costs
 }
 
-func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet, error) {
+func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 	fleet := &Fleet{loaders: map[string]Droplet{}, servers: map[string]Droplet{},
 		machines: map[int]SSHMachine{}, lives: map[int]*dropletLife{}}
 	var err error
@@ -257,7 +257,6 @@ func launchFleet(ctx context.Context, do Provider, race Race, id string) (*Fleet
 			return fleet, err
 		}
 	}
-	_ = id
 	return fleet, nil
 }
 

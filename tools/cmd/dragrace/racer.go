@@ -703,7 +703,7 @@ func (racer *Racer) raceCloud(ctx context.Context, root string, run RunPost, rac
 	workerTime := workerTimeFor(ageMinutes)
 	tarball := filepath.Join(filepath.Dir(root), "race.tar.gz")
 	launched := time.Now()
-	fleet, err := launchFleet(ctx, racer.provider, race, run.ID)
+	fleet, err := launchFleet(ctx, racer.provider, race)
 	defer fleet.destroy(racer.provider)
 	if err != nil {
 		return nil, err

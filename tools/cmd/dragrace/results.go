@@ -29,7 +29,7 @@ type Run struct {
 
 type MachineInfo struct {
 	Role   string `json:"role"`  // "server" or "loader"
-	Class  string `json:"class"` // the server class ("loader" before 2026-10-06: one loader for all)
+	Class  string `json:"class"` // the server class; a loader's is the class it loads
 	Size   string `json:"size"`
 	CPU    string `json:"cpu"`
 	CPUs   int    `json:"cpus"`
@@ -51,8 +51,7 @@ type Result struct {
 	Note       string  `json:"note"` // always present: the site reads it as a field
 	Rounds     []Round `json:"rounds"`
 	// The rounds summarized (summarize), as the site's pages do: the best
-	// round's rate, the rounds' median percentiles. A run published before
-	// a percentile was recorded shows it as 0.
+	// round's rate, the rounds' median percentiles.
 	BestRPS      float64 `json:"best_rps"`
 	MedianP50Ms  float64 `json:"median_p50_ms"`
 	MedianP95Ms  float64 `json:"median_p95_ms"`
@@ -62,8 +61,7 @@ type Result struct {
 	OpenLoop []OpenStep `json:"open_loop"`
 }
 
-// Round is one measured run. The fields after rss_kib were added on
-// 2026-10-06 and are 0 in older runs.
+// Round is one measured run.
 type Round struct {
 	RPS         float64 `json:"rps"`
 	P50Ms       float64 `json:"p50_ms"`
@@ -182,10 +180,7 @@ func runID(where string, started time.Time) string {
 
 // normalize writes "no rounds" as an empty list, not null: Go marshals a
 // nil slice as null, and the site (Roc's Json.parse into a List) refuses
-// a null where a list is due. Applied to every run saved or published, so
-// runs stored with null are mended when the site is next published. The
-// medians are taken again from the rounds, so a run stored before a median
-// was recorded (p95, p99.9: 2026-10-06) has it, from rounds that have it.
+// a null where a list is due. It also summarizes each result.
 func (run *Run) normalize() {
 	for i := range run.Results {
 		if run.Results[i].Rounds == nil {
@@ -194,36 +189,7 @@ func (run *Run) normalize() {
 		if run.Results[i].OpenLoop == nil {
 			run.Results[i].OpenLoop = []OpenStep{}
 		}
-		for j := range run.Results[i].Rounds {
-			run.Results[i].Rounds[j].correctWindow(run.Race.MeasureSeconds)
-		}
 		run.Results[i].summarize()
 	}
 	run.Timing.normalize()
-}
-
-// correctWindow mends a round measured before its rates were taken over
-// the load's duration (2026-10-06, the first races to record the network
-// and the loader): its window held the shell calls around the load too,
-// about 26 s for 20 s of load, so its shares and rates read low. The load
-// lasted the race's measuring time; the round is marked with it, so it is
-// mended once.
-func (round *Round) correctWindow(measureSeconds int) {
-	if round.LoadSeconds > 0 || round.Seconds <= 0 || measureSeconds <= 0 {
-		return
-	}
-	load := float64(measureSeconds)
-	cost := ServerCost{Seconds: round.Seconds, NetRxMbps: round.NetRxMbps,
-		NetTxMbps: round.NetTxMbps, NetRxPPS: round.NetRxPPS, NetTxPPS: round.NetTxPPS,
-		CPU: CPUShares{Busy: round.CPUBusyPct, User: round.CPUUserPct,
-			System: round.CPUSystemPct, Irq: round.CPUIrqPct, Softirq: round.CPUSoftirqPct,
-			Steal: round.StealPct}}.over(load)
-	round.CPUBusyPct, round.StealPct = cost.CPU.Busy, cost.CPU.Steal
-	round.CPUUserPct, round.CPUSystemPct = cost.CPU.User, cost.CPU.System
-	round.CPUIrqPct, round.CPUSoftirqPct = cost.CPU.Irq, cost.CPU.Softirq
-	round.NetRxMbps, round.NetTxMbps = cost.NetRxMbps, cost.NetTxMbps
-	round.NetRxPPS, round.NetTxPPS = cost.NetRxPPS, cost.NetTxPPS
-	// The loader's window was much the same length.
-	round.LoaderCPUBusyPct = math.Min(100, round.LoaderCPUBusyPct*round.Seconds/load)
-	round.LoadSeconds = load
 }

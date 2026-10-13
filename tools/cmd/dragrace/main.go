@@ -1,7 +1,9 @@
 // Command dragrace builds the competitors, races them (on this machine or
-// on DigitalOcean droplets), and renders the results site.
+// on DigitalOcean droplets), and builds, hosts and deploys the results site
+// (a roux app).
 //
-//	dragrace toolchain              fetch and verify the pinned Zig, Roc, oha
+//	dragrace toolchain              fetch Zig, roc, musl and oha at their
+//	                                pins; ready roux's platform and tools
 //	dragrace build                  build every competitor into out/bin
 //	dragrace race local [flags]     race on this machine, server and loader on
 //	                                separate CPUs
@@ -11,7 +13,6 @@
 //	                                minute
 //	dragrace sizes [-prefix c]      droplet sizes and prices in race.json's region
 //	dragrace reap                   delete race droplets older than allowed
-//	dragrace fingerprint            the commits a race would race, as JSON
 //	dragrace site build             build the site (a roux app) into out/bin
 //	dragrace site dev               the site rebuilt and reloaded as it is
 //	                                edited (Roc's dev backend; for the UI)
@@ -132,8 +133,6 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 		return commandSizes(ctx, root, args)
 	case "reap":
 		return commandReap(ctx, root, args)
-	case "fingerprint":
-		return commandFingerprint(root)
 	case "site":
 		return commandSite(ctx, root, args)
 	case "worker":
@@ -156,9 +155,9 @@ func dispatch(ctx context.Context, root, command string, args []string) error {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
-  toolchain | build | race local | race cloud | adhoc race|down |
-  sizes | reap | fingerprint |
-  bundle | worker | site build|provision|install-server|race-now|backups |
+  toolchain | build | race local | race cloud | adhoc race|down | diff |
+  sizes | reap |
+  bundle | worker | site build|dev|provision|install-server|race-now|backups |
   guard | racer serve|check|once|provision|install | host-agent |
   hosts check | version
 See README.md.`)

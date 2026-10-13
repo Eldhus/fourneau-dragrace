@@ -211,9 +211,9 @@ func TestGitHubRetriesAMoment(t *testing.T) {
 		TagName string `json:"tag_name"`
 	}
 	failures["/repos/Eldhus/fourneau-dragrace/releases/latest"] = 1
-	if err := github.call(ctx, http.MethodGet, "/repos/Eldhus/fourneau-dragrace/releases/latest", nil,
+	if err := github.get(ctx, "/repos/Eldhus/fourneau-dragrace/releases/latest",
 		&release); err != nil || len(release.TagName) != 40 || len(waits) != 1 {
-		t.Fatalf("a call after a 504: %v %q %v", err, release.TagName, waits)
+		t.Fatalf("a get after a 504: %v %q %v", err, release.TagName, waits)
 	}
 	waits = nil
 	if err := github.download(ctx, server.URL+"/gone", "00", path); err == nil || len(waits) != 0 {
@@ -263,7 +263,7 @@ func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 			t.Errorf("path %s", r.URL.Path)
 		}
 		json.NewEncoder(w).Encode([]map[string]any{
-			{"tag_name": "build-20261007T060000Z", "body": string(body), "published_at": time.Now(),
+			{"tag_name": "build-20261007T060000Z", "body": string(body),
 				"assets": []map[string]string{{"name": "race.tar.gz", "browser_download_url": "u"}}},
 			{"tag_name": "v1", "body": string(body)},
 			{"tag_name": "build-broken", "body": "not json"},

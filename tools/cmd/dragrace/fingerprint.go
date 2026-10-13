@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 )
 
-// Fingerprint is what a race raced: the commits of this repository, of
-// fourneau and of roux. The nightly races only when it differs from the last
-// run's.
+// Fingerprint is the three checkouts' commits (this repository, fourneau,
+// roux) and whether each has uncommitted changes (git status --porcelain,
+// untracked files included).
 type Fingerprint struct {
 	Dragrace      string `json:"dragrace"`
 	DragraceDirty bool   `json:"dragrace_dirty"`
@@ -46,17 +44,4 @@ func commitOf(ctx context.Context, dir string) (string, bool, error) {
 	}
 	status, err := output(ctx, dir, "git", "status", "--porcelain")
 	return commit, status != "", err
-}
-
-func commandFingerprint(root string) error {
-	fingerprint, err := fingerprintOf(root)
-	if err != nil {
-		return err
-	}
-	bytes, err := json.MarshalIndent(fingerprint, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(bytes))
-	return nil
 }

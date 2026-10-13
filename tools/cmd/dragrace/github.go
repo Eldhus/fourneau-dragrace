@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -91,24 +90,12 @@ type BuildInfo struct {
 
 // Build is a release of build.yml.
 type Build struct {
-	Info BuildInfo
-	// When the release was published. Not GitHub's `created_at`: for a
-	// release that is the date of the tagged commit, which can be long
-	// before the build.
-	PublishedAt time.Time
-	Assets      map[string]string // file name -> download URL
+	Info   BuildInfo
+	Assets map[string]string // file name -> download URL
 }
 
-func (github *GitHub) request(ctx context.Context, method, url string, body any) (*http.Response, error) {
-	var reader io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		reader = bytes.NewReader(encoded)
-	}
-	request, err := http.NewRequestWithContext(ctx, method, url, reader)
+func (github *GitHub) request(ctx context.Context, url string) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +104,13 @@ func (github *GitHub) request(ctx context.Context, method, url string, body any)
 	return github.client.Do(request)
 }
 
-func (github *GitHub) call(ctx context.Context, method, path string, body, into any) error {
-	what := "GitHub " + method + " " + path
+// get reads path of GitHub's API into into; a moment's failure is tried
+// again (retry).
+func (github *GitHub) get(ctx context.Context, path string, into any) error {
+	what := "GitHub GET " + path
 	var text []byte
 	err := github.retry(ctx, what, func() error {
-		response, err := github.request(ctx, method, github.api+path, body)
+		response, err := github.request(ctx, github.api+path)
 		if err != nil {
 			return fmt.Errorf("%w: %w", errGitHubMoment, err)
 		}
@@ -145,16 +134,14 @@ func (github *GitHub) call(ctx context.Context, method, path string, body, into 
 // whose body is not a build.json is not one.
 func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
 	var releases []struct {
-		TagName     string    `json:"tag_name"`
-		Body        string    `json:"body"`
-		PublishedAt time.Time `json:"published_at"`
-		Assets      []struct {
+		TagName string `json:"tag_name"`
+		Body    string `json:"body"`
+		Assets  []struct {
 			Name string `json:"name"`
 			URL  string `json:"browser_download_url"`
 		} `json:"assets"`
 	}
-	if err := github.call(ctx, http.MethodGet, "/repos/"+github.repository+"/releases?per_page=30",
-		nil, &releases); err != nil {
+	if err := github.get(ctx, "/repos/"+github.repository+"/releases?per_page=30", &releases); err != nil {
 		return nil, err
 	}
 	var builds []Build
@@ -166,7 +153,7 @@ func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
 		if json.Unmarshal([]byte(release.Body), &info) != nil || len(info.Commits) == 0 {
 			continue
 		}
-		build := Build{Info: info, PublishedAt: release.PublishedAt, Assets: map[string]string{}}
+		build := Build{Info: info, Assets: map[string]string{}}
 		for _, asset := range release.Assets {
 			build.Assets[asset.Name] = asset.URL
 		}
