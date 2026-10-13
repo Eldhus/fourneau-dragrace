@@ -93,6 +93,7 @@ RaceClasses :: [].{
 								path : Str,
 							},
 						),
+						loader_bound : Bool,
 						measure : Str,
 						run : Str,
 						ticks_x : List({ label : Str, x : Str }),

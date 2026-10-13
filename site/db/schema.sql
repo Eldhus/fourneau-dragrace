@@ -2,11 +2,12 @@
 -- rows. STRICT, as roux-db requires. Times are
 -- ISO 8601 UTC text ("2026-10-07T07:00:00Z"), which sorts as time; the
 -- site's own times come from SQLite's clock (`now`). A flag is INTEGER 0
--- or 1. No migrations yet: a change here is applied over SSH.
+-- or 1. A change here ships with a dated migration in site/migrations,
+-- which the host agent runs on deploy.
 
--- What was asked: a check (race only if a repository has a commit the
--- last finished run did not race) by the racer's timer, or a race by the
--- owner. The racer takes the oldest not taken.
+-- What was asked: a check (race only if the race key changed since the
+-- last finished run) by the racer's timer, or a race by
+-- the owner. The racer takes the oldest not taken.
 CREATE TABLE requests (
   id INTEGER PRIMARY KEY,
   kind TEXT NOT NULL CHECK (kind IN ('check', 'race')),
@@ -284,8 +285,8 @@ CREATE TABLE open_step_parts (
     REFERENCES open_steps (run_id, class, workload, competitor, step)
 ) STRICT, WITHOUT ROWID;
 
--- Each repository's newest commit as the racer last saw it: the race page
--- says whether tonight's check will race.
+-- The commits tonight's check would race, as the racer last said (the last
+-- race's when nothing is new): the race page says whether it will race.
 CREATE TABLE heads (
   repository TEXT PRIMARY KEY CHECK (repository IN ('fourneau-dragrace', 'fourneau', 'roux')),
   commit_sha TEXT NOT NULL,

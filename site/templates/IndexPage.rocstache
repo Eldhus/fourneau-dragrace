@@ -9,7 +9,7 @@
 <article class="prose">
 <h2>How it runs</h2>
 <ul>
-<li>Nightly, on a new commit to fourneau, roux or this repository.</li>
+<li>Nightly, when something raced has changed: fourneau, roux, a competitor, or the race itself. A change to this site alone does not race.</li>
 <li>Fresh DigitalOcean droplets; <a href="https://github.com/hatoo/oha">oha</a> loads the server over the private network.</li>
 </ul>
 <p>Details: <a href="/workloads">Workloads</a>. To make one of these servers faster: <a href="/contribute">Contribute</a>.</p>

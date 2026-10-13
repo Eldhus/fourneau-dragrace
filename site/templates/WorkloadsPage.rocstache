@@ -19,13 +19,13 @@
 <h2>The race</h2>
 <ul>
 <li><b>Machines.</b> Each server class gets a fresh server droplet and a loader droplet with more vCPUs, running <a href="https://github.com/hatoo/oha">oha</a>, in one region, over the private network. The classes race at the same time; every droplet is deleted afterwards.</li>
-<li><b>Checks.</b> Before racing, <code>/plaintext</code> must answer exactly <code>Hello, World!</code>, <code>/echo</code> the body it was sent, <code>/menu</code> the reference page, <code>/sse</code> the reference stream with one chunk per event (and 400 without signals), and an unknown path 404. A server that fails is a DNF.</li>
-<li><b>Builds.</b> Each server is built and configured the way its users ship it. Every version is pinned and recorded with the results.</li>
-<li><b>Noise.</b> Shared-vCPU classes record CPU steal, so a noisy night shows up in the results.</li>
+<li><b>Checks.</b> Before racing, <code>/plaintext</code> must answer exactly <code>Hello, World!</code>, <code>/echo</code> the body it was sent, <code>/menu</code> the reference page, <code>/sse</code> the reference stream with one chunk per event (and 400 without signals), and an unknown path 404; over TLS, TLS&nbsp;1.3 with HTTP/2 by ALPN; without TLS, <code>/plaintext</code> over h2c too. RealWorld&rsquo;s answers are checked against the seed&rsquo;s model before its climb. Each mode, with TLS and without, is checked on its own: a server that fails one is a DNF there and still races the other.</li>
+<li><b>Builds.</b> Each server is built and configured the way its users ship it. Every dependency is pinned but fourneau and roux, which race their master; each race records their commits and the toolchains&rsquo; versions.</li>
+<li><b>Noise.</b> Every round records CPU steal, and each machine its CPU model, so a night&rsquo;s hardware shows in its data.</li>
 </ul>
 
 <h2>Closed loop</h2>
-<p>oha holds <i>N</i> connections (each workload&rsquo;s above), each sending its next request when the last answer lands, so every server runs flat out at its own pace. Each workload gets a warmup{{?ready}} of {{ warmup }}&nbsp;s{{/ready}}, discarded, then a measured run{{?ready}} of {{ measure }}&nbsp;s{{/ready}}, in {{?ready}}{{ rounds }} {{/ready}}rounds of a seeded random order.</p>
+<p>oha holds <i>N</i> connections (each workload&rsquo;s above), each sending its next request when the last answer lands, so every server runs flat out at its own pace. Each closed-loop workload (all but RealWorld) gets, in each of {{?ready}}{{ rounds }} {{/ready}}rounds of a seeded random order, a warmup{{?ready}} of {{ warmup }}&nbsp;s{{/ready}}, discarded, then a measured run{{?ready}} of {{ measure }}&nbsp;s{{/ready}}.</p>
 <ul>
 <li><b>Throughput</b> is the best round&rsquo;s, as a benchmark takes the fastest of its repeats: a server can do no more than it did, and a round that fell short met noise (a neighbour, the network, a frequency change).</li>
 <li><b>Each latency percentile</b> is the rounds&rsquo; median: a tail is the server&rsquo;s own rare stalls, so the least would report the round that missed them and the most the round a neighbour hit.</li>
@@ -38,15 +38,15 @@
 </ul>
 
 <h2>Open loop</h2>
-<p>So each server then climbs a ladder{{?ready}} on {{ ladder }}{{/ready}}: fixed offered rates{{?ready}} at {{ shares }}{{/ready}} of its own closed-loop best, latency counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each percentile belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed. The top step is past saturation on purpose: the queue grows for the whole step.</p>
-<p>Pacing costs oha about half again the CPU of its closed loop, so at the fastest servers&rsquo; rates the loader can bind. A step with the loader {{ loader_limit }}% busy or more is drawn hollow.</p>
+<p>RealWorld races open loop only: oha offers fixed rates, the same for every server (its card gives them), each step about &radic;2 the last, and each server climbs until it falls behind. Latency is counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each latency belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed.</p>
+<p>A step with the loader {{ loader_limit }}% busy or more is drawn hollow.</p>
 
 <h2>Caveats</h2>
 <ul>
 <li>The loader&rsquo;s CPU is recorded every round, so a round it bound shows.</li>
-<li>Echo on the larger classes can fill the network link first: the fast servers tie there (each round records the traffic).</li>
+<li>Echo on the dedicated class can fill the network link first: the fast servers tie there (each round records the traffic).</li>
 <li>Only 2xx answers count: an error or another status is no work done.</li>
 </ul>
-<p>This is a reproducible nightly on hardware anyone can rent, not a best case on tuned bare metal. The same race runs on your own machine: <code>dragrace race local</code>.</p>
+<p>This is a nightly on hardware anyone can rent (DigitalOcean picks the CPU; each class names it), not a best case on tuned bare metal. The same race runs on your own machine: <code>dragrace race local</code>.</p>
 </article>
 {{> Bottom}}

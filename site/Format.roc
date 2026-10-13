@@ -22,10 +22,10 @@ Format :: [].{
 			Err(_) => "0.00"
 		}
 
-	## Milliseconds of latency, two decimals; 0 is a percentile the run did
-	## not record (p95 and p99.9 before 2026-10-06), shown as a dash.
+	## Milliseconds of latency, two decimals; 0 is none recorded, shown as a
+	## dash.
 	latency : F64 -> Str
-	latency = |milliseconds| if milliseconds <= 0.0 "–" else Format.two_decimals(milliseconds)
+	latency = |milliseconds| if milliseconds <= 0.0 "—" else Format.two_decimals(milliseconds)
 
 	## Two significant figures, at most four characters where it matters
 	## (the p99 beside a bar): 0.234 is "0.23", 2.34 is
@@ -33,7 +33,7 @@ Format :: [].{
 	two_figures : F64 -> Str
 	two_figures = |value|
 		if value <= 0.0 {
-			"–"
+			"—"
 		} else if value < 0.995 {
 			Format.two_decimals(value)
 		} else if value < 9.95 {
@@ -105,10 +105,10 @@ expect Format.two_decimals(4.0) == "4.00"
 expect Format.two_decimals(0.05) == "0.05"
 expect Format.one_decimal(81.648) == "81.6"
 expect Format.short("49da1f40d81d946096dc88f6011ac65c3c44c1a5") == "49da1f4"
-expect Format.latency(0.0) == "–"
+expect Format.latency(0.0) == "—"
 expect Format.latency(1.234) == "1.23"
 expect Format.two_figures(0.234) == "0.23" and Format.two_figures(0.05) == "0.05" and Format.two_figures(0.996) == "1.0"
 expect Format.two_figures(2.34) == "2.3" and Format.two_figures(9.96) == "10" and Format.two_figures(23.4) == "23"
 expect Format.two_figures(99.6) == "100" and Format.two_figures(207.4) == "210" and Format.two_figures(1234.0) == "1200"
-expect Format.two_figures(0.0) == "–"
+expect Format.two_figures(0.0) == "—"
 expect Format.compact(100000.0) == "100k" and Format.compact(37500.0) == "37.5k" and Format.compact(500.0) == "500" and Format.compact(0.0) == "0"

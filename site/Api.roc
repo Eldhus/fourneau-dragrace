@@ -105,8 +105,8 @@ Api :: [].{
 	}
 
 	## A result, as results.go's Result: the rounds and open-loop steps whole.
-	## The racer's own summary of the rounds (`best_*`; `median_*` before
-	## 2026-10-11) is not read: the pages take theirs from the rounds.
+	## The racer's own summary of the rounds (`best_rps`, `median_*_ms`) is
+	## not read: the pages take theirs from the rounds.
 	ResultPost : {
 		class : Str,
 		workload : Str,
@@ -797,11 +797,11 @@ expect {
 	}
 }
 
-# A racer from before 2026-10-11 posts its medians: still a result, the
-# medians skipped (the pages take the rounds' best).
+# The racer's own summary (best_rps, median_*_ms) is not read: the pages
+# take theirs from the rounds.
 expect {
 	parsed : Try(Api.ResultPost, _)
-	parsed = Json.parse("{\"class\":\"smallest\",\"workload\":\"plaintext\",\"competitor\":\"go\",\"valid\":true,\"note\":\"\",\"rounds\":[],\"median_rps\":41863.2,\"median_p50_ms\":1.0,\"median_p95_ms\":2.0,\"median_p99_ms\":3.0,\"median_p999_ms\":4.0,\"open_loop\":[]}")
+	parsed = Json.parse("{\"class\":\"smallest\",\"workload\":\"plaintext\",\"competitor\":\"go\",\"valid\":true,\"note\":\"\",\"rounds\":[],\"best_rps\":41863.2,\"median_p50_ms\":1.0,\"median_p95_ms\":2.0,\"median_p99_ms\":3.0,\"median_p999_ms\":4.0,\"open_loop\":[]}")
 	match parsed {
 		Ok(result) => result.competitor == "go" and result.valid
 		Err(_) => Bool.False

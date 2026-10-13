@@ -17,13 +17,11 @@ WorkloadsPage :: [].{
 			},
 		),
 		home : Bool,
-		ladder : Str,
 		loader_limit : Str,
 		measure : Str,
 		nav : List({ current : Bool, href : Str, label : Str }),
 		ready : Bool,
 		rounds : Str,
-		shares : Str,
 		title : Str,
 		variants : List(
 			{

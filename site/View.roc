@@ -5,7 +5,7 @@ import db/Live
 
 ## What the pages show, made from the races: every number formatted, every
 ## bar's share and every chart's path computed here, so the templates only
-## place text. (This was race.js, drawing in the browser.)
+## place text.
 View :: [].{
 	Commit : { name : Str, short : Str, url : Str }
 	## `hollow`: something besides the server's CPU limited the result (the
@@ -64,8 +64,9 @@ View :: [].{
 	## An open line before its label is placed: `end_x`, `end_y` are where
 	## it ends, for spreading the labels apart (`spread_open`).
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
-	## `caption`: one sentence on the load; `measure`: the y axis's note.
-	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick) }
+	## `caption`: one sentence on the load; `measure`: the y axis's note;
+	## `loader_bound`: a point is hollow, so the legend explains it.
+	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick), loader_bound : Bool }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -96,7 +97,7 @@ View :: [].{
 	## tests sent that way.
 	VariantGroup : { label : Str, intro : Str, rows : List(VariantRow) }
 	VariantRow : { line : List(Str), tests : Str }
-	Workloads : { ready : Bool, cards : List(WorkloadCard), variants : List(VariantGroup), rounds : Str, warmup : Str, measure : Str, shares : Str, ladder : Str, loader_limit : Str }
+	Workloads : { ready : Bool, cards : List(WorkloadCard), variants : List(VariantGroup), rounds : Str, warmup : Str, measure : Str, loader_limit : Str }
 
 	workloads : List(Pages.WorkloadSpecs), Pages.RaceSettings -> Workloads
 	workloads = |specs, settings| {
@@ -107,8 +108,6 @@ View :: [].{
 		rounds: settings.rounds.to_str(),
 		warmup: settings.warmup_seconds.to_str(),
 		measure: settings.measure_seconds.to_str(),
-		shares: settings.shares,
-		ladder: settings.ladder,
 		loader_limit: Format.thousands(loader_limit_pct),
 	}
 
@@ -265,8 +264,8 @@ View :: [].{
 			{ name: "tokio", version: v.tokio.version },
 			{ name: "oha (load)", version: v.oha.version },
 			{ name: "droplet image", version: v.droplet_image },
-			{ name: "fourneau", version: "master at ${Format.short(run.fingerprint.fourneau)}" },
-		].concat(if run.fingerprint.roux.is_empty() [] else [{ name: "roux", version: "master at ${Format.short(run.fingerprint.roux)}" }])
+			{ name: "fourneau", version: Format.short(run.fingerprint.fourneau) },
+		].concat(if run.fingerprint.roux.is_empty() [] else [{ name: "roux", version: Format.short(run.fingerprint.roux) }])
 	}
 }
 
@@ -331,9 +330,8 @@ tab = |page, class, section, label, current| {
 
 class_view : Data.Run, Data.ServerClass, Str -> View.Class
 class_view = |run, class, section| {
-	# A loader is its class's now; before 2026-10-06 one loader, of class
-	# "loader", raced every class.
-	described = run.machines.keep_if(|machine| machine.class == class.name or machine.class == "loader")
+	# A loader is its class's.
+	described = run.machines.keep_if(|machine| machine.class == class.name)
 	# The server first: it is what the class is about.
 	ordered = described.sort_with(|a, b| if a.role == b.role Same else if a.role == "server" Before else After)
 	machines = ordered.map(|m| { role: m.role, items: [m.size, vcpus(m.cpus)].concat(memory(m.memory_mib)).concat([cpu_name(m.cpu), "Linux ${m.kernel}"]) })
@@ -361,7 +359,7 @@ intro = |section|
 	if section == "tls" {
 		"The realistic deployment: HTTPS as browsers reach a server with no proxy in front. TLS 1.3, AES-128-GCM, X25519, an ECDSA P-256 certificate, no session resumption; HTTP/2 by ALPN (churn: HTTP/1.1). basic-webserver serves no TLS."
 	} else if section == "h2c" {
-		"HTTP/2 without TLS, by prior knowledge: HTTP/2's own cost, apart from TLS's. No browser speaks it; on the race page it sits below either section."
+		"HTTP/2 without TLS, by prior knowledge: HTTP/2's own cost, apart from TLS's. No browser speaks it."
 	} else {
 		"Plain HTTP/1.1, as a server behind a proxy sees it."
 	}
@@ -933,7 +931,8 @@ open_chart = |{ key, title, summary, variant, run, results, mixed }| {
 		} else {
 			{ caption: ladder, measure: "p99 latency" }
 		}
-	{ key, title, caption, variant, run, measure, lines, ticks_x, ticks_y }
+	loader_bound = lines.any(|l| l.dots.any(|dot| dot.hollow))
+	{ key, title, caption, variant, run, measure, lines, ticks_x, ticks_y, loader_bound }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine
