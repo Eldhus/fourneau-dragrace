@@ -1,0 +1,23 @@
+[Unit]
+Description=the guard: the DigitalOcean token and the budget
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=guard
+Group=racer
+LoadCredentialEncrypted=digitalocean-token
+RuntimeDirectory=dragrace-guard
+RuntimeDirectoryMode=0750
+StateDirectory=dragrace-guard
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/dragrace-guard guard
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target

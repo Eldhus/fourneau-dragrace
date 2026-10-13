@@ -22,6 +22,12 @@ import (
 //   - racer: runs `dragrace racer serve` from its state directory, a binary
 //     it updates itself from the newest build; reaches DigitalOcean only
 //     through the guard's socket (group racer).
+//
+// Its units and the racer's config are files in hosts/racer/ (and
+// hosts/common/); the guard's config is made at the install.
+
+// guardBinary is the guard: this dragrace binary, as installed.
+const guardBinary = "/usr/local/bin/dragrace-guard"
 
 const racerUserData = `#cloud-config
 disable_root: true
@@ -47,74 +53,6 @@ runcmd:
   - ufw --force enable
 `
 
-// racerUnits are the guard's and the racer's services, and the 05:00 check:
-// at least 90 minutes after Ubuntu's update run and its reboot (06:00 to
-// 07:30 UTC, the hosts' clock), all year (it was 03:00,
-// inside that window in summer).
-func racerUnits() map[string]string {
-	return map[string]string{
-		"/etc/systemd/system/dragrace-guard.service": `[Unit]
-Description=the guard: the DigitalOcean token and the budget
-After=network-online.target
-Wants=network-online.target
-[Service]
-User=guard
-Group=racer
-LoadCredentialEncrypted=digitalocean-token
-RuntimeDirectory=dragrace-guard
-RuntimeDirectoryMode=0750
-StateDirectory=dragrace-guard
-StateDirectoryMode=0700
-ExecStart=/usr/local/bin/dragrace-guard guard
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-Restart=always
-RestartSec=5
-[Install]
-WantedBy=multi-user.target
-`,
-		"/etc/systemd/system/dragrace-racer.service": `[Unit]
-Description=the racer: the site's requests, raced
-After=network-online.target dragrace-guard.service
-Wants=network-online.target
-[Service]
-User=racer
-LoadCredentialEncrypted=racer-token
-StateDirectory=dragrace-racer
-StateDirectoryMode=0700
-ExecStart=/var/lib/dragrace-racer/bin/dragrace racer serve
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-Restart=always
-RestartSec=10
-[Install]
-WantedBy=multi-user.target
-`,
-		"/etc/systemd/system/dragrace-racer-check.service": `[Unit]
-Description=Ask the site for a check: race tonight if anything is new
-[Service]
-Type=oneshot
-User=racer
-LoadCredentialEncrypted=racer-token
-ExecStart=/var/lib/dragrace-racer/bin/dragrace racer check
-`,
-		"/etc/systemd/system/dragrace-racer-check.timer": `[Unit]
-Description=05:00 New York time: the nightly check, after Ubuntu's updates and reboot
-[Timer]
-OnCalendar=*-*-* 05:00:00 America/New_York
-Persistent=true
-[Install]
-WantedBy=timers.target
-`,
-	}
-}
-
 // racerProvision makes the racer droplet, once, with the owner's token.
 func racerProvision(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer provision")
@@ -132,7 +70,7 @@ func racerProvision(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nThe racer is up at %s. Next:\n  dragrace racer install -host %s -site SITE_ADDRESS\n",
+	fmt.Printf("\nThe racer is up at %s. Next:\n  dragrace racer install -host %s\n",
 		host, host)
 	return nil
 }
@@ -147,22 +85,21 @@ func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64, adminKeyID int) Gua
 		Ledger: "/var/lib/dragrace-guard/ledger.json", AdminKeyID: adminKeyID}
 }
 
-// racerInstall sets the racer up, as cook: the guard (this binary, pinned)
-// and its config (with the admin key's id, looked up on the account), the
-// racer's first binary and config, the units, and the
-// two secrets as encrypted credentials, each sent on SSH's standard input:
-// the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring) and the
-// racer token from the keyring.
+// racerInstall sets the racer up, as cook: its files (hosts/racer/,
+// hosts/common/), the guard (this binary, pinned) and its config (with the
+// admin key's id, looked up on the account), the racer's first binary, and
+// the two secrets as encrypted credentials, each sent on SSH's standard
+// input: the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring) and
+// the racer token from the keyring.
 func racerInstall(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer install")
 	host := flags.String("host", "", "the racer's address")
-	siteHost := flags.String("site", "", "the site host's address")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
 	capUSD := flags.Float64("cap", 25, "the most the races may cost in a month, US dollars")
 	hourlyMaxUSD := flags.Float64("hourly-max", 0.25, "the most any droplet may cost an hour, US dollars")
 	flags.Parse(args)
-	if *host == "" || *siteHost == "" {
-		return fmt.Errorf("-host and -site are required")
+	if *host == "" {
+		return fmt.Errorf("-host is required")
 	}
 	race, err := loadRace(root)
 	if err != nil {
@@ -191,12 +128,6 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	racerJSON, err := json.MarshalIndent(RacerConfig{Site: "https://" + *siteHost,
-		Guard: guardConfig.Socket, Repository: "Eldhus/fourneau-dragrace",
-		State: "/var/lib/dragrace-racer"}, "", "  ")
-	if err != nil {
-		return err
-	}
 	racerToken, err := keyringToken(ctx, "racer-token")
 	if err != nil {
 		return err
@@ -205,27 +136,16 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	stamp, err := installStamp(ctx, root)
-	if err != nil {
-		return err
-	}
 	machine := ownerMachine(root, *host, *key, "racer-known-hosts")
 	if err := machine.Put(ctx, self, "/tmp/dragrace"); err != nil {
 		return err
 	}
-	if err := putFiles(ctx, machine, racerUnits(), 0o644); err != nil {
-		return err
-	}
-	if err := putFiles(ctx, machine, map[string]string{
-		"/etc/dragrace-guard/config.json": string(guardJSON),
-		"/etc/dragrace-racer/config.json": string(racerJSON), installedPath: stamp}, 0o644); err != nil {
-		return err
-	}
-	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
+	if err := installHost(ctx, machine, root, "racer", map[string]string{guardBinary: self},
+		map[string]string{"/etc/dragrace-guard/config.json": string(guardJSON)}); err != nil {
 		return err
 	}
 	setup := strings.Join(append(hostSetup("22"),
-		"sudo install -m 755 /tmp/dragrace /usr/local/bin/dragrace-guard",
+		"sudo install -m 755 /tmp/dragrace "+guardBinary,
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
 		// The installer's binary to start from: it replaces itself with the
 		// newest release within 10 minutes, idle (racer.update).

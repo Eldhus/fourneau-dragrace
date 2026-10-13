@@ -1,0 +1,8 @@
+{
+  "repository": "Eldhus/fourneau-dragrace",
+  "home": "/opt/dragrace-site",
+  "service": "dragrace-site.service",
+  "health": "https://fourneau.y2kbugger.com/api/health",
+  "database": "/var/lib/dragrace-site/site.db",
+  "user": "site"
+}

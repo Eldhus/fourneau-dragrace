@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily: restart the site, which renews its certificate when due
+[Timer]
+OnCalendar=*-*-* 04:17:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=dragrace-site-renew.service
+[Install]
+WantedBy=timers.target

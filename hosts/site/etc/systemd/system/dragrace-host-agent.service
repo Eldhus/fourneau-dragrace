@@ -1,0 +1,8 @@
+[Unit]
+Description=Deploy the newest build's site
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dragrace-host-agent host-agent
+TimeoutStartSec=15min

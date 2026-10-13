@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -393,9 +394,26 @@ func TestGuardConfigHasACeiling(t *testing.T) {
 	if err := guardConfigFor(race, 0.25, 25, 0).check(); err == nil {
 		t.Fatal("a guard with no admin key for its droplets accepted")
 	}
-	for _, unit := range racerUnits() {
-		if strings.Contains(unit, "digitalocean-token") && !strings.Contains(unit, "User=guard") {
-			t.Fatalf("a unit other than the guard's loads the DigitalOcean token:\n%s", unit)
+	files, err := hostTree("../../..", "racer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		unit, err := os.ReadFile(file.path)
+		if err != nil {
+			t.Fatal(err)
 		}
+		if strings.Contains(string(unit), "digitalocean-token") && !strings.Contains(string(unit), "User=guard") {
+			t.Fatalf("a file other than the guard's unit loads the DigitalOcean token:\n%s", unit)
+		}
+	}
+	// The racer's config (hosts/racer/) names the guard's socket and the
+	// owner's site.
+	var racer RacerConfig
+	if err := readJSON("../../../hosts/racer/etc/dragrace-racer/config.json", &racer); err != nil {
+		t.Fatal(err)
+	}
+	if racer.Guard != config.Socket || racer.Site != "https://"+siteName {
+		t.Fatalf("the racer's config: %+v; the guard's socket %s", racer, config.Socket)
 	}
 }

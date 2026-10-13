@@ -1,0 +1,7 @@
+[Unit]
+Description=05:00 New York time: the nightly check, after Ubuntu's updates and reboot
+[Timer]
+OnCalendar=*-*-* 05:00:00 America/New_York
+Persistent=true
+[Install]
+WantedBy=timers.target

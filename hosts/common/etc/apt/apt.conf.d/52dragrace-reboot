@@ -1,0 +1,2 @@
+// Reboot at the end of the update run when an update needs it.
+Unattended-Upgrade::Automatic-Reboot "true";

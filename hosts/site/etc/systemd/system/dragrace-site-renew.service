@@ -1,0 +1,5 @@
+[Unit]
+Description=Restart the site, which renews its certificate when due
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart dragrace-site.service

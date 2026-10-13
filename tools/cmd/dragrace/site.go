@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -22,6 +21,13 @@ import (
 //     obtains its own certificate (fourneau's ACME, through roux's host).
 //   - the host agent (root, a timer, every minute): deploys the newest
 //     build's site, rolling back one that does not answer.
+//
+// Its units and configs are files in hosts/site/ (and hosts/common/).
+
+// siteName is the site's name (an A record): the host the installs
+// and the check reach, and the one hosts/ names (the certificate's, the host
+// agent's health check's, the racer's site).
+const siteName = "fourneau.y2kbugger.com"
 
 // siteHome is the site's code: releases/ID, and current, a link to one.
 const siteHome = "/opt/dragrace-site"
@@ -30,8 +36,11 @@ const siteHome = "/opt/dragrace-site"
 // and static, a link into the current release.
 const siteState = "/var/lib/dragrace-site"
 
+// hostAgentBinary is the host agent: this dragrace binary, as installed.
+const hostAgentBinary = "/usr/local/bin/dragrace-host-agent"
+
 // siteUserData makes the users and the firewall, once. The services are
-// install-server's (siteUnits), so a host made earlier and one made today
+// install-server's (hosts/site/), so a host made earlier and one made today
 // run the same ones.
 const siteUserData = `#cloud-config
 disable_root: true
@@ -55,124 +64,6 @@ runcmd:
   - ufw allow 443/tcp
   - ufw --force enable
 `
-
-// The ACME directories install-server can point the site at: staging to
-// try (its certificates are not trusted by browsers), production after.
-var acmeDirectories = map[string]string{
-	"staging":    "https://acme-staging-v02.api.letsencrypt.org/directory",
-	"production": "https://acme-v02.api.letsencrypt.org/directory",
-}
-
-// siteSocket is one of the site's listening sockets, systemd's to hold: on
-// every IPv4 address as ROUX_ADDRESS was, named for the site to find it.
-func siteSocket(port int, name string) string {
-	return fmt.Sprintf(`[Unit]
-Description=the dragrace site's port %d, held across its restarts
-[Socket]
-ListenStream=0.0.0.0:%d
-FileDescriptorName=%s
-Backlog=4096
-Service=dragrace-site.service
-[Install]
-WantedBy=sockets.target
-`, port, port, name)
-}
-
-// siteUnits are the site's systemd units and the kernel modules it needs:
-// the site on 443 with its own certificate (ACME, for the host's IP
-// address, Let's Encrypt's six-day profile) and port 80 redirecting; a
-// daily restart, which renews the certificate when a third of its life is
-// left (fourneau's acme.zig); the host agent's timer. systemd holds the
-// two listening sockets (fourneau's listen.zig, by these names), so a
-// restart (a deploy, the daily renewal) refuses no one: a client waits in
-// the socket's queue while the old site drains and the new one starts.
-func siteUnits(host, acmeDirectory string) map[string]string {
-	service := `[Unit]
-Description=the dragrace site (roux)
-After=network-online.target dragrace-site-https.socket dragrace-site-http.socket
-Wants=network-online.target
-Requires=dragrace-site-https.socket dragrace-site-http.socket
-ConditionPathExists={site_home}/current/dragrace-site
-[Service]
-Sockets=dragrace-site-https.socket dragrace-site-http.socket
-User=site
-StateDirectory=dragrace-site
-StateDirectoryMode=0700
-WorkingDirectory={site_state}
-Environment=ROUX_ADDRESS=0.0.0.0
-Environment=ROUX_REDIRECT_PORT=80
-Environment=ROUX_ACME_DIRECTORY={acme_directory}
-Environment=ROUX_ACME_IDENTIFIER={host}
-Environment=ROUX_ACME_STATE={site_state}
-Environment=ROUX_ACME_PROFILE=shortlived
-ExecStart={site_home}/current/dragrace-site
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_INET6
-RestrictNamespaces=yes
-LockPersonality=yes
-MemoryDenyWriteExecute=yes
-LimitNOFILE=65536
-MemoryMax=256M
-Restart=always
-RestartSec=5
-[Install]
-WantedBy=multi-user.target
-`
-	// Braced placeholders: a bare ACME_DIRECTORY also matched inside
-	// ROUX_ACME_DIRECTORY, and the site would not start.
-	service = strings.NewReplacer("{site_home}", siteHome, "{site_state}", siteState,
-		"{acme_directory}", acmeDirectory, "{host}", host).Replace(service)
-	return map[string]string{
-		"/etc/systemd/system/dragrace-site.service":      service,
-		"/etc/systemd/system/dragrace-site-https.socket": siteSocket(443, "https"),
-		"/etc/systemd/system/dragrace-site-http.socket":  siteSocket(80, "http"),
-		"/etc/systemd/system/dragrace-site-renew.service": `[Unit]
-Description=Restart the site, which renews its certificate when due
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl restart dragrace-site.service
-`,
-		"/etc/systemd/system/dragrace-site-renew.timer": `[Unit]
-Description=Daily: restart the site, which renews its certificate when due
-[Timer]
-OnCalendar=*-*-* 04:17:00
-RandomizedDelaySec=30m
-Persistent=true
-Unit=dragrace-site-renew.service
-[Install]
-WantedBy=timers.target
-`,
-		"/etc/systemd/system/dragrace-host-agent.service": `[Unit]
-Description=Deploy the newest build's site
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/dragrace-host-agent host-agent
-TimeoutStartSec=15min
-`,
-		"/etc/systemd/system/dragrace-host-agent.timer": `[Unit]
-Description=Every minute: deploy the newest build's site
-[Timer]
-OnBootSec=1min
-OnUnitInactiveSec=1min
-[Install]
-WantedBy=timers.target
-`,
-		// kTLS: the kernel loads tls only for a CAP_NET_ADMIN process;
-		// the site has none, so it is loaded at boot.
-		"/etc/modules-load.d/fourneau-tls.conf": "tls\n",
-	}
-}
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
@@ -222,9 +113,10 @@ func siteProvision(ctx context.Context, root string, args []string) error {
 	fmt.Printf(`
 The site host is up at %s; nothing serves until install-server.
 
-Next:
-  dragrace site install-server -host %s
-`, host, host)
+Next: %s's A record
+to %s, then
+  dragrace site install-server
+`, host, siteName, host)
 	return nil
 }
 
@@ -283,63 +175,29 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 		KnownHosts: filepath.Join(secretsDir(root), knownHosts)}
 }
 
-// siteHostConfig is the host agent's config, as the install writes it.
-func siteHostConfig(host string) (string, error) {
-	config, err := json.MarshalIndent(HostConfig{Repository: "Eldhus/fourneau-dragrace",
-		Home: siteHome, Service: "dragrace-site.service",
-		Health:   "https://" + host + "/api/health",
-		Database: siteState + "/site.db", User: "site"}, "", "  ")
-	return string(config), err
-}
-
 // siteInstallServer sets the site host up,
-// as cook: the units, the host agent (this dragrace binary, pinned) and
-// its config, the site's two tokens from the owner's keyring (made there
-// if missing), and a first deploy. Run again after a change to the units
-// or the agent; never needed for a new site: a push deploys that.
+// as cook: its files (hosts/site/, hosts/common/), the host agent (this
+// dragrace binary, pinned), the site's two tokens from the owner's keyring
+// (made there if missing), and a first deploy. Run again after a change to
+// hosts/ or the agent; never needed for a new site: a push deploys that.
 func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site install-server")
-	host := flags.String("host", "", "the site host's address (and the certificate's)")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
-	// Production by default: the site is live, and an install without the
-	// flag put an untrusted staging certificate on it.
-	acme := flags.String("acme", "production", "Let's Encrypt: production, or staging to try")
 	flags.Parse(args)
-	if *host == "" {
-		return fmt.Errorf("-host is required")
-	}
-	directory, known := acmeDirectories[*acme]
-	if !known {
-		return fmt.Errorf("-acme: staging or production, not %q", *acme)
-	}
 	agent, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	machine := ownerMachine(root, *host, *key, "site-known-hosts")
-	config, err := siteHostConfig(*host)
-	if err != nil {
-		return err
-	}
-	stamp, err := installStamp(ctx, root)
-	if err != nil {
-		return err
-	}
+	machine := ownerMachine(root, siteName, *key, "site-known-hosts")
 	if err := machine.Put(ctx, agent, "/tmp/dragrace-host-agent"); err != nil {
 		return err
 	}
-	if err := putFiles(ctx, machine, siteUnits(*host, directory), 0o644); err != nil {
-		return err
-	}
-	if err := putFiles(ctx, machine, map[string]string{
-		"/etc/dragrace-host/config.json": config, installedPath: stamp}, 0o644); err != nil {
-		return err
-	}
-	if err := putFiles(ctx, machine, hostFiles(), 0o644); err != nil {
+	if err := installHost(ctx, machine, root, "site", map[string]string{hostAgentBinary: agent},
+		nil); err != nil {
 		return err
 	}
 	setup := strings.Join(append(hostSetup("22", "80", "443"),
-		"sudo install -m 755 /tmp/dragrace-host-agent /usr/local/bin/dragrace-host-agent",
+		"sudo install -m 755 /tmp/dragrace-host-agent "+hostAgentBinary,
 		"rm /tmp/dragrace-host-agent",
 		"sudo install -d -m 755 "+siteHome,
 		"sudo install -d -m 700 -o site -g site "+siteState+" "+siteState+"/secrets "+
@@ -348,6 +206,8 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		// The first boot's dist-upgrade can outlive `cloud-init status
 		// --wait`: wait for its lock.
 		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q sqlite3 >/dev/null 2>&1",
+		// kTLS: the kernel loads tls only for a CAP_NET_ADMIN process; the
+		// site has none, so it is loaded at boot (modules-load.d) and now.
 		"sudo modprobe tls",
 		"sudo systemctl daemon-reload",
 		"sudo systemctl enable --now dragrace-site-renew.timer dragrace-host-agent.timer",
@@ -378,48 +238,31 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo systemctl restart dragrace-site.service; sleep 3; "+
 		"systemctl is-active dragrace-site.service"); err != nil {
 		log.Printf("the site is not up; its log: ssh cook@%s journalctl -u dragrace-site; "+
-			"the agent's: journalctl -u dragrace-host-agent", *host)
+			"the agent's: journalctl -u dragrace-host-agent", siteName)
 		return err
 	}
-	fmt.Printf("the site is serving https://%s/ (Let's Encrypt %s)\n", *host, *acme)
+	fmt.Printf("the site is serving https://%s/\n", siteName)
 	return nil
 }
 
-// hostFiles are what every host of the owner's (the site host, the racer)
-// is set up with, found missing on the first live audit:
-// root's login refused outright (cloud-init's disable_root only gave root
-// a key that prints "login as ..."), and a reboot when an update needs one.
-//
-// The updates are Ubuntu's own, stock (after a
-// homemade reboot timer's night ended in a kernel panic on the site host;
-// DigitalOcean's and Canonical's advice): unattended-upgrades' daily run,
-// security only, at 06:00 UTC plus up to an hour, and its own reboot at
-// the end of the run when an update needs one: so never mid-install, and
-// over by 03:30 New York time at the latest, before the 05:00 race.
-// Automatic-Reboot is the one setting changed (Ubuntu ships it off).
-func hostFiles() map[string]string {
-	return map[string]string{
-		"/etc/ssh/sshd_config.d/10-dragrace.conf": "PermitRootLogin no\nPasswordAuthentication no\n",
-		"/etc/apt/apt.conf.d/52dragrace-reboot": "// Reboot at the end of the update run when an update needs it.\n" +
-			"Unattended-Upgrade::Automatic-Reboot \"true\";\n",
-	}
-}
-
 // hostRetired are files an install deletes: the racer's GitHub token, which
-// started builds until the builds became daily. Once `racer install` has run on a build after a5204c0,
-// this and its uses (hostSetup, hosts.go's probe) can go.
+// started builds until the builds became daily, and the commit an install stamped before SHA256SUMS.
+// Once `racer install` has run on a build after a5204c0, and
+// both installs on one with SHA256SUMS, this and its uses (hostSetup,
+// hosts.go's probe) can go.
 var hostRetired = []string{
 	"/etc/credstore.encrypted/github-token",
+	"/etc/dragrace-host/installed",
 }
 
-// hostSetup is the script that goes with hostFiles: the first boot's
-// cloud-init waited for (DigitalOcean's per-instance script can replace
-// the machine id late, and the racer's credentials, encrypted before it,
-// would stop decrypting at the next restart), sshd
-// reloaded, the retired files gone, a 512 MiB swap file (a 512 MB droplet thrashed in its
-// first boot's package checks), and Ubuntu's update-notifier and motd
-// timers off (nobody logs in to read them; on the racer they took a CPU
-// for minutes).
+// hostSetup is the script that goes with the host's files (hosts/): the
+// first boot's cloud-init waited for (DigitalOcean's per-instance script
+// can replace the machine id late, and the racer's credentials, encrypted
+// before it, would stop decrypting at the next restart),
+// sshd reloaded, the retired files gone, a 512 MiB swap file (a 512 MB
+// droplet thrashed in its first boot's package checks), and Ubuntu's
+// update-notifier and motd timers off (nobody logs in to read them; on the
+// racer they took a CPU for minutes).
 //
 // And a boot without an initramfs: GRUB_FORCE_PARTUUID, Ubuntu's own
 // cloud images' setting (DigitalOcean's image leaves it out). The kernel
@@ -456,35 +299,6 @@ func hostSetup(ports ...string) []string {
 		"sudo systemctl disable --now update-notifier-download.timer update-notifier-motd.timer " +
 			"motd-news.timer 2>/dev/null; true",
 	}
-}
-
-// putFiles copies each file to /tmp and installs it in place as root.
-func putFiles(ctx context.Context, machine SSHMachine, files map[string]string, mode os.FileMode) error {
-	dir, err := os.MkdirTemp("", "dragrace-files-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(dir)
-	var script []string
-	// Numbered: two files of one name (the guard's and the racer's
-	// config.json) would take each other's place.
-	index := 0
-	for path, content := range files {
-		index++
-		name := fmt.Sprintf("dragrace-%d-%s", index, filepath.Base(path))
-		local := filepath.Join(dir, name)
-		if err := os.WriteFile(local, []byte(content), 0o600); err != nil {
-			return err
-		}
-		remote := "/tmp/" + name
-		if err := machine.Put(ctx, local, remote); err != nil {
-			return err
-		}
-		script = append(script, fmt.Sprintf("sudo install -D -m %o %s %s && rm %s", mode, remote,
-			path, remote))
-	}
-	_, err = machine.Shell(ctx, strings.Join(script, " && "))
-	return err
 }
 
 // siteRaceNow asks the site for a race, with the owner's manual token.

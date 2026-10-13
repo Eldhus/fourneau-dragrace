@@ -1,8 +1,12 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -41,14 +45,25 @@ func TestResultWritesEveryField(t *testing.T) {
 	}
 }
 
-// Every environment line of the site's unit is NAME=value with the
-// values filled in, none left as a placeholder.
+// hostFile is one of hosts/'s files: host is its directory there, path its
+// install path.
+func hostFile(t *testing.T, host, path string) string {
+	t.Helper()
+	bytes, err := os.ReadFile(filepath.Join("../../../hosts", host, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(bytes)
+}
+
+// The site's unit is for the owner's one site: its name, Let's Encrypt's
+// production directory, the paths the code uses; the host agent's config
+// says the same.
 func TestSiteUnitEnvironment(t *testing.T) {
-	directory := "https://acme.example/directory"
-	service := siteUnits("192.0.2.1", directory)["/etc/systemd/system/dragrace-site.service"]
+	service := hostFile(t, "site", "/etc/systemd/system/dragrace-site.service")
 	for _, want := range []string{
-		"Environment=ROUX_ACME_DIRECTORY=" + directory + "\n",
-		"Environment=ROUX_ACME_IDENTIFIER=192.0.2.1\n",
+		"Environment=ROUX_ACME_DIRECTORY=https://acme-v02.api.letsencrypt.org/directory\n",
+		"Environment=ROUX_ACME_IDENTIFIER=" + siteName + "\n",
 		"WorkingDirectory=" + siteState + "\n",
 		"ExecStart=" + siteHome + "/current/dragrace-site\n",
 		"ConditionPathExists=" + siteHome + "/current/dragrace-site\n",
@@ -57,30 +72,114 @@ func TestSiteUnitEnvironment(t *testing.T) {
 			t.Fatalf("no %q in:\n%s", want, service)
 		}
 	}
-	if strings.Contains(service, "{") {
-		t.Fatalf("a placeholder left in:\n%s", service)
+	agent := hostFile(t, "site", "/etc/systemd/system/dragrace-host-agent.service")
+	if !strings.Contains(agent, "ExecStart="+hostAgentBinary+" host-agent\n") {
+		t.Fatalf("the agent's unit runs another binary:\n%s", agent)
+	}
+	var config HostConfig
+	if err := json.Unmarshal([]byte(hostFile(t, "site", "/etc/dragrace-host/config.json")), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.Health != "https://"+siteName+"/api/health" || config.Home != siteHome ||
+		config.Database != siteState+"/site.db" {
+		t.Fatalf("the host agent's config: %+v", config)
 	}
 }
 
 // The site's sockets are systemd's, named as fourneau's listen.zig and
 // roux's host look for them, and the service takes both.
 func TestSiteSockets(t *testing.T) {
-	units := siteUnits("192.0.2.1", "https://acme.example/directory")
 	for _, socket := range []struct{ file, listen, name string }{
 		{"dragrace-site-https.socket", "ListenStream=0.0.0.0:443\n", "FileDescriptorName=https\n"},
 		{"dragrace-site-http.socket", "ListenStream=0.0.0.0:80\n", "FileDescriptorName=http\n"},
 	} {
-		unit := units["/etc/systemd/system/"+socket.file]
+		unit := hostFile(t, "site", "/etc/systemd/system/"+socket.file)
 		for _, want := range []string{socket.listen, socket.name, "Service=dragrace-site.service\n"} {
 			if !strings.Contains(unit, want) {
 				t.Fatalf("no %q in %s:\n%s", want, socket.file, unit)
 			}
 		}
 	}
-	service := units["/etc/systemd/system/dragrace-site.service"]
+	service := hostFile(t, "site", "/etc/systemd/system/dragrace-site.service")
 	want := "Sockets=dragrace-site-https.socket dragrace-site-http.socket\n"
 	if !strings.Contains(service, want) {
 		t.Fatalf("no %q in:\n%s", want, service)
+	}
+}
+
+// An install's SHA256SUMS lists every file of the host's tree and each
+// binary, by path, as sha256sum -c reads it; the tarball it sends holds the
+// tree, root's, mode 644, and no directory (extracting one over /etc would
+// change /etc's own mode).
+func TestHostSums(t *testing.T) {
+	files, err := hostTree("../../..", "racer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, file := range files {
+		names[file.name] = true
+	}
+	for _, name := range []string{"etc/ssh/sshd_config.d/10-dragrace.conf",
+		"etc/systemd/system/dragrace-guard.service", "etc/dragrace-racer/config.json"} {
+		if !names[name] {
+			t.Fatalf("the racer's tree lacks %s: %v", name, files)
+		}
+	}
+	if names["etc/dragrace-host/config.json"] {
+		t.Fatalf("the racer's tree has the site's files")
+	}
+	binary := filepath.Join(t.TempDir(), "dragrace")
+	if err := os.WriteFile(binary, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sums, err := hostSums(files, map[string]string{guardBinary: binary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(sums, "\n"), "\n")
+	var paths []string
+	for _, line := range lines {
+		_, path, _ := strings.Cut(line, "  ")
+		paths = append(paths, path)
+	}
+	if len(lines) != len(files)+1 || !slices.IsSorted(paths) {
+		t.Fatalf("%d lines for %d files and a binary, by path:\n%s", len(lines), len(files), sums)
+	}
+	// sha256 of "x".
+	want := "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881  " + guardBinary
+	if !slices.Contains(lines, want) {
+		t.Fatalf("no %q in:\n%s", want, sums)
+	}
+	tarball := filepath.Join(t.TempDir(), "host.tar.gz")
+	if _, err := writeTarball(tarball, files, nil); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(tarball)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	unzipped, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := tar.NewReader(unzipped)
+	for count := 0; ; count++ {
+		header, err := archive.Next()
+		if err == io.EOF {
+			if count != len(files) {
+				t.Fatalf("%d entries for %d files", count, len(files))
+			}
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header.Typeflag != tar.TypeReg || header.Mode != 0o644 || header.Uid != 0 ||
+			header.Gid != 0 || strings.HasPrefix(header.Name, "/") {
+			t.Fatalf("not a file of root's, mode 644, below /: %+v", header)
+		}
 	}
 }
 
@@ -291,15 +390,26 @@ func TestCoresApart(t *testing.T) {
 // cycle stock, its reboot at the end of the run turned on; the check at
 // 05:00 New York time comes after it.
 func TestHostFiles(t *testing.T) {
-	files := hostFiles()
-	if files["/etc/ssh/sshd_config.d/10-dragrace.conf"] != "PermitRootLogin no\nPasswordAuthentication no\n" {
-		t.Fatalf("sshd: %q", files["/etc/ssh/sshd_config.d/10-dragrace.conf"])
+	sshd := hostFile(t, "common", "/etc/ssh/sshd_config.d/10-dragrace.conf")
+	if sshd != "PermitRootLogin no\nPasswordAuthentication no\n" {
+		t.Fatalf("sshd: %q", sshd)
 	}
-	if !strings.Contains(files["/etc/apt/apt.conf.d/52dragrace-reboot"], `Automatic-Reboot "true";`) {
+	if !strings.Contains(hostFile(t, "common", "/etc/apt/apt.conf.d/52dragrace-reboot"),
+		`Automatic-Reboot "true";`) {
 		t.Fatalf("unattended-upgrades must reboot at the end of its run")
 	}
-	if len(files) != 2 {
-		t.Fatalf("stock updates: no file but sshd's and the reboot's, got %d", len(files))
+	var common []string
+	err := filepath.WalkDir("../../../hosts/common", func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() {
+			common = append(common, path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(common) != 2 {
+		t.Fatalf("stock updates: no file but sshd's and the reboot's, got %v", common)
 	}
 	for _, path := range hostRetired {
 		if !strings.Contains(strings.Join(hostSetup(), "\n"), path) {
@@ -320,7 +430,7 @@ func TestHostFiles(t *testing.T) {
 		!strings.Contains(setup, "sudo update-grub") {
 		t.Fatalf("setup must boot without an initramfs: %s", setup)
 	}
-	if !strings.Contains(racerUnits()["/etc/systemd/system/dragrace-racer-check.timer"],
+	if !strings.Contains(hostFile(t, "racer", "/etc/systemd/system/dragrace-racer-check.timer"),
 		"OnCalendar=*-*-* 05:00:00 America/New_York") {
 		t.Fatalf("the check must come after the updates' window")
 	}

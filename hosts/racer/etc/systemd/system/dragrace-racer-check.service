@@ -1,0 +1,7 @@
+[Unit]
+Description=Ask the site for a check: race tonight if anything is new
+[Service]
+Type=oneshot
+User=racer
+LoadCredentialEncrypted=racer-token
+ExecStart=/var/lib/dragrace-racer/bin/dragrace racer check

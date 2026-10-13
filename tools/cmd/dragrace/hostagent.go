@@ -36,8 +36,8 @@ type HostConfig struct {
 	// The site's code: releases/ID, and current, a link to one of them.
 	Home    string `json:"home"`
 	Service string `json:"service"`
-	// The site's health, as the agent asks it (its certificate is for the
-	// host's address).
+	// The site's health, as the agent asks it, by the site's name (its
+	// certificate's).
 	Health string `json:"health"`
 	// The site's database and the user it runs as, for migrations.
 	Database string `json:"database"`
