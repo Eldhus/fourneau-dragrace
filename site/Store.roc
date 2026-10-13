@@ -18,8 +18,8 @@ Store :: [].{
 		run!(reads, id)
 	}
 
-	## What the newest finished run asked of each workload, and its rounds
-	## and ladder: the Workloads page. `NotFound` before the first race.
+	## What the newest finished run asked of each workload, and its rounds:
+	## the Workloads page. `NotFound` before the first race.
 	workloads! : Sqlite.Db, Server.Request => Try({ specs : List(Pages.WorkloadSpecs), settings : Pages.RaceSettings }, [NotFound, DbErr(Sqlite.Err)])
 	workloads! = |db, request| {
 		reads = Sqlite.read(db, request)

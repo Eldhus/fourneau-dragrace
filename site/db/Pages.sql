@@ -115,16 +115,8 @@ SELECT w.name, w.test, w.kind, w.title, w.summary, w.method, w.path, w.body_byte
     WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), 0) AS highest
 FROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;
 
--- The rounds and the ladders of a run: `shares`, the ladder's steps as
--- percentages ("50%, 75%, ..."); `ladder`, the workloads that climb it.
+-- The rounds of a run, for the Workloads page.
 -- name: race_settings :one
 -- @param run_id : Str
--- @column shares : Str
--- @column ladder : Str
-SELECT s.rounds, s.warmup_seconds, s.measure_seconds,
-  coalesce((SELECT group_concat(CAST(round(j.value * 100) AS INTEGER) || '%', ', ')
-    FROM json_each(s.open_loop_shares) AS j), '') AS shares,
-  coalesce((SELECT group_concat(w.title, ', ') FROM
-    (SELECT title FROM run_workloads WHERE run_id = s.run_id AND ladder = 1 ORDER BY position) AS w),
-    '') AS ladder
+SELECT s.rounds, s.warmup_seconds, s.measure_seconds
 FROM run_settings s WHERE s.run_id = :run_id;
