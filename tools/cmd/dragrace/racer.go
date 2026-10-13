@@ -294,9 +294,8 @@ type Tonight struct {
 // tonight is, for a racer in the cloud, the newest build of the commit it
 // runs from: the one the site serves, which it updated itself to (the daily
 // build of new fourneau or roux commits makes another build of the same
-// commit). New when its race
-// key is not the last race's, which is the race key of the build with the
-// last race's commits; with no such build (pruned, or from before race
+// commit). New when its race key is not the last race's, which is the race
+// key of the build with the last race's commits; with no such build (pruned, or from before race
 // keys) it counts as new. A change to the site or the tool alone keeps the
 // race key: no race. For a local racer, the checkout's commits, new when
 // any differs.
