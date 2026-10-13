@@ -18,7 +18,7 @@ import (
 // commandBundle packs a build for a release (build.yml), into -out:
 //
 //   - race.tar.gz: a checkout as a race needs it, for the racer and its
-//     workers: race.json, versions.json, workloads/, each competitor's
+//     workers: race.json, workloads/, each competitor's
 //     competitor.json, out/toolchain.json, and out/bin with the
 //     competitors, oha and this dragrace binary;
 //   - site.tar.gz: the site, for the site host: dragrace-site, static/
@@ -32,8 +32,9 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	flags := newFlags("bundle")
 	out := flags.String("out", filepath.Join(outDir(root), "bundle"), "where the files go")
 	flags.Parse(args)
-	tools, err := loadToolchain(ctx, root)
-	if err != nil {
+	// The toolchain's record, out/toolchain.json, made afresh: what the
+	// race posts as its versions.
+	if _, err := loadToolchain(ctx, root); err != nil {
 		return err
 	}
 	race, err := loadRace(root)
@@ -51,13 +52,16 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	oha, err := fetchOha(ctx, race.Oha)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(*out, 0o755); err != nil {
 		return err
 	}
 	raceFiles := []bundled{{"race.json", filepath.Join(root, "race.json")},
-		{"versions.json", filepath.Join(root, "versions.json")},
 		{"out/toolchain.json", toolchainRecord(root)},
-		{"out/bin/oha", tools.Oha}, {"out/bin/dragrace", self}}
+		{"out/bin/oha", oha}, {"out/bin/dragrace", self}}
 	trees := []bundledTree{{"workloads", filepath.Join(root, "workloads")}}
 	if race.hasMixed() {
 		raceFiles = append(raceFiles, bundled{"out/conduit/conduit.db", conduitDatabase(root)})

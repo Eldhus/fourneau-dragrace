@@ -20,7 +20,7 @@ type Run struct {
 	FinishedAt  time.Time     `json:"finished_at"`
 	Seed        int64         `json:"seed"`
 	Fingerprint Fingerprint   `json:"fingerprint"`
-	Versions    Versions      `json:"versions"`
+	Versions    []NameVersion `json:"versions"`
 	Race        Race          `json:"race"`
 	Machines    []MachineInfo `json:"machines"`
 	Results     []Result      `json:"results"`

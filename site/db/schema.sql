@@ -69,11 +69,14 @@ CREATE TABLE run_settings (
   open_loop_warmup_seconds INTEGER NOT NULL,
   open_loop_measure_seconds INTEGER NOT NULL,
   race_json TEXT NOT NULL,
+  -- versions.json whole, before it went; '' since 2026-10-13 (each
+  -- version is a row of run_versions).
   versions_json TEXT NOT NULL
 ) STRICT;
 
--- versions.json's pins, a row each (zig, roc, oha, go, rust, axum, tokio,
--- droplet_image, ...).
+-- The versions raced, a row each (zig, roc, oha, go, rust, axum, tokio,
+-- droplet_image): the build's record and race.json's (racer.go,
+-- versionRows).
 CREATE TABLE run_versions (
   run_id TEXT NOT NULL REFERENCES runs (id),
   name TEXT NOT NULL,

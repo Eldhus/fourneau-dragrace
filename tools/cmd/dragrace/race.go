@@ -627,7 +627,7 @@ func quote(text string) string {
 }
 
 func newRun(root, where string, race Race) (Run, error) {
-	versions, err := loadVersions(root)
+	versions, err := versionRows(root, race)
 	if err != nil {
 		return Run{}, err
 	}

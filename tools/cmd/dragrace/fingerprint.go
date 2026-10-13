@@ -17,22 +17,19 @@ type Fingerprint struct {
 }
 
 func fingerprintOf(root string) (Fingerprint, error) {
-	versions, err := loadVersions(root)
-	if err != nil {
-		return Fingerprint{}, err
-	}
 	ctx := context.Background()
 	var fingerprint Fingerprint
+	var err error
 	fingerprint.Dragrace, fingerprint.DragraceDirty, err = commitOf(ctx, root)
 	if err != nil {
 		return fingerprint, err
 	}
 	fingerprint.Fourneau, fingerprint.FourneauDirty, err =
-		commitOf(ctx, checkoutPath(root, versions.Fourneau))
+		commitOf(ctx, checkoutPath(root, "fourneau"))
 	if err != nil {
 		return fingerprint, err
 	}
-	fingerprint.Roux, fingerprint.RouxDirty, err = commitOf(ctx, checkoutPath(root, versions.Roux))
+	fingerprint.Roux, fingerprint.RouxDirty, err = commitOf(ctx, checkoutPath(root, "roux"))
 	return fingerprint, err
 }
 

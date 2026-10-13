@@ -100,7 +100,6 @@ type RacePost struct {
 	WarmupSeconds  int               `json:"warmup_seconds"`
 	MeasureSeconds int               `json:"measure_seconds"`
 	RaceJSON       string            `json:"race_json"`
-	VersionsJSON   string            `json:"versions_json"`
 	Versions       []NameVersion     `json:"versions"`
 	Competitors    []CompetitorPost  `json:"competitors"`
 	Workloads      []WorkloadPost    `json:"workloads"`
@@ -441,24 +440,18 @@ func pruneRuns(dir string, keep int) {
 	}
 }
 
-// racePost is race.json and versions.json, as the site keeps them.
+// racePost is race.json and the versions raced, as the site keeps them.
 func racePost(root string, race Race, competitors []Competitor, seed int64) (*RacePost, error) {
 	raceJSON, err := os.ReadFile(filepath.Join(root, "race.json"))
 	if err != nil {
 		return nil, err
 	}
-	versionsJSON, err := os.ReadFile(filepath.Join(root, "versions.json"))
-	if err != nil {
-		return nil, err
-	}
-	versions, err := loadVersions(root)
-	if err != nil {
-		return nil, err
-	}
 	post := &RacePost{Seed: seed, Region: race.Cloud.Region, Image: race.Cloud.Image,
 		Port: race.Port, Rounds: race.Rounds, WarmupSeconds: race.WarmupSeconds,
-		MeasureSeconds: race.MeasureSeconds, RaceJSON: string(raceJSON),
-		VersionsJSON: string(versionsJSON)}
+		MeasureSeconds: race.MeasureSeconds, RaceJSON: string(raceJSON)}
+	if post.Versions, err = versionRows(root, race); err != nil {
+		return nil, err
+	}
 	for _, workload := range race.Workloads {
 		streams := 0
 		if workload.HTTP2 {
@@ -471,20 +464,6 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 			Keepalive: workload.Keepalive, HTTP2: workload.HTTP2, Streams: streams,
 			TLS: workload.TLS, Protocol: workload.Protocol})
 	}
-	// Zig's and roc's from the record of the build (loadToolchain), which
-	// race.tar.gz carries: roux's pins.
-	usedJSON, err := os.ReadFile(toolchainRecord(root))
-	if err != nil {
-		return nil, err
-	}
-	var used ToolchainUsed
-	if err := json.Unmarshal(usedJSON, &used); err != nil {
-		return nil, err
-	}
-	post.Versions = []NameVersion{{"zig", used.Zig}, {"roc", used.Roc}, {"oha", versions.Oha.Version},
-		{"go", versions.Go.Version}, {"rust", versions.Rust.Version},
-		{"axum", versions.Axum.Version}, {"tokio", versions.Tokio.Version},
-		{"droplet_image", versions.DropletImage}}
 	for _, competitor := range competitors {
 		post.Competitors = append(post.Competitors, CompetitorPost{Name: competitor.Name,
 			Title: competitor.Title, Language: competitor.Language, Framework: competitor.Framework})
@@ -493,6 +472,19 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 		post.Classes = append(post.Classes, ServerClassPost(class))
 	}
 	return post, nil
+}
+
+// versionRows are a race's versions, a row each as the site keeps them
+// (run_versions): the build's record (out/toolchain.json, which
+// race.tar.gz carries), and oha's and the droplet image from race.json.
+func versionRows(root string, race Race) ([]NameVersion, error) {
+	var used ToolchainUsed
+	if err := readJSON(toolchainRecord(root), &used); err != nil {
+		return nil, err
+	}
+	return []NameVersion{{"zig", used.Zig}, {"roc", used.Roc}, {"oha", race.Oha.Version},
+		{"go", used.Go}, {"rust", used.Rust}, {"axum", used.Axum}, {"tokio", used.Tokio},
+		{"droplet_image", race.Cloud.Image}}, nil
 }
 
 func randomToken() string {

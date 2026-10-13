@@ -232,6 +232,28 @@ func TestGitHubRetriesAMoment(t *testing.T) {
 	}
 }
 
+// A race's versions are the build's record and race.json's, under the
+// names the site reads (Store.roc).
+func TestVersionRows(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, toolchainRecord(root), `{"zig":"0.17.0","roc":"nightly-1","go":"1.27.1",`+
+		`"rust":"1.94.1","axum":"0.8.9","tokio":"1.53.2"}`)
+	race := Race{Oha: Download{Version: "1.16.0"}, Cloud: Cloud{Image: "ubuntu-26-04-x64"}}
+	rows, err := versionRows(root, race)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		got = append(got, row.Name+" "+row.Version)
+	}
+	want := "zig 0.17.0, roc nightly-1, oha 1.16.0, go 1.27.1, rust 1.94.1, axum 0.8.9, " +
+		"tokio 1.53.2, droplet_image ubuntu-26-04-x64"
+	if strings.Join(got, ", ") != want {
+		t.Fatalf("rows %s, want %s", strings.Join(got, ", "), want)
+	}
+}
+
 // The racer reads the commit the site serves; a site from before
 // site.json (404) says nothing, so the racer holds.
 func TestSiteCommit(t *testing.T) {

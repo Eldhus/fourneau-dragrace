@@ -234,7 +234,7 @@ type hostRequest struct {
 }
 
 func provisionHost(ctx context.Context, root string, request hostRequest) (string, error) {
-	versions, err := loadVersions(root)
+	race, err := loadRace(root)
 	if err != nil {
 		return "", err
 	}
@@ -256,7 +256,7 @@ func provisionHost(ctx context.Context, root string, request hostRequest) (strin
 	userData := strings.ReplaceAll(request.userData, "ADMIN_KEY", strings.TrimSpace(string(admin)))
 	droplet, err := do.createDroplet(ctx, DropletRequest{
 		Name: request.name, Region: request.region, Size: request.size,
-		Image: versions.DropletImage, SSHKeys: []int{key.ID}, Tags: []string{request.tag},
+		Image: race.Cloud.Image, SSHKeys: []int{key.ID}, Tags: []string{request.tag},
 		UserData: userData, Monitoring: true,
 	})
 	if err != nil {

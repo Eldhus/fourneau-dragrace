@@ -37,12 +37,11 @@ ON CONFLICT DO NOTHING;
 -- @param warmup_seconds : I64
 -- @param measure_seconds : I64
 -- @param race_json : Str
--- @param versions_json : Str
 INSERT INTO run_settings (run_id, seed, region, image, port, rounds, warmup_seconds,
   measure_seconds, open_loop_shares, open_loop_warmup_seconds,
   open_loop_measure_seconds, race_json, versions_json)
 VALUES (:run_id, :seed, :region, :image, :port, :rounds, :warmup_seconds,
-  :measure_seconds, '[]', 0, 0, :race_json, :versions_json)
+  :measure_seconds, '[]', 0, 0, :race_json, '')
 ON CONFLICT DO NOTHING;
 
 -- name: add_version :exec

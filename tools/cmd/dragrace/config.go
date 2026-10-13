@@ -9,19 +9,7 @@ import (
 	"strings"
 )
 
-// Versions is versions.json: every pin a race depends on but Zig and roc,
-// which are roux's (RouxPins).
-type Versions struct {
-	Oha          Download `json:"oha"`
-	Go           Note     `json:"go"`
-	Rust         Note     `json:"rust"`
-	Axum         Note     `json:"axum"`
-	Tokio        Note     `json:"tokio"`
-	DropletImage string   `json:"droplet_image"`
-	Fourneau     Checkout `json:"fourneau"`
-	Roux         Checkout `json:"roux"`
-}
-
+// Download is a pinned file: oha (race.json), Zig and roc (RouxPins).
 type Download struct {
 	Version string `json:"version"`
 	URL     string `json:"url"`
@@ -34,19 +22,6 @@ type RocMusl struct {
 	Files  map[string]string `json:"files"`
 }
 
-type Note struct {
-	Version  string `json:"version"`
-	PinnedIn string `json:"pinned_in"`
-}
-
-// Checkout is a repository raced at its newest commit, cloned beside this
-// one: fourneau, and roux on it.
-type Checkout struct {
-	Repository string `json:"repository"`
-	Branch     string `json:"branch"`
-	Checkout   string `json:"checkout"`
-}
-
 // Race is race.json: what a race is.
 type Race struct {
 	Port           int      `json:"port"`
@@ -54,6 +29,9 @@ type Race struct {
 	WarmupSeconds  int      `json:"warmup_seconds"`
 	MeasureSeconds int      `json:"measure_seconds"`
 	Competitors    []string `json:"competitors"`
+	// Oha is the loader's pin (fetchOha): in race.json, so a new oha moves
+	// the race key and no competitor's.
+	Oha Download `json:"oha"`
 	// Tests are race.json's workloads, each sent each of its variants'
 	// ways; Workloads are what is raced, a test in one variant, made by
 	// loadRace (expand).
@@ -315,19 +293,13 @@ func readJSON(path string, into any) error {
 	return nil
 }
 
-func loadVersions(root string) (Versions, error) {
-	var versions Versions
-	err := readJSON(filepath.Join(root, "versions.json"), &versions)
-	return versions, err
-}
-
 func loadRace(root string) (Race, error) {
 	var race Race
 	if err := readJSON(filepath.Join(root, "race.json"), &race); err != nil {
 		return race, err
 	}
-	if race.Rounds < 1 || race.MeasureSeconds < 1 || len(race.Tests) == 0 {
-		return race, fmt.Errorf("race.json: rounds, measure_seconds and workloads must be set")
+	if race.Rounds < 1 || race.MeasureSeconds < 1 || len(race.Tests) == 0 || race.Oha.SHA256 == "" {
+		return race, fmt.Errorf("race.json: rounds, measure_seconds, workloads and oha must be set")
 	}
 	menu, err := os.ReadFile(filepath.Join(root, "workloads", "menu.html"))
 	if err != nil {
@@ -372,7 +344,9 @@ func loadCompetitors(root string, names []string) ([]Competitor, error) {
 	return competitors, nil
 }
 
-// checkoutPath is where a raced repository is: beside this one.
-func checkoutPath(root string, checkout Checkout) string {
-	return filepath.Clean(filepath.Join(root, checkout.Checkout))
+// checkoutPath is where a raced repository is, fourneau or roux: beside
+// this one (README.md, Use it). Each is raced at its newest commit on
+// master, which the race records.
+func checkoutPath(root, repository string) string {
+	return filepath.Clean(filepath.Join(root, "..", repository))
 }

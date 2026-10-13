@@ -284,22 +284,6 @@ func TestCoresApart(t *testing.T) {
 	}
 }
 
-func TestDropletImagePinsAgree(t *testing.T) {
-	root := "../../.."
-	race, err := loadRace(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	versions, err := loadVersions(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if race.Cloud.Image == "" || race.Cloud.Image != versions.DropletImage {
-		t.Fatalf("race.json image %q, versions.json droplet_image %q",
-			race.Cloud.Image, versions.DropletImage)
-	}
-}
-
 // Only DigitalOcean's refusal of a not-yet-registered key is retried;
 // any other refusal (a bad size, a quota) fails at once.
 func TestKeyNotYetKnown(t *testing.T) {

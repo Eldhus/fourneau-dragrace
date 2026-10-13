@@ -1,5 +1,5 @@
 {
-  "comment": "What a race is: the port, the rounds, the droplets and the workloads.",
+  "comment": "What a race is: the port, the rounds, the loader, the droplets and the workloads.",
   "port": 8080,
   "rounds": 3,
   "warmup_seconds": 5,
@@ -11,6 +11,11 @@
     "roux",
     "basic-webserver"
   ],
+  "oha": {
+    "version": "1.16.0",
+    "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64",
+    "sha256": "620bb9e16fb53eabc9a3fc45f88bdb41fefa3fee5c05e75892011ce320391716"
+  },
   "workloads": [
     {
       "name": "plaintext",

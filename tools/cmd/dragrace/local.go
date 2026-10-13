@@ -130,10 +130,14 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	oha, err := fetchOha(ctx, race.Oha)
+	if err != nil {
+		return err
+	}
 	run.Timing.BuildSeconds = watch.since()
 	machine := LocalMachine{}
 	loaderHome := filepath.Join(outDir(root), "loader")
-	if err := machine.Put(ctx, tools.Oha, filepath.Join(loaderHome, "oha")); err != nil {
+	if err := machine.Put(ctx, oha, filepath.Join(loaderHome, "oha")); err != nil {
 		return err
 	}
 	cpu, _ := machine.Shell(ctx, "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'")

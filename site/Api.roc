@@ -33,7 +33,7 @@ Api :: [].{
 		## "": none (a run that does not race).
 		worker_token : Str,
 		commits : List({ repository : Str, commit_sha : Str, new : Bool }),
-		## race.json and versions.json as raced; a run that does not race has
+		## race.json and the versions as raced; a run that does not race has
 		## none.
 		race : Try(RacePost, [Missing]),
 	}
@@ -47,7 +47,6 @@ Api :: [].{
 		warmup_seconds : I64,
 		measure_seconds : I64,
 		race_json : Str,
-		versions_json : Str,
 		versions : List({ name : Str, version : Str }),
 		competitors : List({ name : Str, title : Str, language : Str, framework : Str }),
 		workloads : List(WorkloadPost),
@@ -410,7 +409,6 @@ Api :: [].{
 			warmup_seconds: race.warmup_seconds,
 			measure_seconds: race.measure_seconds,
 			race_json: race.race_json,
-			versions_json: race.versions_json,
 		})?
 		for version in race.versions.take_first(items_max) {
 			Runs.add_version!(tx, { run_id, name: version.name, version: version.version })?
@@ -801,6 +799,17 @@ expect {
 	parsed = Json.parse("{\"share\":0.0,\"offered_rps\":250.0,\"achieved_rps\":250.0,\"p50_ms\":1.0,\"p90_ms\":0.0,\"p99_ms\":2.0,\"p999_ms\":3.0,\"errors\":0,\"non_2xx\":0,\"cpu_busy_pct\":5.0,\"loader_cpu_busy_pct\":4.0,\"net_rx_mbps\":1.0,\"net_tx_mbps\":2.0,\"mean_ms\":1.0,\"parts\":[]}")
 	match parsed {
 		Ok(step) => step.offered_rps == 250.0 and step.p99_ms == 2.0
+		Err(_) => Bool.False
+	}
+}
+
+# A race with a field the site no longer reads (`versions_json`) still
+# parses.
+expect {
+	parsed : Try(Api.RacePost, _)
+	parsed = Json.parse("{\"seed\":1,\"region\":\"lon1\",\"image\":\"ubuntu-26-04-x64\",\"port\":8080,\"rounds\":3,\"warmup_seconds\":5,\"measure_seconds\":20,\"race_json\":\"{}\",\"versions_json\":\"{}\",\"versions\":[{\"name\":\"oha\",\"version\":\"1.16.0\"}],\"competitors\":[],\"workloads\":[],\"classes\":[]}")
+	match parsed {
+		Ok(race) => race.versions.len() == 1 and race.port == 8080
 		Err(_) => Bool.False
 	}
 }

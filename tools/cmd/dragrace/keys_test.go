@@ -11,7 +11,7 @@ import (
 )
 
 // keyRepo is a checkout as competitorKey reads one: two competitors,
-// workloads/, versions.json, and target/ ignored; and a fourneau checkout.
+// workloads/, race.json, and target/ ignored; and a fourneau checkout.
 func keyRepo(t *testing.T) (root string, tools Toolchain) {
 	t.Helper()
 	t.Setenv("ImageOS", "test")
@@ -26,7 +26,7 @@ func keyRepo(t *testing.T) (root string, tools Toolchain) {
 		filepath.Join(root, "competitors/plain/competitor.json"): "{}\n",
 		filepath.Join(root, "competitors/other/main.go"):         "package main\n",
 		filepath.Join(root, "workloads/menu.html"):               "<p>menu</p>\n",
-		filepath.Join(root, "versions.json"):                     "{}\n",
+		filepath.Join(root, "race.json"):                         "{}\n",
 		filepath.Join(tools.Fourneau, "src/fourneau.zig"):        "pub const x = 1;\n",
 		filepath.Join(tools.Roux, "host/host.zig"):               "pub const y = 1;\n",
 	}
@@ -89,7 +89,8 @@ func TestCompetitorKey(t *testing.T) {
 		{"an ignored file", "competitors/plain/target/out.o", "binary", [3]bool{false, false, false}},
 		{"another competitor's file", "competitors/other/main.go", "package other\n", [3]bool{false, false, false}},
 		{"a workload", "workloads/menu.html", "<p>other</p>\n", [3]bool{true, true, true}},
-		{"versions.json", "versions.json", `{"x": 1}`, [3]bool{true, true, true}},
+		// oha's pin: the race key's (TestRaceKey), no competitor's.
+		{"race.json", "race.json", `{"oha": {"version": "2"}}`, [3]bool{false, false, false}},
 		// roux's platform compiles all of fourneau, so its key takes all.
 		{"an input", "../fourneau/src/fourneau.zig", "pub const x = 2;\n", [3]bool{false, true, true}},
 		{"beside an input", "../fourneau/README.md", "fourneau\n", [3]bool{false, false, true}},
@@ -122,7 +123,6 @@ func TestCompetitorKey(t *testing.T) {
 // and not with the site or the tool.
 func TestRaceKey(t *testing.T) {
 	root, _ := keyRepo(t)
-	writeFile(t, filepath.Join(root, "race.json"), "{}\n")
 	ctx := context.Background()
 	keys := map[string]string{"plain": "k1", "other": "k2"}
 	key := func(keys map[string]string) string {

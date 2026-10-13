@@ -2,8 +2,8 @@
 // on DigitalOcean droplets), and builds, hosts and deploys the results site
 // (a roux app).
 //
-//	dragrace toolchain              fetch Zig, roc, musl and oha at their
-//	                                pins; ready roux's platform and tools
+//	dragrace toolchain              fetch Zig, roc and musl at their pins;
+//	                                ready roux's platform and tools
 //	dragrace build                  build every competitor into out/bin
 //	dragrace race local [flags]     race on this machine, server and loader on
 //	                                separate CPUs

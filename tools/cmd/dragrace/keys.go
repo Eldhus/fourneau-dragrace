@@ -27,7 +27,7 @@ import (
 // competitorKeyRecipe changes whenever what a key covers, or how a
 // competitor is built (buildCompetitor), changes: no binary stored under
 // an older recipe is ever taken for a newer one.
-const competitorKeyRecipe = "competitor-key 2"
+const competitorKeyRecipe = "competitor-key 3"
 
 // storeKeep is how many binaries the store keeps for each competitor, the
 // newest used first.
@@ -35,11 +35,12 @@ const storeKeep = 3
 
 // competitorKey hashes, in order: the recipe; the competitor's directory
 // and workloads/ as the checkout has them (every file git tracks or would
-// track, uncommitted changes included); versions.json; each of its
-// `inputs`, the trees its build reads by path outside its directory
-// (fourneau-zig: fourneau, and roux's vendored SQLite); the machine image;
-// and the tools its steps name: {roux} the roux and fourneau checkouts
-// (rouxIdentity) and roc, {roc} roc, {zig} Zig.
+// track, uncommitted changes included: its own pins too, go.mod,
+// rust-toolchain.toml, Cargo.lock); each of its `inputs`, the trees its
+// build reads by path outside its directory (fourneau-zig: fourneau, and
+// roux's vendored SQLite); the machine image; and the tools its steps
+// name: {roux} the roux and fourneau checkouts (rouxIdentity) and roc,
+// {roc} roc, {zig} Zig.
 func competitorKey(ctx context.Context, root string, tools Toolchain, competitor Competitor) (string,
 	error) {
 	hash := sha256.New()
@@ -48,8 +49,7 @@ func competitorKey(ctx context.Context, root string, tools Toolchain, competitor
 	}
 	part("recipe", competitorKeyRecipe)
 	part("name", competitor.Name)
-	for _, sub := range []string{filepath.Join("competitors", competitor.Name), "workloads",
-		"versions.json"} {
+	for _, sub := range []string{filepath.Join("competitors", competitor.Name), "workloads"} {
 		tree, err := treeHash(ctx, root, sub)
 		if err != nil {
 			return "", err
@@ -338,10 +338,10 @@ func pruneStore(store, name string, remove func(string) error) error {
 const raceKeyRecipe = "race-key 1"
 
 // raceKey is a hash of what a race races: each competitor's key,
-// race.json and workloads/. A check races only when it is not the last
-// race's (racer.tonight). The tool's own code is not in it: a change to
-// the tool alone is raced with the next change that is, or when the owner
-// asks (`site race-now`).
+// race.json (oha's pin among it) and workloads/. A check races only when
+// it is not the last race's (racer.tonight). The tool's own code is not
+// in it: a change to the tool alone is raced with the next change that
+// is, or when the owner asks (`site race-now`).
 func raceKey(ctx context.Context, root string, competitors map[string]string) (string, error) {
 	hash := sha256.New()
 	fmt.Fprintf(hash, "%s\x00", raceKeyRecipe)

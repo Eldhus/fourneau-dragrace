@@ -125,16 +125,12 @@ func parseVariant(text string) (variant, error) {
 }
 
 // repositoryDirs is where each repository is checked out on this machine.
-func repositoryDirs(root string) (map[string]string, error) {
-	versions, err := loadVersions(root)
-	if err != nil {
-		return nil, err
-	}
+func repositoryDirs(root string) map[string]string {
 	return map[string]string{
 		"dragrace": root,
-		"fourneau": checkoutPath(root, versions.Fourneau),
-		"roux":     checkoutPath(root, versions.Roux),
-	}, nil
+		"fourneau": checkoutPath(root, "fourneau"),
+		"roux":     checkoutPath(root, "roux"),
+	}
 }
 
 // resolve finds a ref's commit in the local repository, fetching origin
@@ -220,15 +216,10 @@ func (v *variant) build(ctx context.Context, root string, dirs map[string]string
 	if err := checkoutAt(ctx, dirs["dragrace"], v.commits["dragrace"], treeRoot); err != nil {
 		return err
 	}
-	// Where the checked-out dragrace expects its siblings: its own pins.
-	versions, err := loadVersions(treeRoot)
-	if err != nil {
-		return err
-	}
-	for repository, checkout := range map[string]Checkout{"fourneau": versions.Fourneau,
-		"roux": versions.Roux} {
+	// Its siblings beside it, as in every checkout.
+	for _, repository := range []string{"fourneau", "roux"} {
 		if err := checkoutAt(ctx, dirs[repository], v.commits[repository],
-			checkoutPath(treeRoot, checkout)); err != nil {
+			checkoutPath(treeRoot, repository)); err != nil {
 			return err
 		}
 	}
@@ -558,11 +549,11 @@ func makeSession(ctx context.Context, root string, do Provider, race Race, class
 		deleteSession(ctx, root, do, session)
 		return nil, err
 	}
-	tools, err := loadToolchain(ctx, root)
+	oha, err := fetchOha(ctx, race.Oha)
 	if err != nil {
 		return nil, err
 	}
-	if err := loader.Put(ctx, tools.Oha, adhocHome+"/oha"); err != nil {
+	if err := loader.Put(ctx, oha, adhocHome+"/oha"); err != nil {
 		return nil, err
 	}
 	if _, err := server.Shell(ctx, "mkdir -p "+adhocHome+"/bin && command -v zstd >/dev/null || "+
@@ -733,10 +724,7 @@ func adhocRace(ctx context.Context, root string, args []string) error {
 	}
 	race.Workloads = picked
 
-	dirs, err := repositoryDirs(root)
-	if err != nil {
-		return err
-	}
+	dirs := repositoryDirs(root)
 	variants := make([]*variant, flags.NArg())
 	for i, text := range flags.Args() {
 		v, err := parseVariant(text)
