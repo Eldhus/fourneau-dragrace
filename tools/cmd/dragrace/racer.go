@@ -92,24 +92,19 @@ type CommitPost struct {
 }
 
 type RacePost struct {
-	Seed           int64  `json:"seed"`
-	Region         string `json:"region"`
-	Image          string `json:"image"`
-	Port           int    `json:"port"`
-	Rounds         int    `json:"rounds"`
-	WarmupSeconds  int    `json:"warmup_seconds"`
-	MeasureSeconds int    `json:"measure_seconds"`
-	OpenLoop       struct {
-		Shares         []float64 `json:"shares"`
-		WarmupSeconds  int       `json:"warmup_seconds"`
-		MeasureSeconds int       `json:"measure_seconds"`
-	} `json:"open_loop"`
-	RaceJSON     string            `json:"race_json"`
-	VersionsJSON string            `json:"versions_json"`
-	Versions     []NameVersion     `json:"versions"`
-	Competitors  []CompetitorPost  `json:"competitors"`
-	Workloads    []WorkloadPost    `json:"workloads"`
-	Classes      []ServerClassPost `json:"classes"`
+	Seed           int64             `json:"seed"`
+	Region         string            `json:"region"`
+	Image          string            `json:"image"`
+	Port           int               `json:"port"`
+	Rounds         int               `json:"rounds"`
+	WarmupSeconds  int               `json:"warmup_seconds"`
+	MeasureSeconds int               `json:"measure_seconds"`
+	RaceJSON       string            `json:"race_json"`
+	VersionsJSON   string            `json:"versions_json"`
+	Versions       []NameVersion     `json:"versions"`
+	Competitors    []CompetitorPost  `json:"competitors"`
+	Workloads      []WorkloadPost    `json:"workloads"`
+	Classes        []ServerClassPost `json:"classes"`
 }
 
 // WorkloadPost is a Workload as the site keeps it: its kind, not its mix.
@@ -126,13 +121,11 @@ type WorkloadPost struct {
 	Connections int    `json:"connections"`
 	Keepalive   bool   `json:"keepalive"`
 	// How it was sent (config.go, Workload): HTTP/2's streams a connection
-	// (0 for HTTP/1.1), TLS, the variant's protocol, and a ladder after
-	// the rounds.
+	// (0 for HTTP/1.1), TLS, and the variant's protocol.
 	HTTP2    bool   `json:"http2"`
 	Streams  int    `json:"streams"`
 	TLS      bool   `json:"tls"`
 	Protocol string `json:"protocol"`
-	Ladder   bool   `json:"ladder"`
 }
 
 type NameVersion struct {
@@ -476,14 +469,7 @@ func racePost(root string, race Race, competitors []Competitor, seed int64) (*Ra
 			Method: workload.Method, Path: workload.Path, BodyBytes: workload.BodyBytes,
 			ContentType: workload.ContentType, Connections: workload.Connections,
 			Keepalive: workload.Keepalive, HTTP2: workload.HTTP2, Streams: streams,
-			TLS: workload.TLS, Protocol: workload.Protocol,
-			Ladder: workload.Ladder && len(race.OpenLoop.Shares) > 0})
-	}
-	post.OpenLoop.Shares = race.OpenLoop.Shares
-	post.OpenLoop.WarmupSeconds = race.OpenLoop.WarmupSeconds
-	post.OpenLoop.MeasureSeconds = race.OpenLoop.MeasureSeconds
-	if post.OpenLoop.Shares == nil {
-		post.OpenLoop.Shares = []float64{}
+			TLS: workload.TLS, Protocol: workload.Protocol})
 	}
 	// Zig's and roc's from the record of the build (loadToolchain), which
 	// race.tar.gz carries: roux's pins.

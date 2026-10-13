@@ -68,10 +68,6 @@ func (flags raceFlags) narrow(race Race) Race {
 	}
 	if flags.quick {
 		race.Rounds, race.WarmupSeconds, race.MeasureSeconds = 1, 1, 3
-		if len(race.OpenLoop.Shares) > 1 {
-			race.OpenLoop.Shares = race.OpenLoop.Shares[:1]
-		}
-		race.OpenLoop.WarmupSeconds, race.OpenLoop.MeasureSeconds = 1, 2
 		workloads := append([]Workload(nil), race.Workloads...)
 		for i, workload := range workloads {
 			if workload.Mixed == nil {

@@ -30,7 +30,7 @@ ORDER BY r.updated_at DESC, r.class, r.workload, r.competitor DESC LIMIT 3;
 -- Each class of a racing run: results in, results the previous run had
 -- (0 for a class it did not race), and the seconds left. Each result of
 -- the previous run weighs what it measured (its rounds' seconds and
--- warmups, its ladder steps at their length); the class's time then,
+-- warmups, a mixed workload's steps at their length); the class's time then,
 -- shared by weight, is what each test takes. Left: the tests not in yet,
 -- less the time since the class's last result (the test in progress).
 -- During a race a result's `updated_at` is when it landed (the racer posts
@@ -62,8 +62,7 @@ weights AS (
             + json_extract(d.value, '$.mixed.measure_seconds')
           FROM settings, json_each(settings.race_json, '$.workloads') AS d, run_workloads w
           WHERE w.run_id = r.run_id AND w.name = r.workload
-            AND json_extract(d.value, '$.name') = w.test),
-        (SELECT open_loop_warmup_seconds + open_loop_measure_seconds FROM settings)) AS weight
+            AND json_extract(d.value, '$.name') = w.test), 0) AS weight
   FROM results r WHERE r.run_id = (SELECT id FROM previous)
 )
 SELECT c.name AS class, c.label,

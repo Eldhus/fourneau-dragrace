@@ -170,19 +170,5 @@
   "local": {
     "server_cpus": "0-1",
     "loader_cpus": "2-7"
-  },
-  "open_loop": {
-    "comment": "The ladder each workload marked \"ladder\" climbs after the rounds. None is marked since 2026-10-10: RealWorld's climb is the open loop.",
-    "shares": [
-      0.05,
-      0.25,
-      0.5,
-      0.75,
-      0.9,
-      1.0,
-      1.2
-    ],
-    "warmup_seconds": 3,
-    "measure_seconds": 10
   }
 }

@@ -25,10 +25,9 @@ Data :: [].{
 		open_loop : List(OpenStep),
 	}
 
-	## One rate of the open-loop ladder: the offered rate, what was answered
+	## One rate of an open-loop climb: the offered rate, what was answered
 	## (2xx), latency from when each request was due, and both machines' CPU.
 	OpenStep : {
-		share : F64,
 		offered_rps : F64,
 		achieved_rps : F64,
 		## A mixed workload's percentiles are its slowest part's.

@@ -58,7 +58,7 @@ FROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;
 
 -- name: steps :many(5000)
 -- @param run_id : Str
-SELECT class, workload, competitor, share, offered_rps, achieved_rps, p99_ms, p999_ms,
+SELECT class, workload, competitor, offered_rps, achieved_rps, p99_ms, p999_ms,
   cpu_busy_pct, loader_cpu_busy_pct
 FROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;
 

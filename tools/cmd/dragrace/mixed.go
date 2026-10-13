@@ -20,6 +20,13 @@ import (
 // behind (answers under `saturated` of the rate offered, or errors), and
 // each step records the mean latency over every request, its slowest
 // part's p99 (the chart), and each part's own numbers.
+//
+// Open loop, as real users arrive whatever the server does (tail latency and saturation). A closed loop's connection
+// waits for each answer before its next request, so a server that stalls
+// is sent less, and its stall never shows in the percentiles (coordinated
+// omission); here latency is counted from when each request was due (oha
+// -q, --latency-correction). Steps rather than a continuous ramp: a ramp
+// never holds a rate long enough for its percentiles to mean that rate.
 
 // Mixed is a workload's mixed load (race.json).
 type Mixed struct {
@@ -41,6 +48,28 @@ type Part struct {
 	// Auth: the load user's token (Authorization: Token ...).
 	Auth bool   `json:"auth"`
 	Body string `json:"body"`
+}
+
+// OpenStep is one rate of the climb, measured.
+type OpenStep struct {
+	OfferedRPS float64 `json:"offered_rps"`
+	// Good (2xx) answers a second: below the offered rate, the server (or
+	// the loader: its CPU says which) could not keep up.
+	AchievedRPS float64 `json:"achieved_rps"`
+	// Latency from when each request was due, not when it was sent: the
+	// slowest part's (mixedStep).
+	P50Ms            float64 `json:"p50_ms"`
+	P99Ms            float64 `json:"p99_ms"`
+	P999Ms           float64 `json:"p999_ms"`
+	Errors           int     `json:"errors"`
+	Non2xx           int     `json:"non_2xx"`
+	CPUBusyPct       float64 `json:"cpu_busy_pct"`
+	LoaderCPUBusyPct float64 `json:"loader_cpu_busy_pct"`
+	NetRxMbps        float64 `json:"net_rx_mbps"`
+	NetTxMbps        float64 `json:"net_tx_mbps"`
+	// The mean over every request, and each part.
+	MeanMs float64    `json:"mean_ms"`
+	Parts  []OpenPart `json:"parts"`
 }
 
 // OpenPart is one part of a mixed step, measured.
@@ -82,7 +111,7 @@ func putConduitSeed(ctx context.Context, root string, race Race, competitors []C
 }
 
 // mixedLoop climbs every mixed workload's ladder for every valid
-// competitor, after the rounds and the open loop.
+// competitor, after the rounds.
 func mixedLoop(ctx context.Context, race Race, competitors []Competitor, target Target,
 	valid map[string]string, run *Run) error {
 	for _, workload := range race.Workloads {
@@ -184,7 +213,7 @@ func climbMixed(ctx context.Context, race Race, workload Workload, competitor Co
 // (each part's mean weighted by its answers); a step's percentiles are the
 // worst part's, as a percentile of the whole cannot be had from the parts.
 func mixedStep(rate int, parts []OpenPart) OpenStep {
-	step := OpenStep{Share: 0, OfferedRPS: float64(rate), Parts: parts}
+	step := OpenStep{OfferedRPS: float64(rate), Parts: parts}
 	weighted := 0.0
 	for _, part := range parts {
 		step.AchievedRPS += part.AchievedRPS

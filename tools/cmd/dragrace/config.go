@@ -61,7 +61,6 @@ type Race struct {
 	Workloads []Workload `json:"-"`
 	Cloud     Cloud      `json:"cloud"`
 	Local     Local      `json:"local"`
-	OpenLoop  OpenLoop   `json:"open_loop"`
 	// The templates workload's page, as every competitor must render it
 	// (workloads/menu.html), up to how each engine spells an entity.
 	Menu string `json:"-"`
@@ -84,9 +83,6 @@ type Test struct {
 	BodyBytes   int    `json:"body_bytes,omitempty"`
 	ContentType string `json:"content_type,omitempty"`
 	Keepalive   bool   `json:"keepalive"`
-	// Ladder, when set, climbs the open-loop ladder after the rounds
-	// (open_loop.go).
-	Ladder bool `json:"ladder,omitempty"`
 	// Mixed, when set, makes this an open-loop-only test of several parts
 	// at once (mixed.go): conduit.
 	Mixed    *Mixed    `json:"mixed,omitempty"`
@@ -134,7 +130,6 @@ type Workload struct {
 	TLS bool `json:"tls,omitempty"`
 	// Protocol is the variant's (Variant.Protocol).
 	Protocol string `json:"protocol"`
-	Ladder   bool   `json:"ladder,omitempty"`
 	Mixed    *Mixed `json:"mixed,omitempty"`
 }
 
@@ -171,7 +166,7 @@ func (test Test) expand() ([]Workload, error) {
 			BodyBytes: test.BodyBytes, ContentType: test.ContentType,
 			Connections: variant.Connections, Keepalive: test.Keepalive,
 			HTTP2: variant.Streams > 0, Streams: variant.Streams, TLS: protocol.name == "tls",
-			Protocol: protocol.name, Ladder: test.Ladder, Mixed: test.Mixed})
+			Protocol: protocol.name, Mixed: test.Mixed})
 	}
 	if len(workloads) != len(test.Variants) || len(workloads) == 0 || workloads[0].Protocol != "http1" {
 		return nil, fmt.Errorf("race.json: %s: an HTTP/1.1 variant, and each protocol once of %v",
@@ -339,10 +334,6 @@ func loadRace(root string) (Race, error) {
 		return race, err
 	}
 	for _, test := range race.Tests {
-		if test.Ladder && (test.Mixed != nil || len(race.OpenLoop.Shares) == 0) {
-			return race, fmt.Errorf("race.json: %s: a ladder needs rounds and open_loop's shares",
-				test.Name)
-		}
 		workloads, err := test.expand()
 		if err != nil {
 			return race, err
@@ -356,6 +347,15 @@ func loadRace(root string) (Race, error) {
 	}
 	race.Stream = string(stream)
 	return race, nil
+}
+
+func workloadNamed(race Race, name string) (Workload, bool) {
+	for _, workload := range race.Workloads {
+		if workload.Name == name {
+			return workload, true
+		}
+	}
+	return Workload{}, false
 }
 
 func loadCompetitors(root string, names []string) ([]Competitor, error) {
@@ -375,13 +375,4 @@ func loadCompetitors(root string, names []string) ([]Competitor, error) {
 // checkoutPath is where a raced repository is: beside this one.
 func checkoutPath(root string, checkout Checkout) string {
 	return filepath.Clean(filepath.Join(root, checkout.Checkout))
-}
-
-// OpenLoop is the race's open-loop test (open_loop.go): each workload
-// marked `ladder`, at fixed offered rates, each a share of the server's
-// own closed-loop best, held long enough for a steady state.
-type OpenLoop struct {
-	Shares         []float64 `json:"shares"`
-	WarmupSeconds  int       `json:"warmup_seconds"`
-	MeasureSeconds int       `json:"measure_seconds"`
 }

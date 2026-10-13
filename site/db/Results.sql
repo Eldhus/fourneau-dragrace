@@ -94,17 +94,17 @@ VALUES (:run_id, :class, :workload, :competitor, :round, :rps, :p50_ms, :p90_ms,
   :net_tx_mbps, :net_rx_pps, :net_tx_pps, :tcp_retransmits, :threads, :voluntary_switches,
   :involuntary_switches, :load_seconds, :seconds);
 
+-- A step of a mixed workload's climb. `share` and `p90_ms` were the share
+-- ladder's (gone 2026-10-13): 0 since.
 -- name: add_step :exec
 -- @param run_id : Str
 -- @param class : Str
 -- @param workload : Str
 -- @param competitor : Str
 -- @param step : I64
--- @param share : F64
 -- @param offered_rps : F64
 -- @param achieved_rps : F64
 -- @param p50_ms : F64
--- @param p90_ms : F64
 -- @param p99_ms : F64
 -- @param p999_ms : F64
 -- @param errors : I64
@@ -117,8 +117,8 @@ VALUES (:run_id, :class, :workload, :competitor, :round, :rps, :p50_ms, :p90_ms,
 INSERT INTO open_steps (run_id, class, workload, competitor, step, share, offered_rps,
   achieved_rps, p50_ms, p90_ms, p99_ms, p999_ms, errors, non_2xx, cpu_busy_pct,
   loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps, mean_ms)
-VALUES (:run_id, :class, :workload, :competitor, :step, :share, :offered_rps,
-  :achieved_rps, :p50_ms, :p90_ms, :p99_ms, :p999_ms, :errors, :non_2xx, :cpu_busy_pct,
+VALUES (:run_id, :class, :workload, :competitor, :step, 0.0, :offered_rps,
+  :achieved_rps, :p50_ms, 0.0, :p99_ms, :p999_ms, :errors, :non_2xx, :cpu_busy_pct,
   :loader_cpu_busy_pct, :net_rx_mbps, :net_tx_mbps, :mean_ms);
 
 -- name: add_part :exec

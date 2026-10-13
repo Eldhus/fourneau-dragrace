@@ -60,20 +60,20 @@ func TestOhaCommandOverTLS(t *testing.T) {
 	target := Target{Address: "10.0.0.7", LoaderHome: "/home/x"}
 	h2 := Workload{Name: "templates-tls", Method: "GET", Path: "/menu", Connections: 128,
 		Keepalive: true, HTTP2: true, Streams: 2, TLS: true}
-	command := ohaCommand(race, h2, target, nil, LoadShape{Seconds: 20})
+	command := ohaCommand(race, h2, target, nil, 20)
 	for _, want := range []string{" --http2 -p 2", " --insecure", " https://10.0.0.7:8080/menu"} {
 		if !strings.Contains(command, want) {
 			t.Errorf("%q lacks %q", command, want)
 		}
 	}
 	churn := Workload{Name: "churn-tls", Method: "GET", Path: "/plaintext", Connections: 64, TLS: true}
-	command = ohaCommand(race, churn, target, nil, LoadShape{Seconds: 20})
+	command = ohaCommand(race, churn, target, nil, 20)
 	if strings.Contains(command, "--http2") || !strings.Contains(command, "--disable-keepalive") {
 		t.Errorf("churn over TLS: %q", command)
 	}
 	plain := Workload{Name: "plaintext", Method: "GET", Path: "/plaintext", Connections: 256,
 		Keepalive: true}
-	command = ohaCommand(race, plain, target, nil, LoadShape{Seconds: 20})
+	command = ohaCommand(race, plain, target, nil, 20)
 	if strings.Contains(command, "--insecure") || !strings.Contains(command, " http://10.0.0.7") {
 		t.Errorf("plain: %q", command)
 	}
@@ -166,8 +166,7 @@ func TestExpand(t *testing.T) {
 
 // race.json as committed: every test raced over HTTP/1.1 and TLS, plaintext over h2c too (HTTP/2's cost apart from TLS's),
 // each variant the same requests in flight as HTTP/1.1's connections: the
-// same test, carried another way. No share ladder: RealWorld's climb is
-// the open loop.
+// same test, carried another way.
 func TestRaceVariants(t *testing.T) {
 	race, err := loadRace("../../..")
 	if err != nil {
@@ -188,9 +187,6 @@ func TestRaceVariants(t *testing.T) {
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("%s: variants %v, want %v", test.Name, got, want)
-		}
-		if test.Ladder {
-			t.Errorf("%s: a share ladder", test.Name)
 		}
 	}
 }

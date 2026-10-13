@@ -46,7 +46,6 @@ Api :: [].{
 		rounds : I64,
 		warmup_seconds : I64,
 		measure_seconds : I64,
-		open_loop : { shares : List(F64), warmup_seconds : I64, measure_seconds : I64 },
 		race_json : Str,
 		versions_json : Str,
 		versions : List({ name : Str, version : Str }),
@@ -69,12 +68,11 @@ Api :: [].{
 		connections : I64,
 		keepalive : Bool,
 		## HTTP/2 (`streams` a connection; 0 for HTTP/1.1), over TLS or not;
-		## the variant's protocol ("http1", "h2c", "tls"); a ladder climbed.
+		## the variant's protocol ("http1", "h2c", "tls").
 		http2 : Bool,
 		streams : I64,
 		tls : Bool,
 		protocol : Str,
-		ladder : Bool,
 	}
 
 	## A run's end: its status, and its timing and droplets (timing.go).
@@ -155,12 +153,11 @@ Api :: [].{
 		seconds : F64,
 	}
 
+	## A step of a mixed workload's climb (mixed.go, OpenStep).
 	StepPost : {
-		share : F64,
 		offered_rps : F64,
 		achieved_rps : F64,
 		p50_ms : F64,
-		p90_ms : F64,
 		p99_ms : F64,
 		p999_ms : F64,
 		errors : I64,
@@ -412,9 +409,6 @@ Api :: [].{
 			rounds: race.rounds,
 			warmup_seconds: race.warmup_seconds,
 			measure_seconds: race.measure_seconds,
-			open_loop_shares: json_numbers(race.open_loop.shares),
-			open_loop_warmup_seconds: race.open_loop.warmup_seconds,
-			open_loop_measure_seconds: race.open_loop.measure_seconds,
 			race_json: race.race_json,
 			versions_json: race.versions_json,
 		})?
@@ -446,7 +440,6 @@ Api :: [].{
 				streams: w.streams,
 				tls: w.tls,
 				protocol: w.protocol,
-				ladder: w.ladder,
 			})?
 			$position = $position + 1
 		}
@@ -576,11 +569,9 @@ Api :: [].{
 				workload: r.workload,
 				competitor: r.competitor,
 				step: $index,
-				share: step.share,
 				offered_rps: step.offered_rps,
 				achieved_rps: step.achieved_rps,
 				p50_ms: step.p50_ms,
-				p90_ms: step.p90_ms,
 				p99_ms: step.p99_ms,
 				p999_ms: step.p999_ms,
 				errors: step.errors,
@@ -734,10 +725,6 @@ Api :: [].{
 			Err(Refused(response)) => Err(Refused(response))
 		}
 
-	## Numbers as a JSON array (finite: JSON has no NaN; parsed JSON holds none).
-	json_numbers : List(F64) -> Str
-	json_numbers = |numbers| "[${Str.join_with(numbers.map(|n| n.to_str()), ",")}]"
-
 	json_headers : List({ name : Str, value : Str })
 	json_headers = [{ name: "Content-Type", value: "application/json" }]
 
@@ -781,7 +768,6 @@ expect !Api.same_secret("0123456789abcdef", secret)
 expect !Api.same_secret("", "")
 expect !Api.same_secret("short", "short")
 expect Api.is_name("2026-10-07T070000Z-cloud") and !Api.is_name("a/b") and !Api.is_name("")
-expect Api.json_numbers([0.5, 1.0, 1.2]) == "[0.5,1,1.2]"
 expect Api.query_value("/api/requests?kind=race", "kind") == "race"
 
 expect {
@@ -804,6 +790,17 @@ expect {
 	parsed = Json.parse("{\"class\":\"smallest\",\"workload\":\"plaintext\",\"competitor\":\"go\",\"valid\":true,\"note\":\"\",\"rounds\":[],\"best_rps\":41863.2,\"median_p50_ms\":1.0,\"median_p95_ms\":2.0,\"median_p99_ms\":3.0,\"median_p999_ms\":4.0,\"open_loop\":[]}")
 	match parsed {
 		Ok(result) => result.competitor == "go" and result.valid
+		Err(_) => Bool.False
+	}
+}
+
+# A step with fields the site no longer reads (`share`, `p90_ms`) still
+# parses: the site deploys before the racer updates itself.
+expect {
+	parsed : Try(Api.StepPost, _)
+	parsed = Json.parse("{\"share\":0.0,\"offered_rps\":250.0,\"achieved_rps\":250.0,\"p50_ms\":1.0,\"p90_ms\":0.0,\"p99_ms\":2.0,\"p999_ms\":3.0,\"errors\":0,\"non_2xx\":0,\"cpu_busy_pct\":5.0,\"loader_cpu_busy_pct\":4.0,\"net_rx_mbps\":1.0,\"net_tx_mbps\":2.0,\"mean_ms\":1.0,\"parts\":[]}")
+	match parsed {
+		Ok(step) => step.offered_rps == 250.0 and step.p99_ms == 2.0
 		Err(_) => Bool.False
 	}
 }

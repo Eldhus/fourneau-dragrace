@@ -25,6 +25,8 @@ INSERT INTO run_commits (run_id, repository, commit_sha, new)
 VALUES (:run_id, :repository, :commit_sha, :new)
 ON CONFLICT DO NOTHING;
 
+-- The open_loop_* columns were the share ladder's (gone 2026-10-13): none
+-- ('[]' and 0) since.
 -- name: add_settings :exec
 -- @param run_id : Str
 -- @param seed : I64
@@ -34,17 +36,13 @@ ON CONFLICT DO NOTHING;
 -- @param rounds : I64
 -- @param warmup_seconds : I64
 -- @param measure_seconds : I64
--- @param open_loop_shares : Str
--- @param open_loop_warmup_seconds : I64
--- @param open_loop_measure_seconds : I64
 -- @param race_json : Str
 -- @param versions_json : Str
 INSERT INTO run_settings (run_id, seed, region, image, port, rounds, warmup_seconds,
   measure_seconds, open_loop_shares, open_loop_warmup_seconds,
   open_loop_measure_seconds, race_json, versions_json)
 VALUES (:run_id, :seed, :region, :image, :port, :rounds, :warmup_seconds,
-  :measure_seconds, :open_loop_shares, :open_loop_warmup_seconds,
-  :open_loop_measure_seconds, :race_json, :versions_json)
+  :measure_seconds, '[]', 0, 0, :race_json, :versions_json)
 ON CONFLICT DO NOTHING;
 
 -- name: add_version :exec
@@ -65,6 +63,7 @@ INSERT INTO run_competitors (run_id, name, position, title, language, framework)
 VALUES (:run_id, :name, :position, :title, :language, :framework)
 ON CONFLICT DO NOTHING;
 
+-- `ladder`: the share ladder's (gone 2026-10-13), 0 since.
 -- name: add_workload :exec
 -- @param run_id : Str
 -- @param name : Str
@@ -83,12 +82,11 @@ ON CONFLICT DO NOTHING;
 -- @param streams : I64
 -- @param tls : Bool
 -- @param protocol : Str
--- @param ladder : Bool
 INSERT INTO run_workloads (run_id, name, test, position, kind, title, summary, method, path,
   body_bytes, content_type, connections, keepalive, http2, streams, tls, protocol, ladder)
 VALUES (:run_id, :name, :test, :position, :kind, :title, :summary, :method, :path,
   :body_bytes, :content_type, :connections, :keepalive, :http2, :streams, :tls, :protocol,
-  :ladder)
+  0)
 ON CONFLICT DO NOTHING;
 
 -- name: add_class :exec

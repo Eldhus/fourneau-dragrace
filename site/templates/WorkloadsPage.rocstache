@@ -38,7 +38,7 @@
 </ul>
 
 <h2>Open loop</h2>
-<p>RealWorld races open loop only: oha offers fixed rates, the same for every server (its card gives them), each step about &radic;2 the last, and each server climbs until it falls behind. Latency is counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each latency belongs to one rate; plotted at absolute rates, so a slow server&rsquo;s easy half never passes for speed.</p>
+<p>RealWorld races open loop only: oha offers fixed rates, the same for every server (its card gives them), each step about &radic;2 the last, and each server climbs until it falls behind. Latency is counted from when each request was due (<a href="https://github.com/giltene/wrk2">wrk2</a>&rsquo;s correction; oha <code>-q --latency-correction</code>). Steps, not a ramp, so each latency belongs to one rate.</p>
 <p>A step with the loader {{ loader_limit }}% busy or more is drawn hollow.</p>
 
 <h2>Caveats</h2>

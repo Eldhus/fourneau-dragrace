@@ -57,7 +57,7 @@ type Result struct {
 	MedianP95Ms  float64 `json:"median_p95_ms"`
 	MedianP99Ms  float64 `json:"median_p99_ms"`
 	MedianP999Ms float64 `json:"median_p999_ms"`
-	// The open-loop ladder (open_loop.go), on the open-loop workload only.
+	// The open-loop climb (mixed.go), on a mixed workload only.
 	OpenLoop []OpenStep `json:"open_loop"`
 }
 

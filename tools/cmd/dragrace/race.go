@@ -85,9 +85,6 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 			}
 		}
 	}
-	if err := openLoop(ctx, race, competitors, target, bodies, valid, run); err != nil {
-		return err
-	}
 	return mixedLoop(ctx, race, competitors, target, valid, run)
 }
 
@@ -385,18 +382,9 @@ func validate(ctx context.Context, race Race, target Target, bodies map[int]stri
 	return ""
 }
 
-// LoadShape is how oha sends: closed loop (rate 0: each connection's next
-// request when its answer arrives) or open loop at a fixed rate.
-type LoadShape struct {
-	Seconds int
-	// Requests a second, offered whatever the server does; 0 for a closed
-	// loop. Latency is then counted from when each request was due
-	// (--latency-correction), so a stall counts against every request it
-	// delays (coordinated omission).
-	Rate int
-}
-
-// ohaCommand is one oha run on the loader. Every run, closed or open:
+// ohaCommand is one oha run on the loader, closed loop: each connection's
+// next request when its answer arrives (mixed.go's partCommand is the open
+// loop). Every run:
 //   - --disable-compression: oha otherwise asks for gzip and brotli, which
 //     a server that compresses (basic-webserver) honours and the others
 //     do not, so the race would measure compression policy, not serving
@@ -404,16 +392,13 @@ type LoadShape struct {
 //   - --worker-threads at the loader's CPUs: oha's default is the
 //     physical cores it sees, which a VM may report as fewer.
 func ohaCommand(race Race, workload Workload, target Target, bodies map[int]string,
-	shape LoadShape) string {
+	seconds int) string {
 	var command strings.Builder
 	command.WriteString("ulimit -n $(ulimit -Hn); " + target.taskset(target.LoaderCPUs))
 	fmt.Fprintf(&command, "%s/oha -z %ds -c %d --no-tui --output-format json --disable-compression",
-		quote(target.LoaderHome), shape.Seconds, workload.Connections)
+		quote(target.LoaderHome), seconds, workload.Connections)
 	if target.LoaderThreads > 0 {
 		fmt.Fprintf(&command, " --worker-threads %d", target.LoaderThreads)
-	}
-	if shape.Rate > 0 {
-		fmt.Fprintf(&command, " -q %d --latency-correction", shape.Rate)
 	}
 	if !workload.Keepalive {
 		command.WriteString(" --disable-keepalive")
@@ -440,7 +425,7 @@ func ohaCommand(race Race, workload Workload, target Target, bodies map[int]stri
 func measure(ctx context.Context, race Race, workload Workload, target Target,
 	bodies map[int]string, pid string) (Round, error) {
 	oha := func(seconds int) string {
-		return ohaCommand(race, workload, target, bodies, LoadShape{Seconds: seconds})
+		return ohaCommand(race, workload, target, bodies, seconds)
 	}
 	if _, err := target.Loader.Shell(ctx, oha(race.WarmupSeconds)); err != nil {
 		return Round{}, fmt.Errorf("warmup: %w", err)

@@ -103,7 +103,6 @@ Store :: [].{
 					median_p99_ms: median(answered.map(|x| x.p99_ms)),
 					median_p999_ms: median(answered.map(|x| x.p999_ms)),
 					open_loop: steps.keep_if(same).map(|x| {
-						share: x.share,
 						offered_rps: x.offered_rps,
 						achieved_rps: x.achieved_rps,
 						p99_ms: x.p99_ms,

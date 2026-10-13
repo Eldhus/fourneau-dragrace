@@ -879,25 +879,25 @@ expect {
 	]
 }
 
-## The class's open-loop charts, a ladder each: the closed workload's
-## (each server at shares of its own maximum), and each mixed workload's
-## (at rates the same for every server).
+## The class's open-loop charts, a climb each: each mixed workload's, at
+## rates the same for every server. (Runs before 2026-10-10 also hold
+## templates' share ladder in their steps: the pages show only the newest
+## run, so only those runs' data files show it.)
 open_charts : Data.Run, Str -> List({ section : Str, chart : View.OpenChart })
 open_charts = |run, class|
 	run.race.workloads.keep_oks(|workload| {
 		results = run.results.keep_if(|r| r.class == class and r.workload == workload.name and r.valid and !r.open_loop.is_empty())
-		if results.is_empty() {
-			Err(NoLadder)
+		if workload.kind != "mixed" or results.is_empty() {
+			Err(NoClimb)
 		} else {
-			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, results, mixed: workload.kind == "mixed" }) })
+			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, results }) })
 		}
 	})
 
-## p99 against the offered rate, on a log axis: a mixed workload's is its
-## slowest part's. (A switch to p50, p90, p99.9 and
-## the mean was built and taken out; the charts all looked alike.)
-open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), mixed : Bool } -> View.OpenChart
-open_chart = |{ key, title, summary, variant, run, results, mixed }| {
+## p99 against the offered rate, on a log axis: the slowest part's. (A switch to p50, p90, p99.9 and the mean was built
+## and taken out; the charts all looked alike.)
+open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result) } -> View.OpenChart
+open_chart = |{ key, title, summary, variant, run, results }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -912,33 +912,25 @@ open_chart = |{ key, title, summary, variant, run, results, mixed }| {
 		clamped = if ms < low low else ms
 		top + (1.0 - (log10(clamped) - log10(low)) / (log10(high) - log10(low))) * (height - top - bottom)
 	}
-	lines = spread_open(results.map(|r| open_line(r, x, y, mixed)))
+	lines = spread_open(results.map(|r| open_line(r, x, y)))
 	ticks_y = decades.map(|ms| { line_y: Format.one_decimal(y(ms)), text_y: Format.one_decimal(y(ms) + 4.0), label: ms_label(ms) })
-	# The caption is one sentence on the load, as every strip's is: a mixed
-	# workload's own summary (it races only open loop), else the ladder, its
-	# shares from the run's own steps, never typed in; what is plotted is the axis's note.
-	least_share = steps.fold(1000.0, |least, s| if s.share < least s.share else least)
-	most_share = steps.fold(0.0, |most, s| if s.share > most s.share else most)
-	ladder = "The same requests at fixed rates, ${Format.thousands(least_share * 100.0)}% to ${Format.thousands(most_share * 100.0)}% of each server's own max."
-	{ caption, measure } =
-		if mixed {
-			{ caption: summary, measure: "p99 latency, the slowest request type's" }
-		} else {
-			{ caption: ladder, measure: "p99 latency" }
-		}
+	# The caption is one sentence on the load, as every strip's is: the
+	# workload's own summary (it races only open loop); what is plotted is
+	# the axis's note.
+	measure = "p99 latency, the slowest request type's"
 	loader_bound = lines.any(|l| l.dots.any(|dot| dot.hollow))
-	{ key, title, caption, variant, run, measure, lines, ticks_x, ticks_y, loader_bound }
+	{ key, title, caption: summary, variant, run, measure, lines, ticks_x, ticks_y, loader_bound }
 }
 
-open_line : Data.Result, (F64 -> F64), (F64 -> F64), Bool -> View.DraftOpenLine
-open_line = |result, x, y, mixed| {
+open_line : Data.Result, (F64 -> F64), (F64 -> F64) -> View.DraftOpenLine
+open_line = |result, x, y| {
 	points = result.open_loop.map(|s| { s, px: x(s.offered_rps), py: y(s.p99_ms) })
 	path = Str.join_with(points.map_with_index(|p, i| "${if i == 0 "M" else "L"}${Format.one_decimal(p.px)} ${Format.one_decimal(p.py)}"), " ")
 	dots = points.map(|p| {
 		cx: Format.one_decimal(p.px),
 		cy: Format.one_decimal(p.py),
 		hollow: p.s.loader_cpu_busy_pct >= loader_limit_pct,
-		title: step_title(result.competitor, p.s, mixed),
+		title: step_title(result.competitor, p.s),
 	})
 	{ last_x, last_y } =
 		match List.last(points) {
@@ -948,17 +940,12 @@ open_line = |result, x, y, mixed| {
 	{ competitor: result.competitor, path, dots, label_x: Format.one_decimal(last_x + 10.0), label_y: Format.one_decimal(last_y + 4.0), end_x: last_x, end_y: last_y }
 }
 
-step_title : Str, Data.OpenStep, Bool -> Str
-step_title = |competitor, s, mixed| {
+step_title : Str, Data.OpenStep -> Str
+step_title = |competitor, s| {
 	limit = if s.loader_cpu_busy_pct >= loader_limit_pct " (the loader was the limit)" else ""
 	rates = "${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered"
 	cpu = "server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"
-	if mixed {
-		"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
-	} else {
-		share = Format.thousands(s.share * 100.0)
-		"${competitor} at ${share}% of its max: ${rates}; p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
-	}
+	"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
 }
 
 ## The open chart's labels, spread as the history charts' are.

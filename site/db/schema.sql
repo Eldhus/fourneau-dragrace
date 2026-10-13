@@ -235,8 +235,10 @@ CREATE TABLE rounds (
     REFERENCES results (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;
 
--- One rate of an open-loop ladder (open_loop.go, OpenStep): of one
--- workload, or of a mixed one, whose parts are in open_step_parts.
+-- One rate of a mixed workload's open-loop climb (mixed.go, OpenStep), its
+-- parts in open_step_parts. Runs before 2026-10-10 also hold templates'
+-- share ladder here; `share` and `p90_ms` were the ladder's, 0 since
+-- 2026-10-13.
 CREATE TABLE open_steps (
   run_id TEXT NOT NULL,
   class TEXT NOT NULL,
