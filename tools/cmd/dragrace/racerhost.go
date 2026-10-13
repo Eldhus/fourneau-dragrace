@@ -138,9 +138,8 @@ func racerProvision(ctx context.Context, root string, args []string) error {
 }
 
 // guardConfigFor allows any size up to hourlyMaxUSD an hour, in race.json's
-// region and image, under the month's cap. Before, it allowed
-// race.json's sizes only, and a class added without an install lost a
-// night.
+// region and image, under the month's cap, so a class added to race.json
+// needs no install.
 func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64) GuardConfig {
 	return GuardConfig{Region: race.Cloud.Region, Image: race.Cloud.Image, Tag: race.Cloud.Tag,
 		HourlyMaxUSD: hourlyMaxUSD, MonthlyCapUSD: capUSD, DropletsMax: 6,

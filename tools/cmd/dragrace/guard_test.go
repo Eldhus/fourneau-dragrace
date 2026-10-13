@@ -118,8 +118,7 @@ func testGuard(t *testing.T, capUSD float64) (*Guard, *fakeDigitalOcean, *time.T
 	fake := newFakeDigitalOcean()
 	guard := &Guard{provider: fake, now: func() time.Time { return now }, config: GuardConfig{
 		Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "fourneau-dragrace-race",
-		Sizes:         map[string]float64{"c-2": 0.07, "c-4": 0.13, "s-1vcpu-512mb-10gb": 0.01},
-		MonthlyCapUSD: capUSD, DropletsMax: 4, AgeMaxMinutes: 180,
+		HourlyMaxUSD: 0.13, MonthlyCapUSD: capUSD, DropletsMax: 4, AgeMaxMinutes: 180,
 		Socket: filepath.Join(t.TempDir(), "guard.sock"), Ledger: filepath.Join(t.TempDir(), "ledger.json"),
 	}}
 	if err := guard.config.check(); err != nil {
@@ -135,14 +134,14 @@ func raceDroplet(size string) DropletRequest {
 
 func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
 	guard, fake, _ := testGuard(t, 25)
-	fake.prices["c-2"] = 0.09 // DigitalOcean raised the price past the allowed
+	fake.prices["c-2"] = 0.15 // DigitalOcean raised the price past the allowed
 	cases := map[string]DropletRequest{
-		"size not allowed": raceDroplet("c-32"),
-		"price above":      raceDroplet("c-2"),
-		"region":           func() DropletRequest { r := raceDroplet("c-4"); r.Region = "nyc3"; return r }(),
-		"image":            func() DropletRequest { r := raceDroplet("c-4"); r.Image = "debian"; return r }(),
-		"tag":              func() DropletRequest { r := raceDroplet("c-4"); r.Tags = nil; return r }(),
-		"name":             func() DropletRequest { r := raceDroplet("c-4"); r.Name = "miner"; return r }(),
+		"a dearer size": raceDroplet("c-32"),
+		"price above":   raceDroplet("c-2"),
+		"region":        func() DropletRequest { r := raceDroplet("c-4"); r.Region = "nyc3"; return r }(),
+		"image":         func() DropletRequest { r := raceDroplet("c-4"); r.Image = "debian"; return r }(),
+		"tag":           func() DropletRequest { r := raceDroplet("c-4"); r.Tags = nil; return r }(),
+		"name":          func() DropletRequest { r := raceDroplet("c-4"); r.Name = "miner"; return r }(),
 	}
 	for name, request := range cases {
 		if _, err := guard.createDroplet(context.Background(), request); !errors.Is(err, errRefused) {
@@ -297,38 +296,29 @@ func TestGuardOverItsSocket(t *testing.T) {
 		t.Fatalf("left: %v", fake.droplets)
 	}
 	allowed, err := client.allowed(ctx)
-	if err != nil || allowed.Region != guard.config.Region || len(allowed.Sizes) != len(guard.config.Sizes) {
+	if err != nil || allowed.Region != guard.config.Region || allowed.HourlyMaxUSD != guard.config.HourlyMaxUSD {
 		t.Fatalf("allowed: %+v %v", allowed, err)
 	}
-	// A guard installed before /allowed answers 404.
+	// A route the guard does not know answers 404.
 	var unknown []string
 	if err := client.call(ctx, http.MethodGet, "/nothing", nil, &unknown); !errors.Is(err, errGuardUnknown) {
 		t.Fatalf("a path the guard does not know: %v", err)
 	}
 }
 
-// What the guard would refuse is found before a droplet: a third class
-// whose size a guard of race.json's sizes does not have; a guard with an
-// hourly ceiling takes it with no install.
+// What the guard would refuse is found before a droplet; a class added
+// since the install, under the guard's ceiling, needs no install.
 func TestGuardRefusalsBeforeADroplet(t *testing.T) {
 	two := []ServerClass{{Name: "smallest", Size: "s-1vcpu-512mb-10gb", LoaderSize: "c-4"},
 		{Name: "dedicated-2", Size: "c-2", LoaderSize: "c-4"}}
 	cloud := Cloud{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", MaxAgeMinutes: 180, Servers: two}
 	prices := map[string]float64{"s-1vcpu-512mb-10gb": 0.006, "c-2": 0.0625, "c-4": 0.125,
 		"s-2vcpu-2gb-amd": 0.0312, "c-8": 0.25, "c-16": 0.5}
-	legacy := GuardConfig{Region: "lon1", Image: "ubuntu-26-04-x64", Tag: "t", DropletsMax: 6,
-		Sizes: map[string]float64{"s-1vcpu-512mb-10gb": 0.0075, "c-2": 0.0782, "c-4": 0.1563}}
 	ceiling := guardConfigFor(Race{Cloud: cloud}, 0.25, 25)
-	for _, allowed := range []GuardConfig{legacy, ceiling} {
-		if problems := guardRefusals(cloud, prices, allowed); len(problems) != 0 {
-			t.Fatalf("the race the guard was installed for: %v", problems)
-		}
+	if problems := guardRefusals(cloud, prices, ceiling); len(problems) != 0 {
+		t.Fatalf("the race the guard was installed for: %v", problems)
 	}
 	cloud.Servers = append(two, ServerClass{Name: "basic-amd-2", Size: "s-2vcpu-2gb-amd", LoaderSize: "c-4"})
-	problems := guardRefusals(cloud, prices, legacy)
-	if strings.Join(problems, "; ") != "basic-amd-2: size s-2vcpu-2gb-amd is not allowed" {
-		t.Fatalf("a class added since, a guard of sizes: %v", problems)
-	}
 	if problems := guardRefusals(cloud, prices, ceiling); len(problems) != 0 {
 		t.Fatalf("a class added since, a guard with a ceiling: %v", problems)
 	}
@@ -383,10 +373,6 @@ func TestRacerInstallWaitsForTheRace(t *testing.T) {
 // The guard with a ceiling makes any size under it, and nothing dearer.
 func TestGuardAllowsAnySizeUnderItsCeiling(t *testing.T) {
 	guard, fake, _ := testGuard(t, 25)
-	guard.config.Sizes, guard.config.HourlyMaxUSD = nil, 0.13
-	if err := guard.config.check(); err != nil {
-		t.Fatal(err)
-	}
 	fake.prices["s-2vcpu-2gb-amd"] = 0.0312
 	for _, size := range []string{"c-2", "s-2vcpu-2gb-amd", "c-4"} {
 		if _, err := guard.createDroplet(context.Background(), raceDroplet(size)); err != nil {
@@ -409,8 +395,8 @@ func TestGuardConfigHasACeiling(t *testing.T) {
 	if err := config.check(); err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Sizes) != 0 || config.HourlyMaxUSD != 0.25 {
-		t.Fatalf("sizes %v, ceiling %v", config.Sizes, config.HourlyMaxUSD)
+	if config.HourlyMaxUSD != 0.25 {
+		t.Fatalf("ceiling %v", config.HourlyMaxUSD)
 	}
 	if err := guardConfigFor(race, 20, 25).check(); err == nil {
 		t.Fatal("a ceiling of $20 an hour, a zero too many, accepted")

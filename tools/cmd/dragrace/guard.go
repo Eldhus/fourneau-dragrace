@@ -34,15 +34,12 @@ type GuardConfig struct {
 	// The most any droplet may cost an hour: whatever size the race asks
 	// for under it is allowed, so a class added to race.json needs no
 	// install. The month's cap still bounds the spend.
-	HourlyMaxUSD float64 `json:"hourly_max_usd,omitempty"`
-	// The sizes allowed, each with the most it may cost an hour: a config
-	// from before hourly_max_usd (race.json's sizes at the install).
-	Sizes         map[string]float64 `json:"sizes,omitempty"`
-	MonthlyCapUSD float64            `json:"monthly_cap_usd"`
-	DropletsMax   int                `json:"droplets_max"`
-	AgeMaxMinutes int                `json:"age_max_minutes"`
-	Socket        string             `json:"socket"`
-	Ledger        string             `json:"ledger"`
+	HourlyMaxUSD  float64 `json:"hourly_max_usd"`
+	MonthlyCapUSD float64 `json:"monthly_cap_usd"`
+	DropletsMax   int     `json:"droplets_max"`
+	AgeMaxMinutes int     `json:"age_max_minutes"`
+	Socket        string  `json:"socket"`
+	Ledger        string  `json:"ledger"`
 }
 
 func (config GuardConfig) check() error {
@@ -50,11 +47,8 @@ func (config GuardConfig) check() error {
 	if config.Region == "" || config.Image == "" || config.Tag == "" {
 		problems = append(problems, "region, image and tag are required")
 	}
-	if len(config.Sizes) == 0 && config.HourlyMaxUSD <= 0 {
-		problems = append(problems, "no sizes allowed: hourly_max_usd or sizes")
-	}
-	if config.HourlyMaxUSD > guardHourlyUSDMax {
-		problems = append(problems, fmt.Sprintf("hourly_max_usd: at most %d", guardHourlyUSDMax))
+	if config.HourlyMaxUSD <= 0 || config.HourlyMaxUSD > guardHourlyUSDMax {
+		problems = append(problems, fmt.Sprintf("hourly_max_usd: above 0, at most %d", guardHourlyUSDMax))
 	}
 	if config.MonthlyCapUSD <= 0 || config.MonthlyCapUSD > guardCapUSDMax {
 		problems = append(problems, fmt.Sprintf("monthly_cap_usd: above 0, at most %d", guardCapUSDMax))
@@ -149,18 +143,12 @@ func (guard *Guard) committed(now time.Time) float64 {
 	return total
 }
 
-// sizeProblem says why a size at its price now is not allowed, or "": under
-// hourly_max_usd, or at most its own price in a config of sizes.
+// sizeProblem says why a size at its price now is not allowed (above
+// hourly_max_usd, or no price known), or "".
 func (config GuardConfig) sizeProblem(size string, priceNow float64) string {
-	most, listed := config.Sizes[size]
-	if !listed && config.HourlyMaxUSD > 0 {
-		most, listed = config.HourlyMaxUSD, true
-	}
-	switch {
-	case !listed:
-		return fmt.Sprintf("size %s is not allowed", size)
-	case priceNow <= 0 || priceNow > most:
-		return fmt.Sprintf("%s costs $%.4f an hour, the most allowed is $%.4f", size, priceNow, most)
+	if priceNow <= 0 || priceNow > config.HourlyMaxUSD {
+		return fmt.Sprintf("%s costs $%.4f an hour, the most allowed is $%.4f", size, priceNow,
+			config.HourlyMaxUSD)
 	}
 	return ""
 }
@@ -636,8 +624,8 @@ func (guard *GuardClient) sizes(ctx context.Context) ([]Size, error) {
 	return sizes, err
 }
 
-// errGuardUnknown is a request the guard does not know: a guard installed
-// before it (the guard is never updated by a build).
+// errGuardUnknown is a request the guard does not know (404): the guard is
+// never updated by a build, so a route newer than its install.
 var errGuardUnknown = errors.New("not known to this guard")
 
 func (guard *GuardClient) allowed(ctx context.Context) (GuardConfig, error) {
