@@ -80,17 +80,6 @@ ORDER BY r.started_at, s.class, s.workload, s.competitor;
 SELECT id, trigger, status, reason, started_at, finished_at FROM runs
 ORDER BY started_at DESC LIMIT 10;
 
--- name: class_status :many(32)
--- @param run_id : Str
-SELECT class, status, reason, seconds FROM class_status WHERE run_id = :run_id
-ORDER BY class;
-
--- How many results a run holds so far.
--- name: result_count :one
--- @param run_id : Str
--- @column results : I64
-SELECT count(*) AS results FROM results WHERE run_id = :run_id;
-
 -- The Workloads page, from the newest finished run: what each workload
 -- asked, so the page never types in what race.json decides. A mixed workload's parts and rates are only in the race's
 -- own race.json: `mix` ("list 50%, article 30%, ..."), and `lowest` and

@@ -165,21 +165,17 @@ Store :: [].{
 	Racer : {
 		## The newest run of any status, if any.
 		recent : List(Pages.Recent),
-		## The classes of the newest run, while it races.
-		classes : List(Pages.ClassStatus),
-		## Results the newest run holds so far.
-		results : I64,
 		waiting : List(Requests.Waiting),
 		heads : List(Heads.All),
 		## The commits of the newest finished run.
 		raced : List(Pages.Commits),
 	}
 
-	## What the race page says of the racer, a banner each: what races
-	## now, what tonight's check will do, what was asked, what the last run
-	## that did not finish said. `items` are the banner's parts that must
-	## not break inside (a repository and its commit, a class and its
-	## state), apart from the sentence.
+	## What the race page says of the racer, a banner each: what tonight's
+	## check will do, what was asked, what the last run that did not finish
+	## said (a run racing is the live banner's, live!). `items` are the
+	## banner's parts that must not break inside (a repository and its
+	## commit), apart from the sentence.
 	Banner : { text : Str, items : List(Str) }
 
 	status : Racer -> List(Banner)
@@ -188,24 +184,23 @@ Store :: [].{
 		said = |text| { text, items: [] }
 		racing =
 			match newest {
-				Ok(run) if run.status == "racing" =>
-					[{ text: "Racing now: ${run.id}, ${racer.results.to_str()} results in", items: racer.classes.map(|c| "${c.class} ${c.status}") }]
-				_ => []
+				Ok(run) => run.status == "racing"
+				Err(_) => Bool.False
 			}
 		new = racer.heads.keep_if(|head| !racer.raced.any(|c| c.repository == head.repository and c.commit_sha == head.commit_sha))
 		# While a run races, the heads it races are the news; tonight's
 		# check is said again once it is over.
 		tonight =
-			if racer.heads.is_empty() or !racing.is_empty() {
+			if racer.heads.is_empty() or racing {
 				[]
 			} else if new.is_empty() {
-				[said("Nothing new since the last race: tonight's check will skip it.")]
+				[said(nothing_new)]
 			} else {
 				# Not the hour: the racer's timer holds it, and the site has no
 				# copy to go stale.
 				[{ text: "Racing tonight", items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
 			}
-		asked = if racer.waiting.any(|w| w.kind == "race") [said("A race is asked for: the racer builds it first if its commits are new (about ten minutes), then races (about an hour).")] else []
+		asked = if racer.waiting.any(|w| w.kind == "race") [said("A race is asked for: the racer takes it once idle, within a minute; a race takes about two and a half hours.")] else []
 		last =
 			match newest {
 				Ok(run) if run.status != "racing" and run.status != "finished" => {
@@ -214,9 +209,14 @@ Store :: [].{
 				}
 				_ => []
 			}
-		# A run racing is the live banner's (live!), not a banner here.
 		asked.concat(tonight).concat(last)
 	}
+
+	## The racer judges from its newest build, and fourneau's and roux's
+	## new commits reach a build at the latest with the daily one
+	## (build.yml).
+	nothing_new : Str
+	nothing_new = "Nothing new since the last race: tonight's check skips, unless fourneau or roux have new commits by the next build (daily, 07:47 UTC)."
 
 	## The run racing now, as the race page's live banner shows it: its newest results, and each class's progress
 	## and seconds left (db/Live.sql says how they are estimated).
@@ -242,19 +242,6 @@ Store :: [].{
 	racer! = |db, request| {
 		reads = Sqlite.read(db, request)
 		recent = Pages.recent!(reads)?
-		{ classes, results } =
-			match recent.first() {
-				Ok(newest) => {
-					count =
-						match Pages.result_count!(reads, { run_id: newest.id }) {
-							Ok(row) => row.results
-							Err(NotFound) => 0
-							Err(DbErr(err)) => return Err(DbErr(err))
-						}
-					{ classes: Pages.class_status!(reads, { run_id: newest.id })?, results: count }
-				}
-				Err(_) => { classes: [], results: 0 }
-			}
 		raced =
 			match Pages.latest!(reads) {
 				Ok({ id }) => Pages.commits!(reads, { run_id: id })?
@@ -263,8 +250,6 @@ Store :: [].{
 			}
 		Ok({
 			recent,
-			classes,
-			results,
 			waiting: Requests.waiting!(reads)?,
 			heads: Heads.all!(reads)?,
 			raced,
@@ -289,16 +274,16 @@ expect Store.median([20.73, 20.40, 13.45]) == 20.40
 expect {
 	head = |repository, commit_sha| { repository, commit_sha, seen_at: "" }
 	raced = |repository, commit_sha| { repository, commit_sha, new: Bool.False }
-	quiet = { recent: [], classes: [], results: 0, waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
+	quiet = { recent: [], waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
 	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
-	Store.status(quiet) == [{ text: "Nothing new since the last race: tonight's check will skip it.", items: [] }]
+	Store.status(quiet) == [{ text: Store.nothing_new, items: [] }]
 	and Store.status(busy) == [{ text: "Racing tonight", items: ["roux def1234"] }]
 }
 
 expect {
 	run = |status, reason| { id: "r1", trigger: "timer", status, reason, started_at: "", finished_at: Null }
-	racing = { recent: [run("racing", "")], classes: [{ class: "smallest", status: "done", reason: "", seconds: 1.0 }], results: 12, waiting: [], heads: [], raced: [] }
-	skipped = { ..racing, recent: [run("skipped", "nothing new")], classes: [] }
+	racing = { recent: [run("racing", "")], waiting: [], heads: [], raced: [] }
+	skipped = { ..racing, recent: [run("skipped", "nothing new")] }
 	# A run racing is the live banner's; tonight's news waits for its end.
 	Store.status(racing) == []
 	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == []
