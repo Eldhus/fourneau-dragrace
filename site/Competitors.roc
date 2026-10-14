@@ -61,7 +61,7 @@ Competitors :: [].{
 			db: "roux-db: SQL compiled to typed Roc",
 			build: "roux build: Roc --opt=speed, host ReleaseSafe, x86-64-v3, one static binary",
 			links: [{ label: "roux", href: "https://github.com/Eldhus/roux" }, { label: "fourneau", href: "https://github.com/Eldhus/fourneau" }, source("roux")],
-			about: "Eldhus’s Roc platform: Roc on fourneau. The gap to fourneau-zig is what Roc costs.",
+			about: "Eldhus’s Roc platform: Roc on fourneau. The gap to fourneau-zig is what Roc and roux cost.",
 		},
 		{
 			name: "basic-webserver",

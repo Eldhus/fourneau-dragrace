@@ -6,7 +6,6 @@ competitors/fourneau-zig/zig-out/
 competitors/fourneau-zig/.zig-cache/
 competitors/basic-webserver/main
 .zig-cache/
-site/data/
 tools/dragrace
 site/site.db*
 site/backups/
