@@ -142,21 +142,11 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	return nil
 }
 
-// hostRetired are files an install deletes: the racer's GitHub token, which
-// started builds until the builds became daily, and the commit an install stamped before SHA256SUMS.
-// Once `racer install` has run on a build after a5204c0, and
-// both installs on one with SHA256SUMS, this and its uses (hostSetup,
-// hosts.go's probe) can go.
-var hostRetired = []string{
-	"/etc/credstore.encrypted/github-token",
-	"/etc/dragrace-host/installed",
-}
-
 // hostSetup is the script that goes with the host's files (hosts/): the
 // first boot's cloud-init waited for (DigitalOcean's per-instance script
 // can replace the machine id late, and the racer's credentials, encrypted
 // before it, would stop decrypting at the next restart),
-// sshd reloaded, the retired files gone, a 512 MiB swap file (a 512 MB
+// sshd reloaded, a 512 MiB swap file (a 512 MB
 // droplet thrashed in its first boot's package checks), and Ubuntu's
 // update-notifier and motd timers off (nobody logs in to read them; on the
 // racer they took a CPU for minutes).
@@ -187,7 +177,6 @@ func hostSetup(ports ...string) []string {
 		"grep -q '^GRUB_FORCE_PARTUUID=[0-9a-f-]\\{36\\}$' /etc/default/grub.d/40-force-partuuid.cfg",
 		"sudo update-grub 2>/dev/null",
 		"sudo sshd -t && sudo systemctl reload ssh",
-		"sudo rm -f " + strings.Join(hostRetired, " "),
 		"sudo systemctl daemon-reload",
 		"(test -e /swapfile || (sudo fallocate -l 512M /swapfile && sudo chmod 600 /swapfile && " +
 			"sudo mkswap -q /swapfile))",

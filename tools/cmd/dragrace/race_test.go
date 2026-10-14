@@ -411,11 +411,6 @@ func TestHostFiles(t *testing.T) {
 	if len(common) != 2 {
 		t.Fatalf("stock updates: no file but sshd's and the reboot's, got %v", common)
 	}
-	for _, path := range hostRetired {
-		if !strings.Contains(strings.Join(hostSetup(), "\n"), path) {
-			t.Fatalf("setup does not delete %s", path)
-		}
-	}
 	setup := strings.Join(hostSetup("22", "443"), " && ")
 	for _, part := range []string{"ufw default deny incoming", "ufw allow 22/tcp", "ufw allow 443/tcp",
 		"ufw --force enable", "grep -q '^Status: active'"} {

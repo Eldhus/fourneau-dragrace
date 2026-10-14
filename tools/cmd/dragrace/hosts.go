@@ -22,10 +22,10 @@ import (
 // host. The check compares that list with the one this checkout and this
 // binary make now, has the host check its files against it (sha256sum -c),
 // and looks at the rest: the generated configs and credentials there, the
-// retired files gone, the firewall's ports, the boot without an initramfs,
-// the services up, no unit failed, a reboot pending, and each binary that
-// updates itself (the site, the racer) against the newest release. It
-// prints each finding and exits 1 on any difference.
+// firewall's ports, the boot without an initramfs, the services up, no
+// unit failed, a reboot pending, and each binary that updates itself (the
+// site, the racer) against the newest release. It prints each finding and
+// exits 1 on any difference.
 
 // sumsPath is where an install lists what it put there, with each SHA-256.
 const sumsPath = "/etc/dragrace-host/SHA256SUMS"
@@ -204,7 +204,6 @@ func newestRelease(ctx context.Context) (BuildInfo, error) {
 func probeScript(want hostWant) string {
 	lines := []string{
 		"for f in " + strings.Join(want.present, " ") + "; do sudo test -e $f || echo missing $f; done",
-		"for f in " + strings.Join(hostRetired, " ") + "; do sudo test -e $f && echo retired $f; done",
 		"sudo ufw status | sed -n 1p | sed 's/^/ufw /'",
 		"sudo ufw status | awk '$2==\"ALLOW\" && $1!~/v6/ {print \"port\", $1}'",
 		"echo partuuid $(findmnt -no PARTUUID /) $(sed -n 's/^GRUB_FORCE_PARTUUID=//p' " +
@@ -319,11 +318,8 @@ func sshFailed(err error) bool {
 
 func compareState(report *findings, want hostWant, lines [][]string, seen map[string]string) {
 	for _, fields := range lines {
-		switch {
-		case fields[0] == "missing" && len(fields) == 2:
+		if fields[0] == "missing" && len(fields) == 2 {
 			report.diff("%s is missing", fields[1])
-		case fields[0] == "retired" && len(fields) == 2:
-			report.diff("%s is retired but still there", fields[1])
 		}
 	}
 	if seen["ufw"] != "Status: active" {
