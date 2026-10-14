@@ -15,7 +15,8 @@ import (
 )
 
 // DigitalOcean is the few calls of DigitalOcean's API a race makes. The
-// token needs only a few scopes.
+// token needs only droplet (create, read, delete), ssh_key (read) and tag
+// (create, read).
 type DigitalOcean struct {
 	token  string
 	client *http.Client

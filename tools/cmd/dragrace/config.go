@@ -102,7 +102,7 @@ type Workload struct {
 	// or by ALPN when TLS is set too.
 	HTTP2   bool `json:"http2,omitempty"`
 	Streams int  `json:"streams,omitempty"`
-	// TLS, when set, races the competitor's HTTPS mode (CONTRIBUTING.md, "The contract");
+	// TLS, when set, races the competitor's HTTPS mode (CONTRIBUTING.md);
 	// a competitor without one sits the workload out.
 	TLS bool `json:"tls,omitempty"`
 	// Protocol is the variant's (Variant.Protocol).
@@ -304,7 +304,7 @@ func loadCompetitors(root string, names []string) ([]Competitor, error) {
 }
 
 // checkoutPath is where a raced repository is, fourneau or roux: beside
-// this one (README.md, Use it). Each is raced at its newest commit on
+// this one (README, Use it). Each is raced at its newest commit on
 // master, which the race records.
 func checkoutPath(root, repository string) string {
 	return filepath.Clean(filepath.Join(root, "..", repository))

@@ -55,7 +55,7 @@ func rouxPinsOf(dir string) (RouxPins, error) {
 	var pins RouxPins
 	path := filepath.Join(dir, "toolchain.json")
 	if err := readJSON(path, &pins); err != nil {
-		return pins, fmt.Errorf("roux's pins (README.md, Use it): %w", err)
+		return pins, fmt.Errorf("roux's pins (roux checked out beside this repository): %w", err)
 	}
 	if pins.Zig.SHA256 == "" || pins.Roc.SHA256 == "" {
 		return pins, fmt.Errorf("%s: no zig or roc pin", path)
@@ -85,7 +85,7 @@ func loadToolchain(ctx context.Context, root string) (Toolchain, error) {
 	tools.Roux = checkoutPath(root, "roux")
 	for _, checkout := range []string{tools.Fourneau, tools.Roux} {
 		if _, err := os.Stat(filepath.Join(checkout, "build.zig")); err != nil {
-			return tools, fmt.Errorf("no checkout at %s (README.md, Use it)", checkout)
+			return tools, fmt.Errorf("no checkout at %s (fourneau and roux go beside this repository)", checkout)
 		}
 	}
 	pins, err := rouxPinsOf(tools.Roux)

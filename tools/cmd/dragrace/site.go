@@ -10,7 +10,8 @@ import (
 )
 
 // The site host: one small droplet, up all the time, running the site (a
-// roux app, site_build.go) and keeping the races in its database. In short:
+// roux app, site_build.go) and keeping the races in its database. In
+// short:
 //   - cook: the owner's key, sudo. Root login and passwords are off. (Not
 //     "admin": Ubuntu's image has an admin group, so useradd refuses it
 //     and cloud-init carries on without the user.)

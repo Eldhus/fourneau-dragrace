@@ -1,8 +1,7 @@
 -- 2026-10-10: workloads carry how they were sent (HTTP/2, its streams,
 -- TLS), the race page's section and whether they climbed the ladder;
 -- run_settings loses open_loop_workload (a race now has a ladder per
--- workload). Run once, before the site
--- built from this commit starts.
+-- workload). Run once, before the site built from this commit starts.
 --
 -- roux opens only a database whose sqlite_schema rows are exactly what
 -- schema.sql makes, so each table is made anew from schema.sql's text

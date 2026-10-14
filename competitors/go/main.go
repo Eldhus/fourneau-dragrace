@@ -89,7 +89,7 @@ func main() {
 	server.Protocols = new(http.Protocols)
 	server.Protocols.SetHTTP1(true)
 	if tlsCert != "" {
-		// HTTPS, as the race asks of every competitor (CONTRIBUTING.md, "The contract"):
+		// HTTPS, as the race asks of every competitor:
 		// TLS 1.3, X25519, no session resumption, HTTP/2 by ALPN.
 		server.Protocols.SetHTTP2(true)
 		server.TLSConfig = &tls.Config{

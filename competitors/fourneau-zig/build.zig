@@ -1,6 +1,5 @@
 //! The fourneau-zig competitor: a Zig app on fourneau, built from the
-//! fourneau checkout beside this repository (../fourneau; see
-//! README.md, "Use it").
+//! fourneau checkout beside this repository (../fourneau).
 //!
 //!   zig build          zig-out/bin/fourneau-zig, as the race builds it
 //!   zig build test     the handler's own tests
@@ -19,7 +18,7 @@ pub fn build(b: *std.Build) void {
         .safe;
     const fourneau = b.dependency("fourneau", .{});
     // The conduit workload's SQLite: the amalgamation roux vendors, in the
-    // roux checkout beside this repository (README.md, "Use it"), compiled
+    // roux checkout beside this repository, compiled
     // in; its header translated for Zig.
     const sqlite_dir = "../../../roux/vendor/sqlite/";
     const sqlite_c = b.addTranslateC(.{

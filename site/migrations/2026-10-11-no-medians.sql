@@ -1,8 +1,8 @@
 -- 2026-10-11: results keeps no summary of its rounds. The pages summarize
 -- the rounds themselves (Data.Result: the best round's rate, the rounds'
 -- median percentiles), so the medians the racer posted
--- go; every round stays. Run once, before
--- the site built from this commit starts.
+-- go; every round stays. Run once, before the site built from this commit
+-- starts.
 --
 -- roux opens only a database whose sqlite_schema rows are exactly what
 -- schema.sql makes, so the table is made anew from schema.sql's text and

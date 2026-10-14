@@ -197,7 +197,8 @@ func (v variant) tree(root string) string {
 }
 
 // build makes the variant's binary unless the cache has it: the three
-// repositories exported at their commits side by side (as the README says), the competitor built there with its own competitor.json and
+// repositories exported at their commits side by side (as the README's
+// layout), the competitor built there with its own competitor.json and
 // pins, then stripped and compressed for the upload.
 func (v *variant) build(ctx context.Context, root string, dirs map[string]string, ev *events) error {
 	cache := filepath.Join(adhocDir(root), "bin")

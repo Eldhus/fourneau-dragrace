@@ -105,7 +105,7 @@ fn environment(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
 }
 
-/// HTTPS, as the race asks of every competitor (CONTRIBUTING.md, "The contract"): TLS 1.3,
+/// HTTPS, as the race asks of every competitor: TLS 1.3,
 /// X25519, no session resumption, HTTP/2 by ALPN. A task per connection,
 /// TCP_NODELAY as on plain HTTP; the handshake in that task.
 async fn serve_tls(listener: tokio::net::TcpListener, app: Router, cert: &str, key: &str) {

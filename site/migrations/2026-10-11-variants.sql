@@ -1,7 +1,8 @@
 -- 2026-10-11: a workload is a test in one variant (race.json: a test lists
 -- its variants). run_workloads records the test each row is a
 -- variant of (`test`), and its `section` is named for what it is, the
--- variant's `protocol` (the same values). Run once, before the site built from this commit starts; with
+-- variant's `protocol` (the same values). Run once, before the site built
+-- from this commit starts; with
 -- `sqlite3 -bail`, so a failed statement stops before the old table goes.
 --
 -- roux opens only a database whose sqlite_schema rows are exactly what

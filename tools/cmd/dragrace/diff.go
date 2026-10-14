@@ -18,7 +18,7 @@ import (
 )
 
 // dragrace diff: the same requests, byte for byte, to several competitors,
-// and where their answers differ (fourneau's M11, "second opinions"). Each
+// and where their answers differ: second opinions. Each
 // case is sent on a new connection; the answer is read until the server
 // closes or is idle for a second. What is compared: each response's
 // status, whether the connection was closed after, and the body; never the

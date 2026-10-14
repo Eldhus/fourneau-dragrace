@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// SiteClient speaks to the site's API with a bearer
+// SiteClient speaks to the site's API (site/Api.roc) with a bearer
 // token. A post the site did not answer, or answered 5xx (a deploy
 // restarting it, a database busy), is sent again with backoff, 1 s
 // doubling to 30 s, for 20 minutes: ten times what a deploy takes. The
