@@ -46,7 +46,8 @@ type Race struct {
 }
 
 // Test is one of race.json's workloads: one request, checked the same and
-// answered the same, sent each of its variants' ways (the protocol is a dimension of the test, not a test).
+// answered the same, sent each of its variants' ways (the protocol is a
+// dimension of the test, not a test).
 type Test struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`

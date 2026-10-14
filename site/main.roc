@@ -365,8 +365,8 @@ race_classes! = |db, request, wanted| {
 	patch!(request, RaceClasses.template({ id: latest.id, tabs: shown.tabs, sections: shown.sections, classes: shown.classes }))
 }
 
-## The race page's history panel (not a page, so
-## nobody takes it for the app's history): one class's charts in one
+## The race page's history panel (not a page, so nobody takes it for the
+## app's history): one class's charts in one
 ## section, fetched the first time the panel is opened, the race's own
 ## patch replacing it closed when a tab is clicked.
 history_panel! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
@@ -377,7 +377,8 @@ history_panel! = |db, request, wanted| {
 	patch!(request, HistoryPanel.template({ waiting: view.waiting, classes }))
 }
 
-## The race page's live banner, kept current while a run races: a Datastar stream per open race page. Every 1.618 s the
+## The race page's live banner, kept current while a run races: a
+## Datastar stream per open race page. Every 1.618 s the
 ## handler reads the run (`Sleep.millis!`: its fiber waits, the shard
 ## serves others) and patches `#live-race` when what it says changed, with
 ## the flare when a result has landed (a new canvas each time, so its

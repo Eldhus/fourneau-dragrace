@@ -1,6 +1,6 @@
--- The race page's live banner while a run races: the
--- run, and each class's step racing, its progress and name, the last
--- step's results, and the time left. A step is a competitor's round, or its climb of a
+-- The race page's live banner while a run races: the run, and each
+-- class's step racing, its progress and name, the last step's results,
+-- and the time left. A step is a competitor's round, or its climb of a
 -- ladder (race.go, Step): each worker posts its class's plan as each step
 -- begins (class_steps). Read every 1.618 s by each open race page's stream
 -- (main.roc, race_live!).

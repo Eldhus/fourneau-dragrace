@@ -283,7 +283,8 @@ footer { text-align: center; color: var(--text-3); font-size: 13px; border-top: 
   body { font-size: 15px; }
   nav a { font-size: 9px; padding: 7px 8px; }
   .drag .value { font-size: 12px; }
-  /* A phone: smaller names, thinner bars, the rows closer (a condensed face for the names was tried and refused). */
+  /* A phone: smaller names, thinner bars, the rows closer (a condensed
+     face for the names was tried and refused). */
   .drag .name { font-size: 11px; }
   .drag .bar { height: 14px; }
   .drag { row-gap: 4px; }
@@ -364,8 +365,8 @@ nav.tabs a + a { border-left: 0; }
   border-bottom: 1px solid var(--grid);
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
 .tabbar nav.tabs { padding: 0; }
-/* The section toggle beside the sizes (another
-   layer, plainly another switch): shorter, in a cool cyan the sizes'
+/* The section toggle beside the sizes (another layer, plainly another
+   switch): shorter, in a cool cyan the sizes'
    gold never uses. */
 nav.protocol:empty { display: none; }
 nav.protocol a { font-size: 8px; padding: 6px 10px; color: var(--cyan); border-color: rgba(95,215,255,.45);
@@ -382,8 +383,8 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .intro, .strip figcaption, .workloads .card p { text-wrap: pretty; }
 .h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 .h2c .class { color: var(--cyan); }
-/* History, closed under the race (not a page that
-   reads as the app's history); its charts are fetched when first opened. */
+/* History, closed under the race (not a page that reads as the app's
+   history); its charts are fetched when first opened. */
 details.history { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 details.history > summary { cursor: pointer; font-family: var(--pixel); font-size: 13px;
   line-height: 1.5; color: var(--text-3); margin: 22px 0 8px; }
@@ -391,8 +392,7 @@ details.history > summary:hover, details.history[open] > summary { color: var(--
 details.history .h2c { margin-top: 18px; border-top: 0; }
 @media (max-width: 560px) { details.history > summary { font-size: 11px; } }
 .h2c .table { margin-top: 0; }
-/* Plaintext three ways on a phone (for a Pixel
-   10's 412 px): four columns, not six. Rates in three figures, each
+/* Plaintext three ways on a phone (412 px): four columns, not six. Rates in three figures, each
    change small under the rate it led to, the numbers right-aligned so
    their places line up, and the names pinned should it ever scroll. */
 .three-ways .narrow { display: none; }
@@ -487,7 +487,8 @@ details.history .h2c { margin-top: 18px; border-top: 0; }
   .racer .step .fill, .racer .step.late .fill, .racer .track .now { animation: none; }
 }
 /* The last step's results, one line: still when it fits, else scrolling
-   right to left as a marquee does, round and round (three lines were cut off on a phone). demo.js measures it
+   right to left as a marquee does, round and round (three lines were
+   cut off on a phone). demo.js measures it
    and, when it is wider, adds the second copy that follows it in. */
 .racer .ticker { grid-area: last; display: block; overflow: hidden; white-space: nowrap; color: var(--text-2); text-shadow: none; }
 /* Its own width, not the banner's: a turn moves exactly one copy. */

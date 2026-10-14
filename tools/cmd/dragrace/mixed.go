@@ -21,7 +21,8 @@ import (
 // each step records the mean latency over every request, its slowest
 // part's p99 (the chart), and each part's own numbers.
 //
-// Open loop, as real users arrive whatever the server does (tail latency and saturation). A closed loop's connection
+// Open loop, as real users arrive whatever the server does (tail latency
+// and saturation). A closed loop's connection
 // waits for each answer before its next request, so a server that stalls
 // is sent less, and its stall never shows in the percentiles (coordinated
 // omission); here latency is counted from when each request was due (oha

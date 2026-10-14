@@ -394,7 +394,8 @@ func adhocProvider(ctx context.Context) (*DigitalOcean, error) {
 	return newDigitalOcean()
 }
 
-// upFlags is the session's setup, one for every ad-hoc race: dedicated cores, so a difference is the builds';
+// upFlags is the session's setup, one for every ad-hoc race, kept simple:
+// dedicated cores, so a difference is the builds';
 // race.json's region; deleted after 20 minutes unused.
 type upFlags struct {
 	class, region string

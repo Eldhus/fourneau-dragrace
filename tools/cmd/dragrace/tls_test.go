@@ -164,7 +164,8 @@ func TestExpand(t *testing.T) {
 	}
 }
 
-// race.json as committed: every test raced over HTTP/1.1 and TLS, plaintext over h2c too (HTTP/2's cost apart from TLS's),
+// race.json as committed: every test raced over HTTP/1.1 and TLS,
+// plaintext over h2c too (HTTP/2's cost apart from TLS's),
 // each variant the same requests in flight as HTTP/1.1's connections: the
 // same test, carried another way.
 func TestRaceVariants(t *testing.T) {

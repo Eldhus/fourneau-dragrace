@@ -42,7 +42,8 @@ View :: [].{
 	Strip : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, rows : List(Row), table : List(TableRow) }
 	## A machine's line, item by item: a line breaks between them only.
 	Machine : { role : Str, items : List(Str) }
-	## A class as one section shows it (its tabs say which), and below, outside the
+	## A class as one section shows it (its tabs say which, no sentence
+	## repeating them), and below, outside the
 	## section's toggle, the h2c comparison (one, or none in a race without
 	## it). `history`: the address of its history panel's charts, this
 	## class's in this section, fetched when the panel is first opened.
@@ -93,8 +94,9 @@ View :: [].{
 
 	Pin : { name : Str, version : Str }
 
-	## The Workloads page, every figure from the newest race (nothing typed in that race.json decides): a card per
-	## test, then its variants said once, by protocol (not repeated under every test). A card's `paragraphs`:
+	## The Workloads page, every figure from the newest race (nothing typed
+	## in that race.json decides): a card per test, then its variants said
+	## once, by protocol (not repeated under every test). A card's `paragraphs`:
 	## after the summary, the detail and a mixed one's open loop, those it
 	## has; `protocols`: the variants it is raced in.
 	WorkloadCard : { title : Str, route : Str, summary : Str, paragraphs : List(Str), protocols : List(Str) }
@@ -209,7 +211,8 @@ View :: [].{
 		{ waiting: List.len(entries) < 2, sections, section, classes }
 	}
 
-	## The race page's live banner while a run races (LiveRace.rocstache): the run's steps
+	## The race page's live banner while a run races (LiveRace.rocstache):
+	## the run's steps
 	## raced of all its classes', when the next result lands (the flare) and
 	## the time left; then a lane per server class. `flare`: a result has
 	## just landed; `done` (the steps raced) names the flare's canvas, so
@@ -649,9 +652,10 @@ expect {
 }
 
 ## How a variant is sent, the protocol first: what the line under a chart,
-## and on Workloads under a test, says (thin text
-## in the protocol tabs' colour, bullets between). Short enough for one
-## line on a phone: kept alive goes unsaid, the usual case (the bars first, the words quieter). Churn's no longer than
+## and on Workloads under a test, says (thin text in the protocol tabs'
+## colour, bullets between). Short enough for one line on a phone: kept
+## alive goes unsaid, the usual case (the bars first, the words quieter).
+## Churn's no longer than
 ## HTTP/2's: "connections, one request each" wrapped at 350 px wide over
 ## TLS and not over HTTP/1.1, so a section switch moved every chart
 ## below it.
@@ -1088,8 +1092,9 @@ open_charts = |run, class|
 		}
 	})
 
-## p99 against the offered rate, on a log axis: the slowest part's. (A switch to p50, p90, p99.9 and the mean was built
-## and taken out; the charts all looked alike.)
+## p99 against the offered rate, on a log axis: the slowest part's. (A
+## switch to p50, p90, p99.9 and the mean was built and taken out; the
+## charts all looked alike.)
 open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), competitors : List(Str) } -> View.OpenChart
 open_chart = |{ key, title, summary, variant, run, results, competitors }| {
 	steps = results.map(|r| r.open_loop).join()
@@ -1250,7 +1255,8 @@ expect {
 }
 
 ## A whisker narrower than this share of the strip's top bar is a few
-## pixels: it reads as a blot on the bar's tip, not a range, so it is not drawn; the rounds agreed.
+## pixels: it reads as a blot on the bar's tip, not a range, so it is
+## not drawn; the rounds agreed.
 whisker_share_min : F64
 whisker_share_min = 0.02
 

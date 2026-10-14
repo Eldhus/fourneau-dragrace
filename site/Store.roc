@@ -219,7 +219,8 @@ Store :: [].{
 	nothing_new : Str
 	nothing_new = "Quiet night on the track: nothing new to race. Got something faster? Push it to fourneau or roux"
 
-	## The run racing now, as the race page's live banner shows it: each class's step racing, its time and the
+	## The run racing now, as the race page's live banner shows it: each
+	## class's step racing, its time and the
 	## seconds left, and its last step's results (db/Live.sql says how
 	## they are estimated).
 	LiveRun : { id : Str, classes : List(Live.Classes), ended : List(Live.Ended) }

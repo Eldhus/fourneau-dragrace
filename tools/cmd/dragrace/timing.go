@@ -6,8 +6,7 @@ import (
 )
 
 // How long a race took and what its droplets cost, kept with its results
-// (track how long races take, without paying for
-// idle droplets). A local race has the stages and no droplets.
+// (without paying for idle droplets). A local race has the stages and no droplets.
 
 type Timing struct {
 	// The whole race, from the command's start to its results.
