@@ -88,12 +88,16 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	if err != nil {
 		return err
 	}
+	// The plan before the machines are readied, no step begun: the site
+	// says the class is readying. raceTarget plans the same, from the seed.
+	poster.begin(planSteps(race, competitors, config.Seed), -1)
 	loader := LocalMachine{}
 	const home = "/root/dragrace"
 	server := SSHMachine{User: "root", Host: config.ServerHost, Key: config.Key,
 		KnownHosts: config.KnownHosts}
 	target := Target{Class: config.Class, Server: server, Loader: loader, ServerHome: home,
-		LoaderHome: home + "/loader", Address: config.ServerHost, Report: poster.send}
+		LoaderHome: home + "/loader", Address: config.ServerHost, Report: poster.send,
+		Begin: poster.begin}
 	for _, competitor := range competitors {
 		binary := filepath.Join(binDir(root), competitor.Name)
 		if err := server.Put(ctx, binary, home+"/bin/"+competitor.Name); err != nil {
@@ -121,17 +125,26 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 }
 
 // Poster posts results in the background, the newest of each only, and
-// keeps them all in the results file.
+// keeps them all in the results file. It posts the step begun too, after
+// the results before it: the live banner's (StepsPost).
 type Poster struct {
 	site    *SiteClient
 	config  WorkerConfig
 	mutex   sync.Mutex
 	latest  map[string]Result // by class/workload/competitor
 	pending map[string]bool
+	step    *StepsPost // begun and not posted yet
 	wake    chan struct{}
 	done    chan struct{}
 	closing bool
 	err     error
+}
+
+// StepsPost is a class's plan and the step begun, 1 for the first (0:
+// none yet).
+type StepsPost struct {
+	Step  int    `json:"step"`
+	Steps []Step `json:"steps"`
 }
 
 func newPoster(ctx context.Context, site *SiteClient, config WorkerConfig) *Poster {
@@ -160,6 +173,17 @@ func (poster *Poster) send(result Result) {
 	if err := writeResults(poster.config.Results, all); err != nil {
 		log.Printf("keeping results: %v", err)
 	}
+	select {
+	case poster.wake <- struct{}{}:
+	default:
+	}
+}
+
+// begin queues the step begun, replacing one not posted yet.
+func (poster *Poster) begin(plan []Step, step int) {
+	poster.mutex.Lock()
+	poster.step = &StepsPost{Step: step + 1, Steps: plan}
+	poster.mutex.Unlock()
 	select {
 	case poster.wake <- struct{}{}:
 	default:
@@ -201,11 +225,24 @@ func (poster *Poster) loop(ctx context.Context) {
 		}
 		closing := poster.closing
 		var result Result
+		step := poster.step
 		if key != "" {
 			result = poster.latest[key]
 			delete(poster.pending, key)
+		} else {
+			poster.step = nil
 		}
 		poster.mutex.Unlock()
+		if key == "" && step != nil {
+			// Only the banner's: a site without the route (one older than
+			// this worker) or a failed post fails nothing.
+			path := "/api/runs/" + poster.config.RunID + "/classes/" +
+				url.PathEscape(poster.config.Class.Name) + "/steps"
+			if err := poster.site.post(ctx, path, step, nil); err != nil {
+				log.Printf("posting step %d: %v", step.Step, err)
+			}
+			continue
+		}
 		if key == "" {
 			if closing {
 				return

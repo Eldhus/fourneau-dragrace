@@ -39,11 +39,20 @@ type Target struct {
 	// Report, if set, is told each result as it grows: after each round of
 	// a competitor, and after its open loop (a worker posts it to the site).
 	Report func(Result)
+	// Begin, if set, is told the class's plan as each step starts (its
+	// index in the plan; a worker posts it to the site).
+	Begin func(plan []Step, step int)
 }
 
 func (target Target) report(result Result) {
 	if target.Report != nil {
 		target.Report(result)
+	}
+}
+
+func (target Target) begin(plan []Step, step int) {
+	if target.Begin != nil {
+		target.Begin(plan, step)
 	}
 }
 
@@ -54,9 +63,61 @@ func (target Target) taskset(cpus string) string {
 	return "taskset -c " + cpus + " "
 }
 
-// raceTarget races every competitor on every workload, round after round,
-// in a new random order each round (the seed is in the results), and
-// appends to run.Results.
+// Step is a class's race between two reports: a competitor's round of the
+// closed workloads, or its climb of one mixed workload's ladder. The whole
+// plan is told to the site as each step starts (Target.Begin), so the
+// live banner shows each step's progress and name.
+type Step struct {
+	Competitor string `json:"competitor"`
+	// 1 to the race's rounds; 0 for a ladder.
+	Round int `json:"round"`
+	// "" for a round; the mixed workload for a ladder.
+	Workload string `json:"workload"`
+	// Its loads' seconds, warmups included; a ladder's climbed to its top
+	// rate, which most stop short of. The site's estimate when the run
+	// before had no such step.
+	PlannedSeconds float64 `json:"planned_seconds"`
+
+	competitor Competitor
+	workload   Workload // a ladder's
+}
+
+// planSteps is the order a class races in: round after round, every
+// competitor in a new random order each round (the seed is in the
+// results), then each mixed workload's ladders.
+func planSteps(race Race, competitors []Competitor, seed int64) []Step {
+	var steps []Step
+	for round := 1; round <= race.Rounds; round++ {
+		for _, competitor := range shuffled(competitors, seed+int64(round)) {
+			seconds := 0
+			for _, workload := range race.Workloads {
+				// A mixed workload is open loop only, after the rounds.
+				if workload.Mixed == nil && competitor.offers(workload) {
+					seconds += race.WarmupSeconds + race.MeasureSeconds
+				}
+			}
+			steps = append(steps, Step{Competitor: competitor.Name, Round: round,
+				PlannedSeconds: float64(seconds), competitor: competitor})
+		}
+	}
+	for _, workload := range race.Workloads {
+		if workload.Mixed == nil {
+			continue
+		}
+		mixed := workload.Mixed
+		seconds := len(mixed.Rates) * (mixed.WarmupSeconds + mixed.MeasureSeconds)
+		for _, competitor := range shuffled(competitors, seed+int64(race.Rounds)+2) {
+			if competitor.offers(workload) {
+				steps = append(steps, Step{Competitor: competitor.Name, Workload: workload.Name,
+					PlannedSeconds: float64(seconds), competitor: competitor, workload: workload})
+			}
+		}
+	}
+	return steps
+}
+
+// raceTarget races the class's plan (planSteps), and appends to
+// run.Results.
 func raceTarget(ctx context.Context, race Race, competitors []Competitor, target Target,
 	run *Run) error {
 	bodies, err := putBodies(ctx, race, target, run.Seed)
@@ -70,21 +131,27 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 	}
 	// validKey(competitor, mode) -> why it is not valid ("" if valid).
 	valid := map[string]string{}
-	for round := 1; round <= race.Rounds; round++ {
-		order := shuffled(competitors, run.Seed+int64(round))
-		for _, competitor := range order {
-			log.Printf("[%s] round %d/%d: %s", target.Class.Name, round, race.Rounds, competitor.Name)
-			if err := raceCompetitor(ctx, race, competitor, target, bodies, round, valid, run); err != nil {
+	plan := planSteps(race, competitors, run.Seed)
+	for i, step := range plan {
+		target.begin(plan, i)
+		if step.Workload != "" {
+			if err := climbStep(ctx, race, step, target, valid, run); err != nil {
 				return err
 			}
-			for _, result := range run.Results {
-				if result.Class == target.Class.Name && result.Competitor == competitor.Name {
-					target.report(result)
-				}
+			continue
+		}
+		competitor := step.competitor
+		log.Printf("[%s] round %d/%d: %s", target.Class.Name, step.Round, race.Rounds, competitor.Name)
+		if err := raceCompetitor(ctx, race, competitor, target, bodies, step.Round, valid, run); err != nil {
+			return err
+		}
+		for _, result := range run.Results {
+			if result.Class == target.Class.Name && result.Competitor == competitor.Name {
+				target.report(result)
 			}
 		}
 	}
-	return mixedLoop(ctx, race, competitors, target, valid, run)
+	return nil
 }
 
 // Mode is how a competitor is started: plain HTTP (HTTP/1.1 and h2c), or

@@ -160,17 +160,25 @@ IndexPage :: [].{
 		id : Str,
 		live : List(
 			{
-				classes : List(
-					{
-						label : Str,
-						newest : List(Str),
-						share : Str,
-						times : Str,
-					},
-				),
 				done : Str,
 				flare : Bool,
-				text : Str,
+				items : List(Str),
+				lanes : List(
+					{
+						count : Str,
+						failed : Bool,
+						from : Str,
+						label : Str,
+						last : List(Str),
+						late : Bool,
+						left : Str,
+						now : Str,
+						seconds : Str,
+						soon : Str,
+						stepping : Bool,
+						track : List(Str),
+					},
+				),
 			},
 		),
 		nav : List({ current : Bool, href : Str, label : Str }),

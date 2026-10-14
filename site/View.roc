@@ -209,59 +209,180 @@ View :: [].{
 		{ waiting: List.len(entries) < 2, sections, section, classes }
 	}
 
-	## The race page's live banner while a run races (LiveRace.rocstache): one sentence (results in, of how many, and
-	## the time left as HH:MM), and the flare when a result has just
-	## landed; `done` names the flare's canvas, so each result's is a new
-	## element and its animation runs. `classes`: a bar per server class
-	## racing, filled by its results in of those
-	## expected, with its time elapsed and the estimate left, or how long it
-	## took once over, and under it the class's newest result.
-	LiveBanner : { text : Str, classes : List(ClassBar), flare : Bool, done : Str }
-	## `share`: the bar's fill, 0 to 1; `times`: "00:42 elapsed · about
-	## 00:31 left", or "done in 01:52"; `newest`: the class's newest result,
-	## one line that scrolls when it is wider than the banner (none before
-	## the first lands).
-	ClassBar : { label : Str, share : Str, times : Str, newest : List(Str) }
-
-	live_banner : List(Live.Newest), List(Live.Progress), Bool -> LiveBanner
-	live_banner = |newest, classes, flare| {
-		done : I64
-		done = classes.fold(0, |sum, c| sum + c.done)
-		expected : I64
-		expected = classes.fold(0, |sum, c| sum + (if c.expected > c.done c.expected else c.done))
-		# A class the previous run did not race has no estimate.
-		timed = classes.keep_if(|c| c.expected > 0 and !c.over)
-		left = timed.fold(0.0, |most, c| if c.left_seconds > most c.left_seconds else most)
-		text =
-			if done >= expected and done > 0 {
-				"Racing now · all ${done.to_str()} results in, finishing"
-			} else if timed.is_empty() {
-				"Racing now · ${done.to_str()} of ${expected.to_str()} results in"
-			} else {
-				"Racing now · ${done.to_str()} of ${expected.to_str()} results in · about ${View.clock(left)} left"
-			}
-		{ text, classes: classes.map(|c| class_bar(c, newest.keep_if(|n| n.class == c.class))), flare, done: done.to_str() }
+	## The race page's live banner while a run races (LiveRace.rocstache): the run's steps
+	## raced of all its classes', when the next result lands (the flare) and
+	## the time left; then a lane per server class. `flare`: a result has
+	## just landed; `done` (the steps raced) names the flare's canvas, so
+	## each result's is a new element and its animation runs.
+	LiveBanner : { items : List(Str), lanes : List(Lane), flare : Bool, done : Str }
+	## A server class: its name, its step count and time left beside
+	## its bars; the step racing (`now`, and when its result lands, `soon`)
+	## over the step's bar; under it the class's track, a mark a step; and
+	## the last step's results, one line that scrolls when it is wider than
+	## the banner (none before the first lands).
+	## `stepping`: a step is racing: its bar fills from `from` (0 to 1) to
+	## the end in `seconds`, the estimate's rest; `late`, past it.
+	## `track`: each step "done", "now", "next" or, failed, "bad".
+	Lane : {
+		label : Str,
+		count : Str,
+		left : Str,
+		now : Str,
+		soon : Str,
+		stepping : Bool,
+		late : Bool,
+		failed : Bool,
+		from : Str,
+		seconds : Str,
+		track : List(Str),
+		last : List(Str),
 	}
 
-	## A class's bar. A class the previous run did not race has no estimate:
-	## its bar stays empty until it is over, and only its time is said. Its
-	## result says no class: it is under the class's name.
-	class_bar : Live.Progress, List(Live.Newest) -> ClassBar
-	class_bar = |c, newest| {
-		share =
-			if c.over 1.0
-			else if c.expected <= 0 0.0
-			else if c.done >= c.expected 1.0
-			else c.done.to_f64() / c.expected.to_f64()
-		times =
-			if c.over "done in ${View.clock(c.elapsed_seconds)}"
-			else if c.expected <= 0 "${View.clock(c.elapsed_seconds)} elapsed"
-			else "${View.clock(c.elapsed_seconds)} elapsed · about ${View.clock(c.left_seconds)} left"
-		said = newest.map(|n| {
-			rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
-			"${n.competitor} ${n.workload}: ${rate}"
+	live_banner : List(Live.Classes), List(Live.Ended), Bool -> LiveBanner
+	live_banner = |classes, ended, flare| {
+		steps = classes.fold(0.I64, |sum, c| sum + c.steps)
+		done = classes.fold(0.I64, |sum, c| sum + raced(c))
+		racing = classes.keep_if(|c| c.status == "racing" and c.steps > 0)
+		left = racing.fold(0.0, |most, c| if c.left_seconds > most c.left_seconds else most)
+		# The next result: the step racing nearest the end of its estimate.
+		next = racing.keep_if(|c| c.step > 0).fold(Err(NoStep), |soonest, c| {
+			rest = c.step_estimate - c.step_seconds
+			match soonest {
+				Ok(s) => Ok(if rest < s rest else s)
+				Err(_) => Ok(rest)
+			}
 		})
-		{ label: c.label, share: Format.two_decimals(share), times, newest: said }
+		items =
+			if steps == 0 {
+				[]
+			} else if racing.is_empty() {
+				["${done.to_str()} of ${steps.to_str()} steps", "finishing"]
+			} else {
+				coming =
+					match next {
+						Ok(rest) => if rest > 0.0 ["next result ${View.in_minutes(rest)}"] else ["next result any moment"]
+						Err(_) => []
+					}
+				ending = if left > 0.0 ["about ${View.clock(left)} left"] else []
+				["${done.to_str()} of ${steps.to_str()} steps"].concat(coming).concat(ending)
+			}
+		lanes = classes.map(|c| lane(c, ended.keep_if(|e| e.class == c.class)))
+		{ items, lanes, flare, done: done.to_str() }
+	}
+
+	## Every word the banner says, and its marks: the stream patches the
+	## page only when this changed (the step bars move by themselves, in
+	## CSS).
+	said : LiveBanner -> Str
+	said = |banner|
+		Str.join_with(banner.items.concat(banner.lanes.map(|l| "${l.label} ${l.count} ${l.left} ${l.now} ${l.soon} ${Str.join_with(l.track, ",")} ${Str.join_with(l.last, "")}")), "|")
+
+	## A class's steps raced: before the step racing, or all begun once
+	## it is done (a failed class's last begun did not finish).
+	raced : Live.Classes -> I64
+	raced = |c|
+		if c.status == "done" c.step
+		else if c.step > 0 c.step - 1
+		else 0
+
+	## A class's lane. A class whose worker tells no steps (one older than
+	## the plan, race.go's Step) says only its time.
+	lane : Live.Classes, List(Live.Ended) -> Lane
+	lane = |c, ended| {
+		over = c.status != "racing"
+		failed = c.status == "failed"
+		stepping = !over and c.step > 0
+		rest = c.step_estimate - c.step_seconds
+		finished = raced(c)
+		var $track = []
+		var $i = 1
+		while $i <= c.steps {
+			mark =
+				if $i <= finished "done"
+				else if $i == c.step and failed "bad"
+				else if $i == c.step and !over "now"
+				else "next"
+			$track = $track.append(mark)
+			$i = $i + 1
+		}
+		count =
+			if c.steps == 0 ""
+			else if over or c.step == 0 "${finished.to_str()} of ${c.steps.to_str()} steps"
+			else "step ${c.step.to_str()} of ${c.steps.to_str()}"
+		left =
+			if c.status == "done" "done in ${View.clock(c.elapsed_seconds)}"
+			else if failed "failed at ${View.clock(c.elapsed_seconds)}"
+			else if c.steps == 0 "${View.clock(c.elapsed_seconds)} elapsed"
+			else if c.left_seconds <= 0.0 "running long"
+			else "about ${View.clock(c.left_seconds)} left"
+		now =
+			if failed (if c.reason == "" "failed" else "failed: ${c.reason}")
+			else if over "every step raced"
+			else if c.steps == 0 "racing"
+			else if c.step == 0 "readying the server and the loader"
+			else step_name(c.competitor, c.round, c.rounds, c.workload)
+		soon =
+			if !stepping ""
+			else if rest > 0.0 "result ${View.in_minutes(rest)}"
+			else if rest > -60.0 "running a little long"
+			else "running ${View.whole_minutes(0.0 - rest)} long"
+		from =
+			if !stepping or c.step_estimate <= 0.0 0.0
+			else if c.step_seconds >= c.step_estimate 1.0
+			else c.step_seconds / c.step_estimate
+		seconds = if stepping and rest > 0.0 (rest.round_to_u64_try() ?? 0) else 0
+		{
+			label: c.label,
+			count,
+			left,
+			now,
+			soon,
+			stepping,
+			late: stepping and rest <= 0.0,
+			failed,
+			from: Format.two_decimals(from),
+			seconds: seconds.to_str(),
+			track: $track,
+			last: ended_line(ended),
+		}
+	}
+
+	## "roux · round 2 of 3", or a ladder's "roux · RealWorld (Conduit) ladder".
+	step_name : Str, I64, I64, Str -> Str
+	step_name = |competitor, round, rounds, workload|
+		if round > 0 "${competitor} · round ${round.to_str()} of ${rounds.to_str()}"
+		else "${competitor} · ${workload} ladder"
+
+	## The last step's results on one line: its name, then each workload's
+	## rate (a round's, or a ladder's highest achieved), or DNF; a step none
+	## of whose results is valid says why once.
+	ended_line : List(Live.Ended) -> List(Str)
+	ended_line = |rows|
+		match rows.first() {
+			Err(_) => []
+			Ok(first) => {
+				name = step_name(first.competitor, first.round, first.rounds, first.workload)
+				rates =
+					if rows.all(|r| !r.valid) {
+						if first.note == "" "DNF" else "DNF, ${first.note}"
+					} else if first.round == 0 {
+						"best ${Format.thousands(first.rps)} req/s"
+					} else {
+						Str.join_with(rows.map(|r| if r.valid "${r.workload} ${Format.compact(r.rps)}" else "${r.workload} DNF"), " · ")
+					}
+				["${name}: ${rates}"]
+			}
+		}
+
+	## Seconds to come, said in minutes: "in under a minute", "in about 3 min".
+	in_minutes : F64 -> Str
+	in_minutes = |seconds| if seconds < 60.0 "in under a minute" else "in about ${View.whole_minutes(seconds)}"
+
+	## Seconds in whole minutes, rounded up: "3 min".
+	whole_minutes : F64 -> Str
+	whole_minutes = |seconds| {
+		whole = seconds.round_to_u64_try() ?? 0
+		"${((whole + 59) // 60).to_str()} min"
 	}
 
 	## Seconds as hours and minutes, HH:MM, rounded up to the minute: a
@@ -1182,22 +1303,59 @@ expect memory(0) == [] and memory(457) == ["457 MiB"] and memory(3916) == ["3.8 
 expect View.clock(0.0) == "00:00" and View.clock(1.0) == "00:01" and View.clock(60.0) == "00:01"
 expect View.clock(61.0) == "00:02" and View.clock(4320.0) == "01:12" and View.clock(36000.0) == "10:00"
 
-expect {
-	newest = [
-		{ class: "a", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 },
-		{ class: "b", workload: "Churn", competitor: "go", valid: Bool.False, best_rps: 0.0 },
-	]
-	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds, elapsed_seconds: 2520.0 }
-	banner = View.live_banner(newest, [progress("a", 41, 59, 300.0), progress("b", 40, 59, 4320.0), progress("c", 30, 0, 0.0)], Bool.True)
-	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.done == "111"
-	and banner.classes == [
-		{ label: "a", share: "0.69", times: "00:42 elapsed · about 00:05 left", newest: ["roux Echo 4 KiB: 35,297 req/s"] },
-		{ label: "b", share: "0.68", times: "00:42 elapsed · about 01:12 left", newest: ["go Churn: DNF"] },
-		{ label: "c", share: "0.00", times: "00:42 elapsed", newest: [] },
-	]
+## A class of a racing run as Live.classes reads it: racing step `step` of
+## `steps`, a round of roux's, 30 s into its 120 s estimate.
+live_class : Str, I64, I64 -> Live.Classes
+live_class = |class, steps, step| {
+	class,
+	label: class,
+	status: "racing",
+	reason: "",
+	elapsed_seconds: 2520.0,
+	steps,
+	step,
+	competitor: "roux",
+	round: 1,
+	rounds: 3,
+	workload: "",
+	step_seconds: 30.0,
+	step_estimate: 120.0,
+	left_seconds: 400.0,
 }
 
 expect {
-	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0, elapsed_seconds: 6720.0 }], Bool.False)
-	all_in.text == "Racing now · all 59 results in, finishing" and all_in.classes == [{ label: "a", share: "1.00", times: "done in 01:52", newest: [] }]
+	ended = [
+		{ class: "a", competitor: "go", round: 1, rounds: 3, workload: "Plaintext", valid: Bool.True, note: "", rps: 1112034.0 },
+		{ class: "a", competitor: "go", round: 1, rounds: 3, workload: "Echo 4 KiB", valid: Bool.False, note: "", rps: 0.0 },
+		{ class: "b", competitor: "axum", round: 0, rounds: 3, workload: "RealWorld (Conduit)", valid: Bool.True, note: "", rps: 4012.4 },
+	]
+	b = { ..live_class("b", 3, 3), competitor: "go", round: 0, workload: "RealWorld (Conduit)", step_seconds: 700.0, step_estimate: 600.0, left_seconds: 0.0 }
+	banner = View.live_banner([live_class("a", 4, 2), b, { ..live_class("c", 4, 0), left_seconds: 600.0 }], ended, Bool.True)
+	when = |l| { now: l.now, soon: l.soon, count: l.count, left: l.left, from: l.from, seconds: l.seconds, late: l.late }
+	banner.items == ["3 of 11 steps", "next result any moment", "about 00:10 left"] and banner.done == "3"
+	and banner.lanes.map(when) == [
+		{ now: "roux · round 1 of 3", soon: "result in about 2 min", count: "step 2 of 4", left: "about 00:07 left", from: "0.25", seconds: "90", late: Bool.False },
+		{ now: "go · RealWorld (Conduit) ladder", soon: "running 2 min long", count: "step 3 of 3", left: "running long", from: "1.00", seconds: "0", late: Bool.True },
+		{ now: "readying the server and the loader", soon: "", count: "0 of 4 steps", left: "about 00:10 left", from: "0.00", seconds: "0", late: Bool.False },
+	]
+	and banner.lanes.map(|l| l.track) == [["done", "now", "next", "next"], ["done", "done", "now"], ["next", "next", "next", "next"]]
+	and banner.lanes.map(|l| l.last) == [["go · round 1 of 3: Plaintext 1112k · Echo 4 KiB DNF"], ["axum · RealWorld (Conduit) ladder: best 4,012 req/s"], []]
+	and banner.lanes.map(|l| l.stepping) == [Bool.True, Bool.True, Bool.False]
 }
+
+expect {
+	no_plan = live_class("a", 0, 0)
+	done = { ..live_class("b", 4, 4), status: "done", elapsed_seconds: 6720.0 }
+	failed = { ..live_class("c", 4, 2), status: "failed", reason: "the server went away" }
+	ended = [{ class: "c", competitor: "roux", round: 1, rounds: 3, workload: "Plaintext", valid: Bool.False, note: "did not start", rps: 0.0 }]
+	banner = View.live_banner([no_plan, done, failed], ended, Bool.False)
+	when = |l| { now: l.now, count: l.count, left: l.left, stepping: l.stepping, failed: l.failed, track: l.track, last: l.last }
+	banner.items == ["5 of 8 steps", "finishing"]
+	and banner.lanes.map(when) == [
+		{ now: "racing", count: "", left: "00:42 elapsed", stepping: Bool.False, failed: Bool.False, track: [], last: [] },
+		{ now: "every step raced", count: "4 of 4 steps", left: "done in 01:52", stepping: Bool.False, failed: Bool.False, track: ["done", "done", "done", "done"], last: [] },
+		{ now: "failed: the server went away", count: "1 of 4 steps", left: "failed at 00:42", stepping: Bool.False, failed: Bool.True, track: ["done", "bad", "next", "next"], last: ["roux · round 1 of 3: DNF, did not start"] },
+	]
+}
+
+expect View.in_minutes(59.0) == "in under a minute" and View.in_minutes(61.0) == "in about 2 min" and View.whole_minutes(120.0) == "2 min"

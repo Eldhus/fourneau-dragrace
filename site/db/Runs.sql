@@ -148,6 +148,30 @@ ON CONFLICT (run_id, class) DO UPDATE SET status = excluded.status,
   reason = excluded.reason, seconds = excluded.seconds,
   updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
 
+-- A step of a class's plan, posted again with each step begun: what it is
+-- may be replaced, never when it began.
+-- name: set_step :exec
+-- @param run_id : Str
+-- @param class : Str
+-- @param step : I64
+-- @param competitor : Str
+-- @param round : I64
+-- @param workload : Str
+-- @param planned_seconds : F64
+INSERT INTO class_steps (run_id, class, step, competitor, round, workload, planned_seconds)
+VALUES (:run_id, :class, :step, :competitor, :round, :workload, :planned_seconds)
+ON CONFLICT (run_id, class, step) DO UPDATE SET competitor = excluded.competitor,
+  round = excluded.round, workload = excluded.workload,
+  planned_seconds = excluded.planned_seconds;
+
+-- The step begun, now; heard again, it began when first heard.
+-- name: begin_step :exec
+-- @param run_id : Str
+-- @param class : Str
+-- @param step : I64
+UPDATE class_steps SET started_at = coalesce(started_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+WHERE run_id = :run_id AND class = :class AND step = :step;
+
 -- name: set_machine :exec
 -- @param run_id : Str
 -- @param class : Str

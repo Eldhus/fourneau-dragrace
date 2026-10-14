@@ -150,6 +150,23 @@ CREATE TABLE class_status (
   PRIMARY KEY (run_id, class)
 ) STRICT, WITHOUT ROWID;
 
+-- Each class's plan, a row a step, as its worker posts it when each step
+-- begins (race.go, Step): a competitor's round of the closed workloads
+-- (round 1 and up, workload ''), or its climb of a mixed workload's ladder
+-- (round 0). started_at: when the site heard the step begin; NULL before.
+-- The live banner's, and the next run's estimate of each step.
+CREATE TABLE class_steps (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  class TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  competitor TEXT NOT NULL,
+  round INTEGER NOT NULL,
+  workload TEXT NOT NULL,
+  planned_seconds REAL NOT NULL,
+  started_at TEXT,
+  PRIMARY KEY (run_id, class, step)
+) STRICT, WITHOUT ROWID;
+
 -- Every machine raced on, as it reported itself.
 CREATE TABLE machines (
   run_id TEXT NOT NULL REFERENCES runs (id),

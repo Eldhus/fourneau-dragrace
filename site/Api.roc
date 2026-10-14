@@ -184,6 +184,13 @@ Api :: [].{
 
 	ClassPost : { status : Str, reason : Str, seconds : F64 }
 
+	## A class's plan and the step begun, 1 for the first, 0 for none yet
+	## (the worker's StepsPost, race.go's Step).
+	StepsPost : {
+		step : I64,
+		steps : List({ competitor : Str, round : I64, workload : Str, planned_seconds : F64 }),
+	}
+
 	HeadPost : { repository : Str, commit_sha : Str }
 
 	## The largest body taken: a run with race.json is some 20 KiB, a result
@@ -219,6 +226,8 @@ Api :: [].{
 			("POST", ["", "api", "runs", id, "machines"]) => for_run!(db, request, tokens, id, add_machines!)
 			("POST", ["", "api", "runs", id, "classes", class]) =>
 				for_run!(db, request, tokens, id, |d, r, run_id| set_class!(d, r, run_id, class))
+			("POST", ["", "api", "runs", id, "classes", class, "steps"]) =>
+				for_run!(db, request, tokens, id, |d, r, run_id| begin_step!(d, r, run_id, class))
 			("POST", ["", "api", "backup"]) =>
 				if caller == Racer backup!(db, request) else Ok(refused(401, "the racer's token"))
 			_ => Ok(refused(404, "no such API route"))
@@ -696,6 +705,47 @@ Api :: [].{
 					Err(DbErr(err)) => Err(DbErr(err))
 				}
 			}
+		}
+	}
+
+	## A class's plan, and the step begun now (the live banner's).
+	begin_step! : Sqlite.Db, Server.Request, Str, Str => Try(Server.Response(t), [DbErr(Sqlite.Err)])
+	begin_step! = |db, request, run_id, class| {
+		parsed : Try(StepsPost, _)
+		parsed = body!(request) |> and_parse
+		match parsed {
+			Err(Refused(response)) => Ok(response)
+			Ok(post) =>
+				if post.steps.len() > items_max {
+					Ok(refused(400, "more than ${items_max.to_str()} steps"))
+				} else if post.step < 0 or post.step > post.steps.len().to_i64_wrap() {
+					Ok(refused(400, "step ${post.step.to_str()} is not in the plan"))
+				} else {
+					tx = Sqlite.write!(db, request)?
+					var $number = 0
+					for s in post.steps {
+						$number = $number + 1
+						written = Runs.set_step!(tx, {
+							run_id,
+							class,
+							step: $number,
+							competitor: s.competitor,
+							round: s.round,
+							workload: s.workload,
+							planned_seconds: s.planned_seconds,
+						})
+						match written {
+							Ok({}) => {}
+							Err(DbErr(Constraint(why))) => return Ok(refused(400, why))
+							Err(DbErr(err)) => return Err(DbErr(err))
+						}
+					}
+					if post.step > 0 {
+						Runs.begin_step!(tx, { run_id, class, step: post.step })?
+					}
+					Sqlite.commit!(tx)?
+					Ok(answer("{\"ok\":true}"))
+				}
 		}
 	}
 

@@ -1,89 +1,115 @@
 -- The race page's live banner while a run races: the
--- run, its newest results, and each class's progress and time left,
--- estimated from the newest finished run before it. Read every 1.618 s by
--- each open race page's stream (main.roc, race_live!).
+-- run, and each class's step racing, its progress and name, the last
+-- step's results, and the time left. A step is a competitor's round, or its climb of a
+-- ladder (race.go, Step): each worker posts its class's plan as each step
+-- begins (class_steps). Read every 1.618 s by each open race page's stream
+-- (main.roc, race_live!).
 
 -- The run racing now, if one is.
 -- name: racing :one
 SELECT id, started_at FROM runs WHERE status = 'racing' ORDER BY started_at DESC LIMIT 1;
 
--- Each class's newest result: what landed, and its best rate (the best
--- round's, or the ladder's highest rate achieved). One a class, under its
--- bar (three were cut off on a phone; each
--- scrolls instead).
--- name: newest :many(32)
+-- Each class of a racing run: how it stands (racing, done or failed, and
+-- why), its time, its steps, and the step racing (0 before the first; a
+-- class whose worker posts no plan has none). A step's estimate is what
+-- the same step took in the newest finished run before (to its next
+-- step's start, the last to its class's end), else its plan's seconds.
+-- Left: the step racing's estimate less its time so far (never below 0),
+-- and every later step's. Elapsed: a class over, its own time; else the
+-- run's (classes start together).
+-- name: classes :many(32)
 -- @param run_id : Str
--- @column workload : Str
--- @column valid : Bool
--- @column best_rps : F64
-SELECT r.class, coalesce(w.title, r.workload) AS workload, r.competitor, r.valid,
-  coalesce((SELECT max(o.rps) FROM rounds o WHERE o.run_id = r.run_id AND o.class = r.class
-      AND o.workload = r.workload AND o.competitor = r.competitor),
-    (SELECT max(s.achieved_rps) FROM open_steps s WHERE s.run_id = r.run_id AND s.class = r.class
-      AND s.workload = r.workload AND s.competitor = r.competitor), 0.0) AS best_rps
-FROM (SELECT x.*, row_number() OVER (PARTITION BY x.class
-        ORDER BY x.updated_at DESC, x.workload, x.competitor DESC) AS n
-      FROM results x WHERE x.run_id = :run_id) AS r
-LEFT JOIN run_workloads w ON w.run_id = r.run_id AND w.name = r.workload
-WHERE r.n = 1
-ORDER BY r.class;
-
--- Each class of a racing run: results in, results the previous run had
--- (0 for a class it did not race), and the seconds left. Each result of
--- the previous run weighs what it measured (its rounds' seconds and
--- warmups, a mixed workload's steps at their length); the class's time then,
--- shared by weight, is what each test takes. Left: the tests not in yet,
--- less the time since the class's last result (the test in progress).
--- Elapsed: a class over, its own time; else the run's (classes start
--- together).
--- During a race a result's `updated_at` is when it landed (the racer posts
--- them all again at the end).
--- name: progress :many(32)
--- @param run_id : Str
--- @column done : I64
--- @column expected : I64
--- @column left_seconds : F64
--- @column over : Bool
+-- @column status : Str
+-- @column reason : Str
 -- @column elapsed_seconds : F64
+-- @column steps : I64
+-- @column step : I64
+-- @column competitor : Str
+-- @column round : I64
+-- @column rounds : I64
+-- @column workload : Str
+-- @column step_seconds : F64
+-- @column step_estimate : F64
+-- @column left_seconds : F64
 WITH previous AS (
   SELECT id FROM runs WHERE status = 'finished'
     AND started_at < (SELECT started_at FROM runs WHERE id = :run_id)
   ORDER BY started_at DESC LIMIT 1
 ),
-settings AS (
-  SELECT s.* FROM run_settings s WHERE s.run_id = (SELECT id FROM previous)
+took AS (
+  SELECT p.class, p.competitor, p.round, p.workload,
+    (julianday(coalesce(
+        (SELECT n.started_at FROM class_steps n
+          WHERE n.run_id = p.run_id AND n.class = p.class AND n.step = p.step + 1),
+        (SELECT s.updated_at FROM class_status s
+          WHERE s.run_id = p.run_id AND s.class = p.class AND s.status = 'done')))
+      - julianday(p.started_at)) * 86400.0 AS seconds
+  FROM class_steps p WHERE p.run_id = (SELECT id FROM previous) AND p.started_at IS NOT NULL
 ),
-weights AS (
-  SELECT r.class, r.workload, r.competitor,
-    coalesce((SELECT sum(o.seconds) FROM rounds o WHERE o.run_id = r.run_id AND o.class = r.class
-        AND o.workload = r.workload AND o.competitor = r.competitor), 0.0)
-    + (SELECT count(*) FROM rounds o WHERE o.run_id = r.run_id AND o.class = r.class
-        AND o.workload = r.workload AND o.competitor = r.competitor)
-      * (SELECT warmup_seconds FROM settings)
-    + (SELECT count(*) FROM open_steps s WHERE s.run_id = r.run_id AND s.class = r.class
-        AND s.workload = r.workload AND s.competitor = r.competitor)
-      * coalesce((SELECT json_extract(d.value, '$.mixed.warmup_seconds')
-            + json_extract(d.value, '$.mixed.measure_seconds')
-          FROM settings, json_each(settings.race_json, '$.workloads') AS d, run_workloads w
-          WHERE w.run_id = r.run_id AND w.name = r.workload
-            AND json_extract(d.value, '$.name') = w.test), 0) AS weight
-  FROM results r WHERE r.run_id = (SELECT id FROM previous)
+steps AS (
+  SELECT t.class, t.step, t.competitor, t.round, t.workload, t.started_at,
+    coalesce((SELECT k.seconds FROM took k WHERE k.class = t.class AND k.competitor = t.competitor
+        AND k.round = t.round AND k.workload = t.workload AND k.seconds > 0),
+      t.planned_seconds) AS estimate
+  FROM class_steps t WHERE t.run_id = :run_id
+),
+racing AS (
+  SELECT s.*, (julianday('now') - julianday(s.started_at)) * 86400.0 AS age
+  FROM steps s WHERE s.started_at IS NOT NULL AND s.step = (
+    SELECT max(m.step) FROM steps m WHERE m.class = s.class AND m.started_at IS NOT NULL)
 )
 SELECT c.name AS class, c.label,
-  (SELECT count(*) FROM results x WHERE x.run_id = :run_id AND x.class = c.name) AS done,
-  (SELECT count(*) FROM weights w WHERE w.class = c.name) AS expected,
-  coalesce((SELECT status IN ('done', 'failed') FROM class_status s
-    WHERE s.run_id = :run_id AND s.class = c.name), 0) AS over,
-  coalesce((SELECT s.seconds FROM class_status s WHERE s.run_id = :run_id AND s.class = c.name
-      AND s.status IN ('done', 'failed')),
-    (julianday('now') - julianday((SELECT started_at FROM runs WHERE id = :run_id))) * 86400.0) AS elapsed_seconds,
-  coalesce(max(0.0,
-    (SELECT s.seconds FROM class_status s WHERE s.run_id = (SELECT id FROM previous) AND s.class = c.name)
-    * (SELECT sum(w.weight) FROM weights w WHERE w.class = c.name AND NOT EXISTS (
-        SELECT 1 FROM results x WHERE x.run_id = :run_id AND x.class = w.class
-          AND x.workload = w.workload AND x.competitor = w.competitor))
-    / (SELECT sum(w.weight) FROM weights w WHERE w.class = c.name)
-    - (julianday('now') - julianday(coalesce(
-        (SELECT max(x.updated_at) FROM results x WHERE x.run_id = :run_id AND x.class = c.name),
-        (SELECT started_at FROM runs WHERE id = :run_id)))) * 86400.0), 0.0) AS left_seconds
-FROM run_classes c WHERE c.run_id = :run_id ORDER BY c.position;
+  coalesce(st.status, 'racing') AS status, coalesce(st.reason, '') AS reason,
+  coalesce(CASE WHEN st.status IN ('done', 'failed') THEN st.seconds END,
+    (julianday('now') - julianday((SELECT started_at FROM runs WHERE id = :run_id))) * 86400.0)
+    AS elapsed_seconds,
+  (SELECT count(*) FROM steps s WHERE s.class = c.name) AS steps,
+  coalesce(r.step, 0) AS step,
+  coalesce(r.competitor, '') AS competitor,
+  coalesce(r.round, 0) AS round,
+  coalesce((SELECT g.rounds FROM run_settings g WHERE g.run_id = c.run_id), 0) AS rounds,
+  coalesce(w.title, r.workload, '') AS workload,
+  coalesce(r.age, 0.0) AS step_seconds,
+  coalesce(r.estimate, 0.0) AS step_estimate,
+  coalesce(max(0.0, r.estimate - r.age), 0.0)
+    + coalesce((SELECT sum(s.estimate) FROM steps s
+        WHERE s.class = c.name AND s.step > coalesce(r.step, 0)), 0.0) AS left_seconds
+FROM run_classes c
+LEFT JOIN class_status st ON st.run_id = c.run_id AND st.class = c.name
+LEFT JOIN racing r ON r.class = c.name
+LEFT JOIN run_workloads w ON w.run_id = c.run_id AND w.name = r.workload
+WHERE c.run_id = :run_id
+ORDER BY c.position;
+
+-- Each class's last step ended: the step before the one racing, or the
+-- class over, its last begun. A row each result it measured, in the race's
+-- order of workloads: a round's rate, or a ladder's highest achieved; 0
+-- and not valid for a competitor that did not start or failed its checks
+-- (its note says why).
+-- name: ended :many(64)
+-- @param run_id : Str
+-- @column rounds : I64
+-- @column valid : Bool
+-- @column rps : F64
+WITH begun AS (
+  SELECT t.class, max(t.step) AS step FROM class_steps t
+  WHERE t.run_id = :run_id AND t.started_at IS NOT NULL GROUP BY t.class
+),
+ended AS (
+  SELECT t.class, t.competitor, t.round, t.workload FROM class_steps t
+  JOIN begun b ON b.class = t.class
+  WHERE t.run_id = :run_id AND t.step = b.step - (
+    CASE WHEN EXISTS (SELECT 1 FROM class_status s WHERE s.run_id = :run_id
+      AND s.class = t.class AND s.status IN ('done', 'failed')) THEN 0 ELSE 1 END)
+)
+SELECT e.class, e.competitor, e.round,
+  (SELECT g.rounds FROM run_settings g WHERE g.run_id = :run_id) AS rounds, w.title AS workload, r.valid, r.note,
+  coalesce(o.rps, (SELECT max(s.achieved_rps) FROM open_steps s WHERE s.run_id = r.run_id
+      AND s.class = r.class AND s.workload = r.workload AND s.competitor = r.competitor), 0.0) AS rps
+FROM ended e
+JOIN results r ON r.run_id = :run_id AND r.class = e.class AND r.competitor = e.competitor
+JOIN run_workloads w ON w.run_id = r.run_id AND w.name = r.workload
+  AND ((e.workload = '' AND w.kind = 'closed') OR w.name = e.workload)
+LEFT JOIN rounds o ON o.run_id = r.run_id AND o.class = r.class AND o.workload = r.workload
+  AND o.competitor = r.competitor AND o.round = e.round
+ORDER BY e.class, w.position;

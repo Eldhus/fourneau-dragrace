@@ -510,3 +510,53 @@ func TestCompetitorsLoad(t *testing.T) {
 		}
 	}
 }
+
+// A class's plan is its rounds, every competitor in each round's seeded
+// order, then the ladders; each step planned at its loads' seconds.
+func TestPlanSteps(t *testing.T) {
+	race, err := loadRace("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitors, err := loadCompetitors("../../..", race.Competitors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := planSteps(race, competitors, 42)
+	closed, plain, ladders := 0, 0, 0
+	for _, workload := range race.Workloads {
+		if workload.Mixed == nil {
+			closed++
+			if !workload.TLS {
+				plain++
+			}
+			continue
+		}
+		for _, competitor := range competitors {
+			if competitor.offers(workload) {
+				ladders++
+			}
+		}
+	}
+	if ladders == 0 || len(plan) != race.Rounds*len(competitors)+ladders {
+		t.Fatalf("%d steps, %d ladders", len(plan), ladders)
+	}
+	load := float64(race.WarmupSeconds + race.MeasureSeconds)
+	for round := 1; round <= race.Rounds; round++ {
+		for i, competitor := range shuffled(competitors, 42+int64(round)) {
+			step := plan[(round-1)*len(competitors)+i]
+			want := load * float64(closed)
+			if !competitor.TLS {
+				want = load * float64(plain)
+			}
+			if step.Competitor != competitor.Name || step.Round != round || step.Workload != "" ||
+				step.PlannedSeconds != want {
+				t.Fatalf("round %d, %d: %+v", round, i, step)
+			}
+		}
+	}
+	ladder := plan[race.Rounds*len(competitors)]
+	if ladder.Round != 0 || ladder.Workload != "conduit" || ladder.PlannedSeconds != 15*63 {
+		t.Fatalf("the first ladder: %+v", ladder)
+	}
+}

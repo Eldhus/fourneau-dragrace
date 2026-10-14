@@ -114,7 +114,7 @@ index! = |db, request, wanted| {
 	racer = Store.status(Store.racer!(db, request)?)
 	live =
 		match Store.live!(db, request)? {
-			Racing(run) => [View.live_banner(run.newest, run.classes, Bool.False)]
+			Racing(run) => [View.live_banner(run.classes, run.ended, Bool.False)]
 			Idle => []
 		}
 	shown = race_tabs(latest, wanted)
@@ -387,9 +387,8 @@ history_panel! = |db, request, wanted| {
 race_live! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
 race_live! = |db, request| {
 	stream = Sse.start!(request, [])?
-	var $text = ""
+	var $said = ""
 	var $done = ""
-	var $bars = []
 	var $quiet = 0
 	var $reads = 0
 	var $racing = Bool.True
@@ -401,15 +400,15 @@ race_live! = |db, request| {
 				$racing = Bool.False
 			}
 			Racing(run) => {
-				calm = View.live_banner(run.newest, run.classes, Bool.False)
-				# The bars' times move by the minute on their own.
-				if calm.text != $text or calm.done != $done or calm.classes != $bars {
+				calm = View.live_banner(run.classes, run.ended, Bool.False)
+				said = View.said(calm)
+				# The times move by the minute; the step bars fill in CSS.
+				if said != $said or calm.done != $done {
 					# The first read draws what the page has; no flare.
 					landed = $done != "" and calm.done != $done
-					Sse.send!(stream, Rocstache.patch!(LiveRace.template(View.live_banner(run.newest, run.classes, landed))))?
-					$text = calm.text
+					Sse.send!(stream, Rocstache.patch!(LiveRace.template({ ..calm, flare: landed })))?
+					$said = said
 					$done = calm.done
-					$bars = calm.classes
 					$quiet = 0
 				} else {
 					$quiet = $quiet + 1

@@ -105,32 +105,23 @@ func putConduitSeed(ctx context.Context, root string, target Target) error {
 	return target.Server.Put(ctx, conduitDatabase(root), target.ServerHome+"/"+conduitSeedName)
 }
 
-// mixedLoop climbs every mixed workload's ladder for every valid
-// competitor, after the rounds.
-func mixedLoop(ctx context.Context, race Race, competitors []Competitor, target Target,
+// climbStep climbs a mixed workload's ladder (a step of planSteps, after
+// the rounds) for its competitor, if the rounds found it valid.
+func climbStep(ctx context.Context, race Race, step Step, target Target,
 	valid map[string]string, run *Run) error {
-	for _, workload := range race.Workloads {
-		if workload.Mixed == nil {
-			continue
+	workload, competitor := step.workload, step.competitor
+	result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
+	why := valid[validKey(competitor.Name, workload.mode())]
+	result.Valid, result.Note = why == "", why
+	if result.Valid {
+		log.Printf("[%s] %s: %s", target.Class.Name, workload.Name, competitor.Name)
+		steps, why, err := climbMixed(ctx, race, workload, competitor, target)
+		if err != nil {
+			return fmt.Errorf("%s %s: %w", competitor.Name, workload.Name, err)
 		}
-		for _, competitor := range shuffled(competitors, run.Seed+int64(race.Rounds)+2) {
-			if !competitor.offers(workload) {
-				continue
-			}
-			result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
-			why := valid[validKey(competitor.Name, workload.mode())]
-			result.Valid, result.Note = why == "", why
-			if result.Valid {
-				log.Printf("[%s] %s: %s", target.Class.Name, workload.Name, competitor.Name)
-				steps, why, err := climbMixed(ctx, race, workload, competitor, target)
-				if err != nil {
-					return fmt.Errorf("%s %s: %w", competitor.Name, workload.Name, err)
-				}
-				result.Valid, result.Note, result.OpenLoop = why == "", why, steps
-			}
-			target.report(*result)
-		}
+		result.Valid, result.Note, result.OpenLoop = why == "", why, steps
 	}
+	target.report(*result)
 	return nil
 }
 

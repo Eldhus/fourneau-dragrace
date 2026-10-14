@@ -219,9 +219,10 @@ Store :: [].{
 	nothing_new : Str
 	nothing_new = "Quiet night on the track: nothing new to race. Got something faster? Push it to fourneau or roux"
 
-	## The run racing now, as the race page's live banner shows it: its newest results, and each class's progress
-	## and seconds left (db/Live.sql says how they are estimated).
-	LiveRun : { id : Str, newest : List(Live.Newest), classes : List(Live.Progress) }
+	## The run racing now, as the race page's live banner shows it: each class's step racing, its time and the
+	## seconds left, and its last step's results (db/Live.sql says how
+	## they are estimated).
+	LiveRun : { id : Str, classes : List(Live.Classes), ended : List(Live.Ended) }
 
 	live! : Sqlite.Db, Server.Request => Try([Racing(LiveRun), Idle], [DbErr(Sqlite.Err)])
 	live! = |db, request| {
@@ -229,7 +230,7 @@ Store :: [].{
 		match Live.racing!(reads) {
 			Ok({ id, .. }) => {
 				key = { run_id: id }
-				Ok(Racing({ id, newest: Live.newest!(reads, key)?, classes: Live.progress!(reads, key)? }))
+				Ok(Racing({ id, classes: Live.classes!(reads, key)?, ended: Live.ended!(reads, key)? }))
 			}
 			Err(NotFound) => Ok(Idle)
 			Err(DbErr(err)) => Err(DbErr(err))
