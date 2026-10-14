@@ -441,8 +441,10 @@ func TestHostFiles(t *testing.T) {
 // SIGPIPE ignored (basic-webserver dies of one). A script
 // stands in for the server and writes down what it was given. A bash
 // script: Ubuntu's /bin/sh, dash, puts SIGPIPE back to the default as it
-// starts, so the stand-in would report it unignored where a real server is
-// not (on GitHub's runner; Arch's /bin/sh is bash).
+// starts, where a real server, a binary, keeps what it is given. Only
+// GitHub's runner (Ubuntu 26.04) runs this against uutils' nohup, which
+// unignores SIGPIPE; here, put Ubuntu's rust-coreutils'
+// /usr/lib/cargo/bin/coreutils first on PATH.
 func TestStartServer(t *testing.T) {
 	home := t.TempDir()
 	script := "#!/usr/bin/env bash\n" +

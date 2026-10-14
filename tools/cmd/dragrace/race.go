@@ -238,7 +238,11 @@ func startServer(ctx context.Context, race Race, competitor Competitor, target T
 	// service: a server that leaves it at the default dies when a client
 	// closes a connection it is writing to (basic-webserver does).
 	// Go's and Rust's runtimes never die of it on a socket already, and
-	// fourneau's sends carry MSG_NOSIGNAL.
+	// fourneau's sends carry MSG_NOSIGNAL. Ignored last, by a shell that
+	// execs the server: Ubuntu 26.04's nohup (uutils, Rust) puts SIGPIPE
+	// back to the default for what it starts (GitHub's runner and the
+	// droplets run that image). Every step execs, so $! is the
+	// server's pid.
 	if _, err := target.Server.Shell(ctx, freshDatabase(target)); err != nil {
 		return "", fmt.Errorf("the database for %s: %w", competitor.Name, err)
 	}
@@ -253,11 +257,12 @@ func startServer(ctx context.Context, race Race, competitor Competitor, target T
 	}
 	var command strings.Builder
 	command.WriteString("cd " + quote(target.ServerHome) + " && ")
-	command.WriteString("ulimit -n $(ulimit -Hn); trap '' PIPE; env")
+	command.WriteString("ulimit -n $(ulimit -Hn); env")
 	for _, variable := range env {
 		command.WriteString(" " + quote(variable))
 	}
 	command.WriteString(" nohup " + target.taskset(target.ServerCPUs))
+	command.WriteString("sh -c " + quote(`trap '' PIPE; exec "$0"`) + " ")
 	command.WriteString(quote(target.ServerHome+"/bin/"+competitor.Name) + " ")
 	command.WriteString("> " + quote(competitor.Name+".log") + " 2>&1 < /dev/null & echo $!")
 	pid, err := target.Server.Shell(ctx, command.String())
