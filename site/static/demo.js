@@ -164,6 +164,41 @@ const firePalette = (() => {
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["id"] });
 })();
 
+// The live banner's newest result, on one line:
+// still when it fits; wider, a second copy follows it and both scroll
+// right to left, round and round, as a marquee does (style.css), at 40 px
+// a second. Measured again whenever the stream patches the banner, which
+// puts back one copy, and on a resize. A ticker already right is left as
+// it is, so its own changes end here.
+(() => {
+  const fit = (ticker) => {
+    const [first, copy] = ticker.querySelectorAll(".ticker-text");
+    if (!first) return;
+    const moving = ticker.classList.contains("moving");
+    // The text's own width: moving, it carries the gap before its copy.
+    const gap = parseFloat(getComputedStyle(first).paddingRight) || 0;
+    const wide = first.offsetWidth - gap > ticker.clientWidth;
+    const right = wide ? moving && copy && copy.textContent === first.textContent : !moving && !copy;
+    if (!right) {
+      ticker.classList.remove("moving");
+      ticker.querySelectorAll(".ticker-text + .ticker-text").forEach((e) => e.remove());
+      if (!wide) return;
+      const twin = first.cloneNode(true);
+      twin.setAttribute("aria-hidden", "true");
+      ticker.append(twin);
+      ticker.classList.add("moving");
+    }
+    // Its width now, with the gap: the distance one turn covers. Set again
+    // when fonts load: measured in the fallback font, it was a third short.
+    if (wide) ticker.style.setProperty("--marquee-seconds", `${(first.offsetWidth / 40).toFixed(1)}s`);
+  };
+  const fitAll = () => document.querySelectorAll(".racer .ticker").forEach(fit);
+  fitAll();
+  document.fonts.ready.then(fitAll);
+  window.addEventListener("resize", fitAll);
+  new MutationObserver(fitAll).observe(document.body, { childList: true, subtree: true, characterData: true });
+})();
+
 // Switching tabs keeps your place, across sizes and sections alike. The
 // tabs stay at the top of the screen while the results scroll under them
 // (style.css); a click morphs the results in place (Datastar), and the
@@ -172,13 +207,16 @@ const firePalette = (() => {
 // matched by `data-chart` (View.chart_key): Echo 4 KiB over HTTP/1.1 and
 // over HTTP/2 + TLS are one chart. One the other side lacks gives way to
 // the next one it has. (The section tabs went back to
-// the top.)
+// the top.) Between sections every chart is where it was already, at every
+// width (the same captions, rows and legends: View.as_test, the "n/a"
+// rows), so this moves nothing there; between classes on a
+// phone, the machines' lines above the charts can differ by a line.
 (() => {
   let kept = null;
   document.addEventListener("datastar-fetch", (event) => {
     const { type, el } = event.detail;
     if (type === "started") {
-      const region = el && el.closest && el.closest("#race-classes, #history-classes");
+      const region = el && el.closest && el.closest("#race-classes");
       if (!region) return;
       const below = region.querySelector(".tabbar").getBoundingClientRect().bottom;
       const charts = [...region.querySelectorAll("[data-chart]")];
@@ -198,4 +236,25 @@ const firePalette = (() => {
       });
     }
   });
+})();
+
+// The time left to push before the daily build takes fourneau's and roux's
+// masters (Store.nothing_new says why `data-utc` is 17 minutes early),
+// counted in the reader's browser; past it, the next day's.
+(() => {
+  const countdown = document.querySelector(".racer .countdown");
+  if (!countdown) return;
+  const [hour, minute] = countdown.dataset.utc.split(":").map(Number);
+  const pad = (n) => String(n).padStart(2, "0");
+  const tick = () => {
+    const now = new Date();
+    const deadline = new Date(now);
+    deadline.setUTCHours(hour, minute, 0, 0);
+    if (deadline <= now) deadline.setUTCDate(deadline.getUTCDate() + 1);
+    const left = Math.floor((deadline - now) / 1000);
+    const h = Math.floor(left / 3600), m = Math.floor(left / 60) % 60, s = left % 60;
+    countdown.textContent = `${h}h ${pad(m)}m ${pad(s)}s left to push`;
+  };
+  tick();
+  setInterval(tick, 1000);
 })();

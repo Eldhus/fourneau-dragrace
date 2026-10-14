@@ -13,12 +13,13 @@
 {{#dots}}<circle class="point s-{{ ../competitor }}{{?hollow}} hollow{{/hollow}}" cx="{{ cx }}" cy="{{ cy }}" r="4"><title>{{ title }}</title></circle>
 {{/dots}}<text class="end" x="{{ label_x }}" y="{{ label_y }}">{{ competitor }}</text>
 {{/lines}}</svg></div><p class="axis-note">offered requests per second &rarr;</p>
-<ul class="legend" aria-label="Lines">{{#lines}}<li><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/lines}}{{?loader_bound}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li>{{/loader_bound}}</ul></figure>
+<ul class="legend" aria-label="Lines">{{#legend}}<li{{^drawn}} class="na" title="n/a: no line in this section"{{/drawn}}><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/legend}}{{?loader_bound}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li>{{/loader_bound}}</ul></figure>
 {{/open}}{{#h2c}}<section class="h2c"><h3 class="class">HTTP/2 without TLS</h3>
 <p class="intro">Plaintext three ways: HTTP/2 by prior knowledge (h2c) against HTTP/1.1 is what HTTP/2 costs or gives; HTTP/2 + TLS against h2c is what TLS costs. No browser speaks h2c: it takes the protocol apart from TLS.</p>
 <div class="strips">
 {{#strips}}{{> Strip}}{{/strips}}<div class="table three-ways"><table><thead><tr><th>competitor</th><th>HTTP/1.1</th><th>h2c</th><th><span class="wide">HTTP/2 + TLS</span><span class="narrow">+TLS</span></th><th class="change">HTTP/2</th><th class="change">TLS</th></tr></thead><tbody>
 {{#rows}}<tr><td>{{ competitor }}</td><td><span class="wide">{{ plain }}</span><span class="narrow">{{ plain_short }}</span></td><td><span class="wide">{{ h2c }}</span><span class="narrow">{{ h2c_short }}<small>{{ http2_note }}</small></span></td><td><span class="wide">{{ tls }}</span><span class="narrow">{{ tls_short }}<small>{{ tls_note }}</small></span></td><td class="change">{{ http2_change }}</td><td class="change">{{ tls_change }}</td></tr>
 {{/rows}}</tbody></table></div></div></section>
-{{/h2c}}{{/classes}}
+{{/h2c}}<details class="history" data-on:toggle="el.open &amp;&amp; !el.querySelector('[data-chart]') &amp;&amp; @get('{{ history }}')"><summary>History, race by race</summary><div id="history-panel"><p class="pending">loading</p></div></details>
+{{/classes}}
 </div>

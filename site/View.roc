@@ -16,7 +16,8 @@ View :: [].{
 	## the whisker shows how far noise took the other rounds below it).
 	## `p99`: the rounds' median p99 in milliseconds, two figures, small
 	## after the rate for comparing tails at a glance; `p99_tip`, its hover.
-	Row : { competitor : Str, valid : Bool, share : Str, low : Str, high : Str, value : Str, p99 : Str, p99_tip : Str, ranged : Bool, hollow : Bool, tip : Str }
+	## `raced`: else the row is "n/a", muted (a DNF is the news, in gold).
+	Row : { competitor : Str, valid : Bool, raced : Bool, share : Str, low : Str, high : Str, value : Str, p99 : Str, p99_tip : Str, ranged : Bool, hollow : Bool, tip : Str }
 	TableRow : {
 		competitor : Str,
 		valid : Bool,
@@ -43,8 +44,9 @@ View :: [].{
 	Machine : { role : Str, items : List(Str) }
 	## A class as one section shows it (its tabs say which), and below, outside the
 	## section's toggle, the h2c comparison (one, or none in a race without
-	## it).
-	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart), h2c : List(H2c) }
+	## it). `history`: the address of its history panel's charts, this
+	## class's in this section, fetched when the panel is first opened.
+	Class : { name : Str, label : Str, title : Str, machines : List(Machine), strips : List(Strip), open : List(OpenChart), h2c : List(H2c), history : Str }
 	## Plaintext three ways: HTTP/1.1, HTTP/2 without TLS (h2c), HTTP/2 and
 	## TLS; each step's change is what HTTP/2, then TLS, cost or gave.
 	## `strips`: the h2c workload's bars, one strip (a template's section
@@ -66,7 +68,11 @@ View :: [].{
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note;
 	## `loader_bound`: a point is hollow, so the legend explains it.
-	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), ticks_x : List(Mark), ticks_y : List(Tick), loader_bound : Bool }
+	## `legend`: every competitor of the race, in its order, "n/a" where it
+	## has no line, so both sections' legends are alike.
+	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), legend : List(Legend), ticks_x : List(Mark), ticks_y : List(Tick), loader_bound : Bool }
+	## A chart's legend entry; `drawn`, else "n/a": not raced, or no result.
+	Legend : { competitor : Str, drawn : Bool }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
 
 	Dot : { cx : Str, cy : Str, r : Str, title : Str }
@@ -192,7 +198,7 @@ View :: [].{
 	history = |run, entries, wanted| {
 		sections = sections_of(run)
 		section = chosen_section(sections, wanted)
-		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(entries, class.name, workload, run.race.competitors))
+		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(entries, class.name, as_test(run.race.workloads, workload), run.race.competitors))
 		classes = classes_of(run).map(|class| {
 			name: class.name,
 			label: class.label,
@@ -204,10 +210,18 @@ View :: [].{
 	}
 
 	## The race page's live banner while a run races (LiveRace.rocstache): one sentence (results in, of how many, and
-	## the time left as HH:MM), the newest results as its items, and the
-	## flare when a result has just landed; `done` names the flare's canvas,
-	## so each result's is a new element and its animation runs.
-	LiveBanner : { text : Str, items : List(Str), flare : Bool, done : Str }
+	## the time left as HH:MM), and the flare when a result has just
+	## landed; `done` names the flare's canvas, so each result's is a new
+	## element and its animation runs. `classes`: a bar per server class
+	## racing, filled by its results in of those
+	## expected, with its time elapsed and the estimate left, or how long it
+	## took once over, and under it the class's newest result.
+	LiveBanner : { text : Str, classes : List(ClassBar), flare : Bool, done : Str }
+	## `share`: the bar's fill, 0 to 1; `times`: "00:42 elapsed · about
+	## 00:31 left", or "done in 01:52"; `newest`: the class's newest result,
+	## one line that scrolls when it is wider than the banner (none before
+	## the first lands).
+	ClassBar : { label : Str, share : Str, times : Str, newest : List(Str) }
 
 	live_banner : List(Live.Newest), List(Live.Progress), Bool -> LiveBanner
 	live_banner = |newest, classes, flare| {
@@ -226,13 +240,28 @@ View :: [].{
 			} else {
 				"Racing now · ${done.to_str()} of ${expected.to_str()} results in · about ${View.clock(left)} left"
 			}
-		items = newest.map(
-			|n| {
-				rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
-				"${n.competitor} ${n.workload} on ${n.class_label}: ${rate}"
-			},
-		)
-		{ text, items, flare, done: done.to_str() }
+		{ text, classes: classes.map(|c| class_bar(c, newest.keep_if(|n| n.class == c.class))), flare, done: done.to_str() }
+	}
+
+	## A class's bar. A class the previous run did not race has no estimate:
+	## its bar stays empty until it is over, and only its time is said. Its
+	## result says no class: it is under the class's name.
+	class_bar : Live.Progress, List(Live.Newest) -> ClassBar
+	class_bar = |c, newest| {
+		share =
+			if c.over 1.0
+			else if c.expected <= 0 0.0
+			else if c.done >= c.expected 1.0
+			else c.done.to_f64() / c.expected.to_f64()
+		times =
+			if c.over "done in ${View.clock(c.elapsed_seconds)}"
+			else if c.expected <= 0 "${View.clock(c.elapsed_seconds)} elapsed"
+			else "${View.clock(c.elapsed_seconds)} elapsed · about ${View.clock(c.left_seconds)} left"
+		said = newest.map(|n| {
+			rate = if n.valid "${Format.thousands(n.best_rps)} req/s" else "DNF"
+			"${n.competitor} ${n.workload}: ${rate}"
+		})
+		{ label: c.label, share: Format.two_decimals(share), times, newest: said }
 	}
 
 	## Seconds as hours and minutes, HH:MM, rounded up to the minute: a
@@ -334,7 +363,8 @@ class_view = |run, class, section| {
 	machines = ordered.map(|m| { role: m.role, items: [m.size, vcpus(m.cpus)].concat(memory(m.memory_mib)).concat([cpu_name(m.cpu), "Linux ${m.kernel}"]) })
 	strips = in_section(closed(run.race.workloads), section).map(|workload| strip(run, class.name, workload))
 	open = open_charts(run, class.name).keep_if(|o| o.section == section).map(|o| o.chart)
-	{ name: class.name, label: class.label, title: class.title, machines, strips, open, h2c: h2c_view(run, class.name) }
+	history = "/history-panel?class=${class.name}&protocol=${section}"
+	{ name: class.name, label: class.label, title: class.title, machines, strips, open, h2c: h2c_view(run, class.name), history }
 }
 
 ## A CPU's model name without its makers' marks and filler words, so a
@@ -442,7 +472,10 @@ expect change(0.0, 88.0) == "—" and rate_or_dash(0.0) == "—"
 closed : List(Data.Workload) -> List(Data.Workload)
 closed = |workloads| workloads.keep_if(|w| w.kind != "mixed")
 
-## One workload on one server class: a bar per competitor, fastest first.
+## One workload on one server class: a bar per competitor, fastest first,
+## then a row "n/a" for each the race has that did not race it
+## (basic-webserver serves no TLS), so both sections show every
+## competitor and their charts are the same height.
 strip : Data.Run, Str, Data.Workload -> View.Strip
 strip = |run, class, workload| {
 	results = run.results
@@ -450,8 +483,35 @@ strip = |run, class, workload| {
 		.sort_with(|a, b| if a.best_rps > b.best_rps Before else if a.best_rps < b.best_rps After else Same)
 	# The scale ends at the fastest round, so every whisker fits.
 	most = results.fold(0.0, |best, r| if r.valid and round_range(r).fastest > best round_range(r).fastest else best)
-	rows = results.map(|r| row(r, most))
-	{ key: chart_key(workload), title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, rows, table: results.map(|r| table_row(r)) }
+	absent = run.race.competitors.keep_if(|c| !results.any(|r| r.competitor == c))
+	not_raced = |c| "${c} is not raced over ${protocol_label(workload.protocol, workload.http2)}"
+	rows = results.map(|r| row(r, most)).concat(absent.map(|c| { ..row_not_raced(c), tip: not_raced(c) }))
+	table = results.map(|r| table_row(r)).concat(absent.map(|c| { ..table_row_not_raced(c), note: not_raced(c) }))
+	shown = as_test(run.race.workloads, workload)
+	{ key: chart_key(workload), title: shown.title, summary: shown.summary, variant: workload_variant(workload), run: run.id, rows, table }
+}
+
+## A variant as the race page and History title it: its test's title and
+## summary (the HTTP/1.1 variant's), the same in both sections, the tab and
+## the variant line saying the protocol; so a switch changes no caption's
+## length. h2c's keeps its own: it shows below
+## either section.
+as_test : List(Data.Workload), Data.Workload -> Data.Workload
+as_test = |workloads, workload|
+	if workload.protocol == "h2c" {
+		workload
+	} else {
+		match workloads.find_first(|w| w.name == workload.test) {
+			Ok(test) => { ..workload, title: test.title, summary: test.summary }
+			Err(_) => workload
+		}
+	}
+
+expect {
+	w = |name, test, protocol, title| { name, test, kind: "closed", title, summary: title, protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False }
+	all = [w("echo-4k", "echo-4k", "http1", "Echo 4 KiB"), w("echo-4k-tls", "echo-4k", "tls", "Echo 4 KiB, HTTP/2 + TLS"), w("plaintext-h2", "plaintext", "h2c", "Plaintext, HTTP/2 (h2c)")]
+	shown = |name| all.find_first(|x| x.name == name).map_ok(|x| as_test(all, x).title) ?? ""
+	shown("echo-4k-tls") == "Echo 4 KiB" and shown("echo-4k") == "Echo 4 KiB" and shown("plaintext-h2") == "Plaintext, HTTP/2 (h2c)"
 }
 
 ## Which chart a workload's is, the same in every class and section: its
@@ -470,13 +530,16 @@ expect {
 ## How a variant is sent, the protocol first: what the line under a chart,
 ## and on Workloads under a test, says (thin text
 ## in the protocol tabs' colour, bullets between). Short enough for one
-## line on a phone: kept alive goes unsaid, the usual case (the bars first, the words quieter).
+## line on a phone: kept alive goes unsaid, the usual case (the bars first, the words quieter). Churn's no longer than
+## HTTP/2's: "connections, one request each" wrapped at 350 px wide over
+## TLS and not over HTTP/1.1, so a section switch moved every chart
+## below it.
 variant_line : Str, Bool, I64, I64, Bool -> List(Str)
 variant_line = |protocol, http2, connections, streams, keepalive| {
 	carried =
 		if http2 "${connections.to_str()} connections × ${streams.to_str()} streams"
 		else if keepalive "${connections.to_str()} connections"
-		else "${connections.to_str()} connections, one request each"
+		else "${connections.to_str()} one-shot connections"
 	[protocol_label(protocol, http2), carried]
 }
 
@@ -495,13 +558,13 @@ protocol_label = |protocol, http2|
 	else "HTTP/1.1"
 
 expect variant_line("tls", Bool.True, 128, 2, Bool.True) == ["HTTP/2+TLS", "128 connections × 2 streams"]
-expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 connections, one request each"]
+expect variant_line("tls", Bool.False, 64, 0, Bool.False) == ["HTTP/1.1+TLS", "64 one-shot connections"]
 expect variant_line("http1", Bool.False, 256, 0, Bool.True) == ["HTTP/1.1", "256 connections"]
 
 row : Data.Result, F64 -> View.Row
 row = |result, most|
 	if !result.valid or most <= 0.0 {
-		{ competitor: result.competitor, valid: Bool.False, share: "0", low: "0", high: "0", value: "DNF", p99: "", p99_tip: "", ranged: Bool.False, hollow: Bool.False, tip: "${result.competitor} did not finish: ${result.note}" }
+		{ ..row_not_raced(result.competitor), raced: Bool.True, value: "DNF", tip: "${result.competitor} did not finish: ${result.note}" }
 	} else {
 		value = Format.thousands(result.best_rps)
 		rounds = List.len(result.rounds).to_str()
@@ -510,6 +573,7 @@ row = |result, most|
 		{
 			competitor: result.competitor,
 			valid: Bool.True,
+			raced: Bool.True,
 			share: Format.two_decimals(result.best_rps / most),
 			low: Format.two_decimals(slowest / most),
 			high: Format.two_decimals(fastest / most),
@@ -522,6 +586,14 @@ row = |result, most|
 		}
 	}
 
+## A competitor that did not race the workload: "n/a" where its bar would
+## be (the tip says why).
+row_not_raced : Str -> View.Row
+row_not_raced = |competitor| { competitor, valid: Bool.False, raced: Bool.False, share: "0", low: "0", high: "0", value: "n/a", p99: "", p99_tip: "", ranged: Bool.False, hollow: Bool.False, tip: "" }
+
+table_row_not_raced : Str -> View.TableRow
+table_row_not_raced = |competitor| { competitor, valid: Bool.False, note: "", rps: "", p95: "", p99: "", p999: "", rounds: "", cpu: "", loader: "", net: "", limit: "", spread: "", steal: "", rss: "" }
+
 ## The table: the rate the bar's (the best round), the percentiles the
 ## rounds' medians (Data.Result says why); what the machines did is the
 ## fastest round's, the one the bar shows.
@@ -533,7 +605,7 @@ table_row = |result| {
 	{
 		competitor: result.competitor,
 		valid: result.valid,
-		note: result.note,
+		note: "not valid: ${result.note}",
 		rps: Format.thousands(result.best_rps),
 		p95: Format.latency(result.median_p95_ms),
 		p99: Format.latency(result.median_p99_ms),
@@ -874,8 +946,8 @@ expect {
 	and open.route == "/sse"
 	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
 	and variant_groups(specs).map(|g| g.rows) == [
-		[{ line: ["256 connections"], tests: "sse, conduit" }, { line: ["64 connections, one request each"], tests: "churn" }],
-		[{ line: ["128 connections × 2 streams"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 connections, one request each"], tests: "churn" }],
+		[{ line: ["256 connections"], tests: "sse, conduit" }, { line: ["64 one-shot connections"], tests: "churn" }],
+		[{ line: ["128 connections × 2 streams"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 one-shot connections"], tests: "churn" }],
 	]
 }
 
@@ -890,14 +962,15 @@ open_charts = |run, class|
 		if workload.kind != "mixed" or results.is_empty() {
 			Err(NoClimb)
 		} else {
-			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: workload.title, summary: workload.summary, variant: workload_variant(workload), run: run.id, results }) })
+			shown = as_test(run.race.workloads, workload)
+			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: shown.title, summary: shown.summary, variant: workload_variant(workload), run: run.id, results, competitors: run.race.competitors }) })
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: the slowest part's. (A switch to p50, p90, p99.9 and the mean was built
 ## and taken out; the charts all looked alike.)
-open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result) } -> View.OpenChart
-open_chart = |{ key, title, summary, variant, run, results }| {
+open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), competitors : List(Str) } -> View.OpenChart
+open_chart = |{ key, title, summary, variant, run, results, competitors }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -919,7 +992,8 @@ open_chart = |{ key, title, summary, variant, run, results }| {
 	# the axis's note.
 	measure = "p99 latency, the slowest request type's"
 	loader_bound = lines.any(|l| l.dots.any(|dot| dot.hollow))
-	{ key, title, caption: summary, variant, run, measure, lines, ticks_x, ticks_y, loader_bound }
+	legend = competitors.map(|c| { competitor: c, drawn: lines.any(|l| l.competitor == c) })
+	{ key, title, caption: summary, variant, run, measure, lines, legend, ticks_x, ticks_y, loader_bound }
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64) -> View.DraftOpenLine
@@ -1109,13 +1183,21 @@ expect View.clock(0.0) == "00:00" and View.clock(1.0) == "00:01" and View.clock(
 expect View.clock(61.0) == "00:02" and View.clock(4320.0) == "01:12" and View.clock(36000.0) == "10:00"
 
 expect {
-	newest = [{ class: "smallest", class_label: "512MB/1vCPU", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 }]
-	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds }
+	newest = [
+		{ class: "a", workload: "Echo 4 KiB", competitor: "roux", valid: Bool.True, best_rps: 35296.9 },
+		{ class: "b", workload: "Churn", competitor: "go", valid: Bool.False, best_rps: 0.0 },
+	]
+	progress = |class, done, expected, left_seconds| { class, label: class, done, expected, over: Bool.False, left_seconds, elapsed_seconds: 2520.0 }
 	banner = View.live_banner(newest, [progress("a", 41, 59, 300.0), progress("b", 40, 59, 4320.0), progress("c", 30, 0, 0.0)], Bool.True)
-	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.items == ["roux Echo 4 KiB on 512MB/1vCPU: 35,297 req/s"] and banner.done == "111"
+	banner.text == "Racing now · 111 of 148 results in · about 01:12 left" and banner.done == "111"
+	and banner.classes == [
+		{ label: "a", share: "0.69", times: "00:42 elapsed · about 00:05 left", newest: ["roux Echo 4 KiB: 35,297 req/s"] },
+		{ label: "b", share: "0.68", times: "00:42 elapsed · about 01:12 left", newest: ["go Churn: DNF"] },
+		{ label: "c", share: "0.00", times: "00:42 elapsed", newest: [] },
+	]
 }
 
 expect {
-	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0 }], Bool.False)
-	all_in.text == "Racing now · all 59 results in, finishing"
+	all_in = View.live_banner([], [{ class: "a", label: "a", done: 59, expected: 59, over: Bool.True, left_seconds: 0.0, elapsed_seconds: 6720.0 }], Bool.False)
+	all_in.text == "Racing now · all 59 results in, finishing" and all_in.classes == [{ label: "a", share: "1.00", times: "done in 01:52", newest: [] }]
 }

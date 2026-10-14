@@ -197,6 +197,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
    under the value instead of squeezing the bar off its whisker. */
 .drag .bar { flex: none; }
 .drag .dnf { color: var(--gold); }
+/* Not raced in this section (basic-webserver over TLS): the row and its
+   legend entry kept, so both sections are alike, and quiet. The legend's
+   says so by its hollow swatch, not a word: a word would widen it and
+   wrap the legend in one section only. */
+.drag .na, .legend .na { color: var(--text-3); }
+.legend .na .swatch { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
 @keyframes launch { from { transform: scaleX(0); } }
 
 .chart-scroll { overflow-x: auto; }
@@ -310,7 +316,7 @@ nav.tabs a + a { border-left: 0; }
   .chart { min-width: 0; }
   .chart .end { display: none; }
   .chart .tick, .chart .date { font-size: 20px; }
-  #history .strip { padding: 12px 10px 6px; }
+  #history-panel .strip { padding: 12px 10px 6px; }
   .chart-legend { font-size: 11px; gap: 3px 10px; }
 }
 
@@ -376,6 +382,14 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .intro, .strip figcaption, .workloads .card p { text-wrap: pretty; }
 .h2c { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
 .h2c .class { color: var(--cyan); }
+/* History, closed under the race (not a page that
+   reads as the app's history); its charts are fetched when first opened. */
+details.history { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--grid); }
+details.history > summary { cursor: pointer; font-family: var(--pixel); font-size: 13px;
+  line-height: 1.5; color: var(--text-3); margin: 22px 0 8px; }
+details.history > summary:hover, details.history[open] > summary { color: var(--gold); }
+details.history .h2c { margin-top: 18px; border-top: 0; }
+@media (max-width: 560px) { details.history > summary { font-size: 11px; } }
 .h2c .table { margin-top: 0; }
 /* Plaintext three ways on a phone (for a Pixel
    10's 412 px): four columns, not six. Rates in three figures, each
@@ -417,6 +431,7 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
 .racer .items { display: block; overflow: hidden; }
 .racer .row { display: flex; flex-wrap: wrap; margin-left: -2.4em; }
 .racer .item { white-space: nowrap; color: #fff3d6; }
+.racer .countdown { font-variant-numeric: tabular-nums; }
 .racer .item::before { content: "\00b7"; display: inline-block; width: 2.4em; text-align: center; color: var(--text-3); }
 @media (prefers-reduced-motion: reduce) { .racer::before { animation: none; } }
 @media (max-width: 560px) { .racer { font-size: 9px; } }
@@ -426,6 +441,41 @@ nav.protocol a:hover, nav.protocol a[aria-current="page"] {
    sits on the banner's bottom edge and reaches above it for the smoke,
    lit onto the panel, never catching a click. */
 .live-wrap { position: relative; }
+/* A bar per server class racing: its name, its
+   results in of those expected, its time elapsed and the estimate left.
+   The times' column is as wide as its longest form ("01:45 elapsed ·
+   about 00:09 left", the type monospaced), so every class's bar ends at
+   the same place. On a phone the bar goes under the name and times, and
+   the times under the name when the two do not fit on one line. */
+.racer .class-bar { display: grid; grid-template-columns: 12ch 1fr 32ch; align-items: center;
+  gap: 2px 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.racer .class-bar .label { color: #fff3d6; white-space: nowrap; }
+.racer .class-bar .times { color: var(--text-2); text-shadow: none; white-space: nowrap; }
+.racer .meter { height: 8px; border: 1px solid rgba(255,215,110,.45); background: rgba(23,11,38,.6); }
+.racer .meter .fill { display: block; height: 100%; width: calc(var(--share) * 100%);
+  background: linear-gradient(90deg, var(--magenta), var(--gold)); box-shadow: 0 0 8px rgba(255,169,77,.5);
+  transition: width .6s steps(6); }
+@media (max-width: 560px) {
+  .racer .class-bar { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; }
+  .racer .class-bar .meter { order: 1; flex: 1 0 100%; }
+}
+/* Each class's newest result, under its bar, one line: still when it
+   fits, else scrolling right to left as a marquee does, round and round
+   (three lines were cut off on a phone). demo.js
+   measures it and, when it is wider, adds the second copy that follows
+   it in. On a desktop it starts where the bar does. */
+.racer .ticker { display: block; overflow: hidden; white-space: nowrap; margin: 2px 0 4px calc(12ch + 12px); color: #fff3d6; }
+@media (max-width: 560px) { .racer .ticker { margin-left: 0; } }
+/* Its own width, not the banner's: a turn moves exactly one copy. */
+.racer .ticker-text { display: inline-block; width: max-content; }
+.racer .ticker.moving .ticker-text { padding-right: 4em; animation: marquee var(--marquee-seconds, 12s) linear infinite; }
+@keyframes marquee { to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .racer .ticker .ticker-text { text-overflow: ellipsis; }
+  .racer .ticker { text-overflow: ellipsis; }
+  .racer .ticker.moving .ticker-text { animation: none; padding-right: 0; }
+  .racer .ticker.moving .ticker-text + .ticker-text { display: none; }
+}
 .racer.live .flare {
   position: absolute; left: 0; bottom: 0; width: 100%; height: 260%; z-index: 2;
   image-rendering: pixelated; pointer-events: none; mix-blend-mode: screen; opacity: .8;

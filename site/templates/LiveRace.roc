@@ -6,7 +6,19 @@ import Templates
 LiveRace :: [].{
 
 	## What `LiveRace.rocstache` reads, inferred from its tags.
-	Ctx : { done : Str, flare : Bool, items : List(Str), text : Str }
+	Ctx : {
+		classes : List(
+			{
+				label : Str,
+				newest : List(Str),
+				share : Str,
+				times : Str,
+			},
+		),
+		done : Str,
+		flare : Bool,
+		text : Str,
+	}
 
 	## The template's value: what a response sends, rendered by the
 	## host from the template's bytecode as it is sent.

@@ -37,6 +37,7 @@ RaceClasses :: [].{
 										low : Str,
 										p99 : Str,
 										p99_tip : Str,
+										raced : Bool,
 										ranged : Bool,
 										share : Str,
 										tip : Str,
@@ -71,12 +72,14 @@ RaceClasses :: [].{
 						),
 					},
 				),
+				history : Str,
 				machines : List({ items : List(Str), role : Str }),
 				name : Str,
 				open : List(
 					{
 						caption : Str,
 						key : Str,
+						legend : List({ competitor : Str, drawn : Bool }),
 						lines : List(
 							{
 								competitor : Str,
@@ -115,6 +118,7 @@ RaceClasses :: [].{
 								low : Str,
 								p99 : Str,
 								p99_tip : Str,
+								raced : Bool,
 								ranged : Bool,
 								share : Str,
 								tip : Str,

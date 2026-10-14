@@ -37,6 +37,7 @@ IndexPage :: [].{
 										low : Str,
 										p99 : Str,
 										p99_tip : Str,
+										raced : Bool,
 										ranged : Bool,
 										share : Str,
 										tip : Str,
@@ -71,12 +72,14 @@ IndexPage :: [].{
 						),
 					},
 				),
+				history : Str,
 				machines : List({ items : List(Str), role : Str }),
 				name : Str,
 				open : List(
 					{
 						caption : Str,
 						key : Str,
+						legend : List({ competitor : Str, drawn : Bool }),
 						lines : List(
 							{
 								competitor : Str,
@@ -115,6 +118,7 @@ IndexPage :: [].{
 								low : Str,
 								p99 : Str,
 								p99_tip : Str,
+								raced : Bool,
 								ranged : Bool,
 								share : Str,
 								tip : Str,
@@ -155,10 +159,22 @@ IndexPage :: [].{
 		home : Bool,
 		id : Str,
 		live : List(
-			{ done : Str, flare : Bool, items : List(Str), text : Str },
+			{
+				classes : List(
+					{
+						label : Str,
+						newest : List(Str),
+						share : Str,
+						times : Str,
+					},
+				),
+				done : Str,
+				flare : Bool,
+				text : Str,
+			},
 		),
 		nav : List({ current : Bool, href : Str, label : Str }),
-		racer : List({ items : List(Str), text : Str }),
+		racer : List({ countdown : Bool, items : List(Str), text : Str }),
 		ready : Bool,
 		sections : List({ action : Str, current : Bool, href : Str, label : Str }),
 		started : Str,

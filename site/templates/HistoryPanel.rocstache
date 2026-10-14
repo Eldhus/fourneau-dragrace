@@ -1,0 +1,6 @@
+<div id="history-panel">
+<p class="intro">Each race&rsquo;s best round, race by race. A line that jumps is a commit, or another CPU under the same size: each race&rsquo;s data, <code>/data/runs/ID.json</code> (the ID is on each point), names both. The <a href="/data/index.json">index</a> lists the races.</p>
+{{?waiting}}<p class="pending">// HISTORY NEEDS TWO RACES // check back after the next nightly</p>{{/waiting}}{{^waiting}}{{#classes}}<div class="strips">
+{{#charts}}{{> HistoryChart}}{{/charts}}</div>
+{{#h2c}}<div class="h2c">{{> HistoryChart}}</div>
+{{/h2c}}{{/classes}}{{/waiting}}</div>

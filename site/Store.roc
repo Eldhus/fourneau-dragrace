@@ -174,13 +174,14 @@ Store :: [].{
 	## check will do, what was asked, what the last run that did not finish
 	## said (a run racing is the live banner's, live!). `items` are the
 	## banner's parts that must not break inside (a repository and its
-	## commit), apart from the sentence.
-	Banner : { text : Str, items : List(Str) }
+	## commit), apart from the sentence. `countdown`
+	## ends the banner with the time left to push (demo.js counts it).
+	Banner : { text : Str, items : List(Str), countdown : Bool }
 
 	status : Racer -> List(Banner)
 	status = |racer| {
 		newest = racer.recent.first()
-		said = |text| { text, items: [] }
+		said = |text| { text, items: [], countdown: Bool.False }
 		racing =
 			match newest {
 				Ok(run) => run.status == "racing"
@@ -193,11 +194,11 @@ Store :: [].{
 			if racer.heads.is_empty() or racing {
 				[]
 			} else if new.is_empty() {
-				[said(nothing_new)]
+				[{ ..said(nothing_new), countdown: Bool.True }]
 			} else {
 				# Not the hour: the racer's timer holds it, and the site has no
 				# copy to go stale.
-				[{ text: "Racing tonight", items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
+				[{ ..said("Racing tonight"), items: new.map(|head| "${head.repository} ${short(head.commit_sha)}") }]
 			}
 		asked = if racer.waiting.any(|w| w.kind == "race") [said("A race is asked for: the racer takes it once idle, within a minute; a race takes about two and a half hours.")] else []
 		last =
@@ -213,9 +214,10 @@ Store :: [].{
 
 	## The racer judges from its newest build, and fourneau's and roux's
 	## new commits reach a build at the latest with the daily one
-	## (build.yml).
+	## (build.yml, 07:47 UTC). The countdown ends at 07:30 UTC: a scheduled
+	## run starts late, never early, so a push by then is in it.
 	nothing_new : Str
-	nothing_new = "Nothing new since the last race: tonight's check skips, unless fourneau or roux have new commits by the next build (daily, 07:47 UTC)."
+	nothing_new = "Quiet night on the track: nothing new to race. Got something faster? Push it to fourneau or roux"
 
 	## The run racing now, as the race page's live banner shows it: its newest results, and each class's progress
 	## and seconds left (db/Live.sql says how they are estimated).
@@ -275,8 +277,8 @@ expect {
 	raced = |repository, commit_sha| { repository, commit_sha, new: Bool.False }
 	quiet = { recent: [], waiting: [], heads: [head("roux", "abc1234567")], raced: [raced("roux", "abc1234567")] }
 	busy = { ..quiet, heads: [head("roux", "def1234567"), head("fourneau", "aaa")], raced: [raced("roux", "abc1234567"), raced("fourneau", "aaa")] }
-	Store.status(quiet) == [{ text: Store.nothing_new, items: [] }]
-	and Store.status(busy) == [{ text: "Racing tonight", items: ["roux def1234"] }]
+	Store.status(quiet) == [{ text: Store.nothing_new, items: [], countdown: Bool.True }]
+	and Store.status(busy) == [{ text: "Racing tonight", items: ["roux def1234"], countdown: Bool.False }]
 }
 
 expect {
@@ -286,5 +288,5 @@ expect {
 	# A run racing is the live banner's; tonight's news waits for its end.
 	Store.status(racing) == []
 	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == []
-	and Store.status(skipped) == [{ text: "The last run, r1, was skipped: nothing new.", items: [] }]
+	and Store.status(skipped) == [{ text: "The last run, r1, was skipped: nothing new.", items: [], countdown: Bool.False }]
 }

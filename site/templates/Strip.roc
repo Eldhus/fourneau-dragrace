@@ -16,6 +16,7 @@ Strip :: [].{
 				low : Str,
 				p99 : Str,
 				p99_tip : Str,
+				raced : Bool,
 				ranged : Bool,
 				share : Str,
 				tip : Str,
