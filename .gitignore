@@ -1,18 +1,5 @@
 out/
-# The competitors' builds (competitor.json's build.binary).
-competitors/go/dragrace-go
-competitors/axum/target/
-competitors/fourneau-zig/zig-out/
-competitors/fourneau-zig/.zig-cache/
-competitors/basic-webserver/main
+# Each competitor ignores its own build, in its own .gitignore.
 .zig-cache/
 tools/dragrace
-site/site.db*
-site/backups/
-site/secrets/
-# roux build writes these, and their layouts key hashes the path roc is
-# installed at: a CI runner's differs from a developer's, so a committed
-# copy left every build's checkout changed and the bundle refused it.
-# Generated, so not committed, until roux keys them by what roc laid out.
-site/templates/Templates.roc
-competitors/roux/templates/Templates.roc
+# The site ignores its own build, in its own .gitignore.

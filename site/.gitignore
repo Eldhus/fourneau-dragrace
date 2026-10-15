@@ -1,7 +1,14 @@
-# roux build's working files, and the binary `roux dev` runs.
+# roux build's working files, and the app it builds (named after main.roc).
 .roux/
 main
-# Generated from db/schema.sql and db/*.sql by roux-db (roux build).
-db/*.roc
-# (Each template's contract, `Page.roc`, is generated and committed: it
-# changes only when the template's type does.)
+# Made by roux build, and its layouts hash keys the path roc is installed at:
+# a committed copy is wrong on any other machine. The build writes it first.
+templates/Templates.roc
+# The app's SQLite database.
+*.db
+*.db-wal
+*.db-shm
+# The site's own: its live database's backups, and its secrets.
+site.db*
+backups/
+secrets/
