@@ -276,6 +276,38 @@ func TestSiteCommit(t *testing.T) {
 	}
 }
 
+// Builds are newest by when each was published: GitHub lists a release by
+// its commit's date, so a build of a commit dated earlier (a squash that
+// kept an old date) lists before the newer builds.
+func TestBuildsNewestByPublished(t *testing.T) {
+	release := func(commit, published string) map[string]any {
+		body, _ := json.Marshal(BuildInfo{Commits: map[string]string{"fourneau-dragrace": commit}})
+		return map[string]any{"tag_name": "build-" + commit, "published_at": published,
+			"body": string(body)}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]map[string]any{
+			release("old", "2026-10-15T21:34:37Z"),
+			release("newest", "2026-10-15T22:23:33Z"),
+			release("middle", "2026-10-15T22:09:36Z"),
+		})
+	}))
+	defer server.Close()
+	github := newGitHub("Eldhus/fourneau-dragrace")
+	github.api = server.URL
+	builds, err := github.builds(context.Background())
+	if err != nil || len(builds) != 3 {
+		t.Fatalf("%v %v", builds, err)
+	}
+	var order []string
+	for _, build := range builds {
+		order = append(order, build.Info.Commits["fourneau-dragrace"])
+	}
+	if strings.Join(order, " ") != "newest middle old" {
+		t.Fatalf("order %v", order)
+	}
+}
+
 func TestBuildsAreReleasesWithABuildJSON(t *testing.T) {
 	info := BuildInfo{Commits: map[string]string{"fourneau-dragrace": "a", "fourneau": "b",
 		"roux": "c"}, Files: map[string]string{"race.tar.gz": "00"}}

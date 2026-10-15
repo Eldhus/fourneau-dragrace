@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -130,20 +131,32 @@ func (github *GitHub) get(ctx context.Context, path string, into any) error {
 	return json.Unmarshal(text, into)
 }
 
+// githubRelease is what builds reads of a release in GitHub's listing.
+type githubRelease struct {
+	TagName     string `json:"tag_name"`
+	PublishedAt string `json:"published_at"`
+	Body        string `json:"body"`
+	Assets      []struct {
+		Name string `json:"name"`
+		URL  string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
 // builds are the newest releases of build.yml, newest first; a release
-// whose body is not a build.json is not one.
+// whose body is not a build.json is not one. Newest by when each was
+// published: GitHub lists releases by their commit's date, not their
+// own, so a build of a commit dated earlier lists before newer builds.
 func (github *GitHub) builds(ctx context.Context) ([]Build, error) {
-	var releases []struct {
-		TagName string `json:"tag_name"`
-		Body    string `json:"body"`
-		Assets  []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
+	var releases []githubRelease
 	if err := github.get(ctx, "/repos/"+github.repository+"/releases?per_page=30", &releases); err != nil {
 		return nil, err
 	}
+	// RFC 3339 times in UTC sort as text, newest first; a release with
+	// none (a draft is never a build) sorts last, and equals keep
+	// GitHub's order.
+	slices.SortStableFunc(releases, func(a, b githubRelease) int {
+		return strings.Compare(b.PublishedAt, a.PublishedAt)
+	})
 	var builds []Build
 	for _, release := range releases {
 		if !strings.HasPrefix(release.TagName, "build-") {
