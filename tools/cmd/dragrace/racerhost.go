@@ -45,8 +45,8 @@ func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64, adminKeyID int) Gua
 // hosts/common/), the guard (this binary, pinned) and its config (with the
 // admin key's id, looked up on the account), the racer's first binary, and
 // the two secrets as encrypted credentials, each sent on SSH's standard
-// input: the DigitalOcean token (DIGITALOCEAN_TOKEN, from the keyring) and
-// the racer token from the keyring.
+// input: the DigitalOcean token (DIGITALOCEAN_TOKEN, or else the keyring's)
+// and the racer token from the keyring.
 func racerInstall(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer install")
 	host := flags.String("host", "", "the racer's address")
@@ -61,7 +61,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	do, err := newDigitalOcean()
+	do, err := ownerDigitalOcean(ctx)
 	if err != nil {
 		return err
 	}

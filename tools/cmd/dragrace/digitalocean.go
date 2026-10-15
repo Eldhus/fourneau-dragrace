@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -34,6 +35,22 @@ func newDigitalOcean() (*DigitalOcean, error) {
 		return nil, fmt.Errorf("DIGITALOCEAN_TOKEN has whitespace inside it: store the token alone")
 	}
 	return &DigitalOcean{token: token, client: &http.Client{Timeout: 60 * time.Second}}, nil
+}
+
+// ownerDigitalOcean is DigitalOcean with the owner's token, on the owner's
+// machine: from the environment, or the keyring (never a command line).
+// DIGITALOCEAN_TOKEN is set from the keyring, so what the caller sends on
+// reads it from there.
+func ownerDigitalOcean(ctx context.Context) (*DigitalOcean, error) {
+	if os.Getenv("DIGITALOCEAN_TOKEN") == "" {
+		token, err := exec.CommandContext(ctx, "secret-tool", "lookup", "service", "digitalocean",
+			"name", "fourneau-dragrace").Output()
+		if err != nil {
+			return nil, fmt.Errorf("no DIGITALOCEAN_TOKEN and none in the keyring: %w", err)
+		}
+		os.Setenv("DIGITALOCEAN_TOKEN", strings.TrimSpace(string(token)))
+	}
+	return newDigitalOcean()
 }
 
 func (do *DigitalOcean) call(ctx context.Context, method, path string, body, into any) error {

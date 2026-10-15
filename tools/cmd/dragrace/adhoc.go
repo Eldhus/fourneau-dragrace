@@ -380,20 +380,6 @@ func lockSession(root string, wait bool) (func(), error) {
 	return func() { file.Close() }, nil
 }
 
-// adhocProvider is DigitalOcean with the owner's token: from the
-// environment, or the keyring (never a command line).
-func adhocProvider(ctx context.Context) (*DigitalOcean, error) {
-	if os.Getenv("DIGITALOCEAN_TOKEN") == "" {
-		token, err := exec.CommandContext(ctx, "secret-tool", "lookup", "service", "digitalocean",
-			"name", "fourneau-dragrace").Output()
-		if err != nil {
-			return nil, fmt.Errorf("no DIGITALOCEAN_TOKEN and none in the keyring: %w", err)
-		}
-		os.Setenv("DIGITALOCEAN_TOKEN", strings.TrimSpace(string(token)))
-	}
-	return newDigitalOcean()
-}
-
 // upFlags is the session's setup, one for every ad-hoc race, kept simple:
 // dedicated cores, so a difference is the builds';
 // race.json's region; deleted after 20 minutes unused.
@@ -423,7 +409,7 @@ func ensureSession(ctx context.Context, root string, up upFlags, ev *events) (*a
 	if class.Name == "" {
 		return nil, fmt.Errorf("no server class %q in race.json", up.class)
 	}
-	do, err := adhocProvider(ctx)
+	do, err := ownerDigitalOcean(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -631,7 +617,7 @@ func adhocDown(ctx context.Context, root string, args []string) error {
 			return nil
 		}
 	}
-	do, err := adhocProvider(ctx)
+	do, err := ownerDigitalOcean(ctx)
 	if err != nil {
 		return err
 	}
