@@ -1,5 +1,6 @@
 [Unit]
-Description=the guard: the DigitalOcean token and the budgetAfter=network-online.target
+Description=the guard: the DigitalOcean token and the budget
+After=network-online.target
 Wants=network-online.target
 [Service]
 User=guard

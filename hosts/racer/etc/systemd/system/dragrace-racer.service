@@ -1,5 +1,6 @@
 [Unit]
-Description=the racer: the site's requests, racedAfter=network-online.target dragrace-guard.service
+Description=the racer: the site's requests, raced
+After=network-online.target dragrace-guard.service
 Wants=network-online.target
 [Service]
 User=racer
