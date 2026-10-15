@@ -349,8 +349,8 @@ nav.tabs a + a { border-left: 0; }
 /* Something besides the server's CPU set a result (the loader, the
    network, too few connections): its bar is drawn as an outline in the
    competitor's own colour, as the open loop's hollow points are, and the
-   table says what (text tags beside the bars were
-   noise, and they squeezed the bars on a phone). */
+   table says what (text tags beside the bars were noise, and squeezed
+   the bars on a phone). */
 .drag .bar.hollow { background: transparent; box-shadow: inset 0 0 0 2px var(--series); }
 .swatch.hollow-bar, .swatch.hollow-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--text-2); }
 .swatch.hollow-dot { border-radius: 50%; }
