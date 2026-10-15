@@ -120,6 +120,14 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	if err := site.post(ctx, "/api/runs/"+config.RunID+"/machines", machines, nil); err != nil {
 		return err
 	}
+	// The black box only explains a failure: without it, the class races.
+	target.BlackBox = filepath.Join(filepath.Dir(config.Results), "server.log")
+	if stop, err := followServer(ctx, server, target.BlackBox); err != nil {
+		log.Printf("the black box: %v; racing without it", err)
+		target.BlackBox = ""
+	} else {
+		defer stop()
+	}
 	run := Run{ID: config.RunID, Seed: config.Seed, Race: race}
 	return raceTarget(ctx, race, competitors, target, &run)
 }

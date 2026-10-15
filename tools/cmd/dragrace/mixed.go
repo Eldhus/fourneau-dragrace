@@ -117,10 +117,15 @@ func climbStep(ctx context.Context, race Race, step Step, target Target,
 	if result.Valid {
 		log.Printf("[%s] %s: %s", target.Class.Name, workload.Name, competitor.Name)
 		steps, why, err := climbMixed(ctx, race, workload, competitor, target)
-		if err != nil {
-			return fmt.Errorf("%s %s: %w", competitor.Name, workload.Name, err)
-		}
 		result.Valid, result.Note, result.OpenLoop = why == "", why, steps
+		if err != nil {
+			// The steps climbed stand, with why the climb ended; none, and the
+			// result is no result.
+			err = fmt.Errorf("%s %s: %w", competitor.Name, workload.Name, err)
+			result.Valid, result.Note = len(steps) > 0, "stopped: "+err.Error()
+			target.report(*result)
+			return err
+		}
 	}
 	target.report(*result)
 	return nil
@@ -165,21 +170,22 @@ func climbMixed(ctx context.Context, race Race, workload Workload, competitor Co
 	mixed := workload.Mixed
 	local := net.ParseIP(target.Address).IsLoopback()
 	steps := []OpenStep{}
+	// An error past here keeps the steps climbed before it.
 	for _, rate := range mixed.Rates {
 		if _, err := runParts(ctx, race, workload, target, rate, mixed.WarmupSeconds); err != nil {
-			return nil, "", fmt.Errorf("warmup at %d/s: %w", rate, err)
+			return steps, "", fmt.Errorf("warmup at %d/s: %w", rate, err)
 		}
 		serverBefore, loaderBefore, err := snapshots(ctx, target, pid, true)
 		if err != nil {
-			return nil, "", err
+			return steps, "", fmt.Errorf("snapshot before %d/s: %w", rate, err)
 		}
 		parts, err := runParts(ctx, race, workload, target, rate, mixed.MeasureSeconds)
 		if err != nil {
-			return nil, "", fmt.Errorf("at %d/s: %w", rate, err)
+			return steps, "", fmt.Errorf("at %d/s: %w", rate, err)
 		}
 		serverAfter, loaderAfter, err := snapshots(ctx, target, pid, false)
 		if err != nil {
-			return nil, "", err
+			return steps, "", fmt.Errorf("snapshot after %d/s: %w", rate, err)
 		}
 		step := mixedStep(rate, parts)
 		seconds := float64(mixed.MeasureSeconds)

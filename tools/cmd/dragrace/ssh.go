@@ -49,9 +49,36 @@ func (machine SSHMachine) baseOptions() []string {
 func (machine SSHMachine) Shell(ctx context.Context, script string) (string, error) {
 	argv := append(machine.options(), machine.User+"@"+machine.Host, "bash -c "+quote(script))
 	cmd := exec.CommandContext(ctx, "ssh", argv...)
-	cmd.Stderr = os.Stderr
+	stderr := &stderrTail{}
+	cmd.Stderr = stderr
 	bytes, err := cmd.Output()
-	return strings.TrimRight(string(bytes), "\n"), err
+	return strings.TrimRight(string(bytes), "\n"), stderr.wrap(err)
+}
+
+// stderrTail passes a command's standard error on to ours and keeps its
+// end, so an error says why: ssh's "exit status 255" alone does not say
+// whether the host refused, timed out or went away mid-command.
+type stderrTail struct {
+	tail []byte
+}
+
+const stderrTailBytes = 300
+
+func (tail *stderrTail) Write(bytes []byte) (int, error) {
+	os.Stderr.Write(bytes)
+	tail.tail = append(tail.tail, bytes...)
+	if len(tail.tail) > stderrTailBytes {
+		tail.tail = tail.tail[len(tail.tail)-stderrTailBytes:]
+	}
+	return len(bytes), nil
+}
+
+func (tail *stderrTail) wrap(err error) error {
+	said := strings.Join(strings.Fields(string(tail.tail)), " ")
+	if err == nil || said == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, said)
 }
 
 // ShellInput runs a script with input on its standard input: how a secret
@@ -60,8 +87,9 @@ func (machine SSHMachine) ShellInput(ctx context.Context, script, input string) 
 	argv := append(machine.options(), machine.User+"@"+machine.Host, "bash -c "+quote(script))
 	cmd := exec.CommandContext(ctx, "ssh", argv...)
 	cmd.Stdin = strings.NewReader(input)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	stderr := &stderrTail{}
+	cmd.Stderr = stderr
+	return stderr.wrap(cmd.Run())
 }
 
 func (machine SSHMachine) Put(ctx context.Context, local, remote string) error {
@@ -70,8 +98,9 @@ func (machine SSHMachine) Put(ctx context.Context, local, remote string) error {
 	}
 	argv := append(machine.options(), local, machine.User+"@"+machine.Host+":"+remote)
 	cmd := exec.CommandContext(ctx, "scp", argv...)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	stderr := &stderrTail{}
+	cmd.Stderr = stderr
+	return stderr.wrap(cmd.Run())
 }
 
 // waitSSH waits until the droplet accepts SSH and cloud-init has finished.

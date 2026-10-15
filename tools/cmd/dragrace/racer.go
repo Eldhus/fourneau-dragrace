@@ -656,6 +656,9 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 		return nil, err
 	}
 	log.Printf("[%s] worker started on its loader", class.Name)
+	// Whatever ends the worker, its log and the black box come home before
+	// the droplets go (the newest runs' directories are kept).
+	defer keepWorkerLogs(context.WithoutCancel(ctx), loader, class.Name, home, filepath.Dir(tarball))
 	deadline := time.Now().Add(workerTime)
 	for {
 		if err := sleepContext(ctx, 30*time.Second); err != nil {
@@ -681,6 +684,27 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 	logs, _ := loader.Shell(ctx, "journalctl -u dragrace-worker --no-pager -n 5 -o cat; true")
 	log.Printf("[%s] worker done: %d results; its last lines:\n%s", class.Name, len(results), logs)
 	return results, nil
+}
+
+// keepWorkerLogs copies a class's worker log and black box from its loader
+// into the run's directory on the racer.
+func keepWorkerLogs(ctx context.Context, loader Machine, class, home, dir string) {
+	files := map[string]string{
+		"worker-" + class + ".log": "journalctl -u dragrace-worker --no-pager -o short-iso",
+		"server-" + class + ".log": "cat " + home + "/server.log",
+	}
+	for name, script := range files {
+		text, err := loader.Shell(ctx, script)
+		if err != nil {
+			log.Printf("[%s] keeping %s: %v", class, name, err)
+		}
+		if text == "" {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text+"\n"), 0o600); err != nil {
+			log.Printf("[%s] keeping %s: %v", class, name, err)
+		}
+	}
 }
 
 // remember and forget keep the run racing on the racer's disk: a racer

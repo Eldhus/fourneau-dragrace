@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -42,6 +44,9 @@ type Target struct {
 	// Begin, if set, is told the class's plan as each step starts (its
 	// index in the plan; a worker posts it to the site).
 	Begin func(plan []Step, step int)
+	// BlackBox, if set, is the file on this machine that follows the
+	// server's (followServer).
+	BlackBox string
 }
 
 func (target Target) report(result Result) {
@@ -132,26 +137,74 @@ func raceTarget(ctx context.Context, race Race, competitors []Competitor, target
 	// validKey(competitor, mode) -> why it is not valid ("" if valid).
 	valid := map[string]string{}
 	plan := planSteps(race, competitors, run.Seed)
+	failed := 0
 	for i, step := range plan {
 		target.begin(plan, i)
+		var err error
 		if step.Workload != "" {
-			if err := climbStep(ctx, race, step, target, valid, run); err != nil {
-				return err
+			err = climbStep(ctx, race, step, target, valid, run)
+		} else {
+			competitor := step.competitor
+			log.Printf("[%s] round %d/%d: %s", target.Class.Name, step.Round, race.Rounds, competitor.Name)
+			err = raceCompetitor(ctx, race, competitor, target, bodies, step.Round, valid, run)
+			for _, result := range run.Results {
+				if result.Class == target.Class.Name && result.Competitor == competitor.Name {
+					target.report(result)
+				}
 			}
+		}
+		if err == nil {
 			continue
 		}
-		competitor := step.competitor
-		log.Printf("[%s] round %d/%d: %s", target.Class.Name, step.Round, race.Rounds, competitor.Name)
-		if err := raceCompetitor(ctx, race, competitor, target, bodies, step.Round, valid, run); err != nil {
-			return err
+		// A step's error is that step's: its result's note says why, and
+		// the class races on while the server answers. The class fails only
+		// when it ends early, saying why and which steps it leaves.
+		log.Printf("[%s] step %d of %d: %v", target.Class.Name, i+1, len(plan), err)
+		if ctx.Err() != nil {
+			return fmt.Errorf("stopped at step %d of %d: %w", i+1, len(plan), ctx.Err())
 		}
-		for _, result := range run.Results {
-			if result.Class == target.Class.Name && result.Competitor == competitor.Name {
-				target.report(result)
-			}
+		if lost := serverAnswers(ctx, target); lost != nil {
+			return fmt.Errorf("the server stopped answering at step %d of %d (%w), after: %v; "+
+				"its black box ends: %s; %s not raced", i+1, len(plan), lost, err,
+				blackBoxTail(target.BlackBox, 6), notRaced(plan[i+1:]))
 		}
+		failed++
+		log.Printf("[%s] the server after step %d: %s", target.Class.Name, i+1, serverState(ctx, target))
+	}
+	if failed > 0 {
+		log.Printf("[%s] %d of %d steps failed; each result's note says why", target.Class.Name,
+			failed, len(plan))
 	}
 	return nil
+}
+
+// serverAnswers waits up to about a minute and a half for the server
+// machine to answer SSH: a step may fail with the machine itself fine.
+func serverAnswers(ctx context.Context, target Target) error {
+	var err error
+	for try := range 4 {
+		if try > 0 {
+			if err := sleepContext(ctx, 15*time.Second); err != nil {
+				return err
+			}
+		}
+		if _, err = target.Server.Shell(ctx, "true"); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+// notRaced names the steps a class leaves.
+func notRaced(steps []Step) string {
+	if len(steps) == 0 {
+		return "no step"
+	}
+	names := make([]string, len(steps))
+	for i, step := range steps {
+		names[i] = step.Competitor + " " + cmp.Or(step.Workload, "round "+strconv.Itoa(step.Round))
+	}
+	return strings.Join(names, ", ")
 }
 
 // Mode is how a competitor is started: plain HTTP (HTTP/1.1 and h2c), or
@@ -194,6 +247,7 @@ func raceCompetitor(ctx context.Context, race Race, competitor Competitor, targe
 	name := fnv.New64a()
 	name.Write([]byte(competitor.Name))
 	seed := run.Seed + int64(round)*7919 + int64(name.Sum64()>>1)
+	var errs []error
 	for _, mode := range shuffled([]Mode{plainMode, tlsMode}, seed+1) {
 		var workloads []Workload
 		for _, workload := range shuffled(race.Workloads, seed) {
@@ -205,12 +259,12 @@ func raceCompetitor(ctx context.Context, race Race, competitor Competitor, targe
 		if len(workloads) == 0 {
 			continue
 		}
+		// One mode's error leaves the other to race (raceTarget decides
+		// whether the class goes on).
 		err := raceMode(ctx, race, competitor, target, bodies, round, valid, run, mode, workloads)
-		if err != nil {
-			return err
-		}
+		errs = append(errs, err)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // raceMode starts the competitor in one mode and races its workloads.
@@ -220,6 +274,13 @@ func raceMode(ctx context.Context, race Race, competitor Competitor, target Targ
 	key := validKey(competitor.Name, mode)
 	pid, err := startServer(ctx, race, competitor, target, mode)
 	if err != nil {
+		// As a measurement's error: each workload's note says why its round
+		// is missing.
+		err = fmt.Errorf("%s round %d: starting it: %w", competitor.Name, round, err)
+		for _, workload := range workloads {
+			result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
+			result.Valid, result.Note = len(result.Rounds) > 0, "stopped: "+err.Error()
+		}
 		return err
 	}
 	defer stopServer(context.WithoutCancel(ctx), target, pid)
@@ -232,13 +293,17 @@ func raceMode(ctx context.Context, race Race, competitor Competitor, target Targ
 	for _, workload := range workloads {
 		result := resultFor(run, target.Class.Name, workload.Name, competitor.Name)
 		result.Valid = valid[key] == ""
-		result.Note = valid[key]
 		if !result.Valid {
+			result.Note = valid[key]
 			continue
 		}
 		measured, err := measure(ctx, race, workload, target, bodies, pid)
 		if err != nil {
-			return fmt.Errorf("%s %s: %w", competitor.Name, workload.Name, err)
+			// The rounds measured stand, and the note (kept through the
+			// rounds after) says why one is missing; none, no result.
+			err = fmt.Errorf("%s %s round %d: %w", competitor.Name, workload.Name, round, err)
+			result.Valid, result.Note = len(result.Rounds) > 0, "stopped: "+err.Error()
+			return err
 		}
 		result.Rounds = append(result.Rounds, measured)
 		result.summarize()

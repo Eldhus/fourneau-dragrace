@@ -560,3 +560,14 @@ func TestPlanSteps(t *testing.T) {
 		t.Fatalf("the first ladder: %+v", ladder)
 	}
 }
+
+// A class that ends early names the steps it leaves.
+func TestNotRaced(t *testing.T) {
+	steps := []Step{{Competitor: "go", Round: 3}, {Competitor: "axum", Workload: "conduit-tls"}}
+	if got := notRaced(steps); got != "go round 3, axum conduit-tls" {
+		t.Fatalf("got %q", got)
+	}
+	if got := notRaced(nil); got != "no step" {
+		t.Fatalf("got %q", got)
+	}
+}
