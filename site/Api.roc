@@ -6,6 +6,7 @@ import db/Results
 import db/Heads
 import db/Pages
 import db/Health
+import db/Visits
 
 ## The site's API: what the racer
 ## and the race workers post, and what the owner asks. Every post is safe
@@ -230,8 +231,22 @@ Api :: [].{
 				for_run!(db, request, tokens, id, |d, r, run_id| begin_step!(d, r, run_id, class))
 			("POST", ["", "api", "backup"]) =>
 				if caller == Racer backup!(db, request) else Ok(refused(401, "the racer's token"))
+			("GET", ["", "api", "visits"]) =>
+				if caller == Owner visits!(db, request) else Ok(refused(401, "the manual token"))
 			_ => Ok(refused(404, "no such API route"))
 		}
+	}
+
+	## The last two weeks' visits, a line a row, tab-separated: day, page,
+	## referring site ("-" for none), kind, count.
+	visits! : Sqlite.Db, Server.Request => Try(Server.Response(t), [DbErr(Sqlite.Err)])
+	visits! = |db, request| {
+		rows = Visits.recent!(Sqlite.read(db, request))?
+		lines = rows.map(|row| {
+			from = if row.referrer == "" "-" else row.referrer
+			"${row.day}\t${row.path}\t${from}\t${row.kind}\t${row.count.to_str()}\n"
+		})
+		Ok({ status: 200, headers: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }], body: Text(Str.join_with(lines, "")) })
 	}
 
 	## The racer or the owner, by the bearer token; a run's worker is told

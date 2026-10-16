@@ -5,5 +5,6 @@
   &middot; part of <a href="https://github.com/Eldhus">Eldhus</a></p>
 </footer>
 <script src="/demo.js" defer></script>
+<script>navigator.sendBeacon("/api/visit?path=" + encodeURIComponent(location.pathname) + "&referrer=" + encodeURIComponent(document.referrer))</script>
 </body>
 </html>

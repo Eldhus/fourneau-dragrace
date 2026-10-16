@@ -316,3 +316,14 @@ CREATE TABLE heads (
   commit_sha TEXT NOT NULL,
   seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ) STRICT, WITHOUT ROWID;
+
+-- The pages' visits, counted: a row a day, page, referring site and kind
+-- (a person, or a bot by its user agent). No address, no cookie.
+CREATE TABLE visits (
+  day TEXT NOT NULL,
+  path TEXT NOT NULL,
+  referrer TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('person', 'bot')),
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, path, referrer, kind)
+) STRICT, WITHOUT ROWID;

@@ -14,7 +14,9 @@ import pf.File
 import pf.Sse
 import pf.Sqlite
 import pf.Sleep
+import pf.Url
 import db/Database
+import db/Visits
 import Api
 import Store
 import Data
@@ -60,7 +62,9 @@ respond! = |request, { db, tokens }| {
 	# The class and the section (HTTP/1.1, HTTP/2 + TLS) asked for; the
 	# pages show only names the race has.
 	wanted = { class: query_value(request.target, "class"), protocol: query_value(request.target, "protocol") }
-	if path.starts_with("/api/") {
+	if request.method == "POST" and path == "/api/visit" {
+		count_visit!(db, request)
+	} else if path.starts_with("/api/") {
 		Api.respond!(request, db, tokens, path)
 	} else {
 		match path {
@@ -89,6 +93,62 @@ respond! = |request, { db, tokens }| {
 		}
 	}
 }
+
+# --- visits ------------------------------------------------------------------
+
+## The pages whose visits are counted: the ones a person opens, not the
+## parts the pages fetch (/race-classes, /history-panel, /race-live).
+counted_pages : List(Str)
+counted_pages = ["/", "/workloads", "/competitors", "/contribute", "/about"]
+
+## `POST /api/visit?path=/&referrer=URL`: a visit counted, posted by the
+## page itself (Bottom.rocstache), since a GET may not write. The page, the
+## referring site (its host; "" for none or this site) and whether the user
+## agent says it is a bot; a page not counted is refused. Bots that run no
+## script are not seen at all.
+count_visit! : Sqlite.Db, Server.Request => Try(Server.Response(_), Err)
+count_visit! = |db, request| {
+	path = Url.query_value(request.target, "path") ?? ""
+	if !counted_pages.contains(path) {
+		return Ok(Server.status_response(400))
+	}
+	referrer = referrer_host(Url.query_value(request.target, "referrer") ?? "")
+	agent =
+		match Server.header(request, "user-agent") {
+			Ok(value) => value.with_ascii_lowercased()
+			Err(_) => ""
+		}
+	kind = if agent == "" or bot_words.any(|word| agent.contains(word)) "bot" else "person"
+	tx = Sqlite.write!(db, request)?
+	Visits.count!(tx, { path, referrer, kind })?
+	Sqlite.commit!(tx)?
+	Ok(Server.status_response(204))
+}
+
+## Words a crawler's or a link preview's user agent carries.
+bot_words : List(Str)
+bot_words = ["bot", "crawl", "spider", "preview", "curl", "wget", "python", "go-http", "headless"]
+
+## The host of a Referer ("https://news.ycombinator.com/item?id=1" is
+## news.ycombinator.com), at most 100 bytes; "" for this site or no host.
+referrer_host : Str -> Str
+referrer_host = |value| {
+	host =
+		match value.split_first("://") {
+			Ok(url) =>
+				match url.after.split_first("/") {
+					Ok(parts) => parts.before
+					Err(_) => url.after
+				}
+			Err(_) => ""
+		}
+	if host == "fourneau.y2kbugger.com" or host.count_utf8_bytes() > 100 "" else host
+}
+
+expect referrer_host("https://news.ycombinator.com/item?id=1") == "news.ycombinator.com"
+expect referrer_host("https://roc.zulipchat.com") == "roc.zulipchat.com"
+expect referrer_host("https://fourneau.y2kbugger.com/workloads") == ""
+expect referrer_host("garbage") == ""
 
 ## The pages that read nothing: constants, which Roc makes at compile time.
 contribute = Rocstache.html(ContributePage.template(frame("Contribute", "/contribute")))
