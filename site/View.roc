@@ -781,10 +781,9 @@ chart = |all_entries, class, workload, competitors, base| {
 			v = ceiling * t / 4.0
 			{ line_y: Format.one_decimal(y(v)), text_y: Format.one_decimal(y(v) + 4.0), label: if based "${Format.compact(v)}%" else Format.compact(v) }
 		})
-		every = if count <= 6 1 else (count + 5) // 6
 		dates = entries
 			.map_with_index(|entry, i| { i, entry })
-			.keep_if(|e| e.i % every == 0 or e.i == count - 1)
+			.keep_if(|e| dated(count, e.i))
 			.map(|e| {
 				x: Format.one_decimal(x(e.i)),
 				day: day(e.entry.started_at),
@@ -792,6 +791,15 @@ chart = |all_entries, class, workload, competitors, base| {
 			})
 		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), scale, based, base_y: Format.one_decimal(y(100.0)), empty: Bool.False, lines, ticks, dates }
 	}
+}
+
+## Whether race `i` of `count` gets a date under the axis: about six, the
+## last always, and none so near the last that the two would overlap (14
+## races marked 12 and 13: "Oct 15 Oct 16").
+dated : U64, U64 -> Bool
+dated = |count, i| {
+	every = if count <= 6 1 else (count + 5) // 6
+	i == count - 1 or (i % every == 0 and (count - 1 - i) * 2 >= every)
 }
 
 ## A share chart's top: four steps of 10, 20, 25 or 50 times a power of
@@ -868,6 +876,21 @@ expect nice_ceiling(45620.0) == 50000.0
 # A share chart's top: four steps, 100% on a grid line when the step divides it.
 expect share_ceiling(220.0) == 400.0 and share_ceiling(150.0) == 200.0 and share_ceiling(101.0) == 200.0
 expect share_ceiling(35.0) == 40.0 and share_ceiling(900.0) == 1000.0
+# The dates: every race up to six; past it about six, none crowding the last.
+expect dated_of(5) == [0, 1, 2, 3, 4] and dated_of(14) == [0, 3, 6, 9, 13]
+expect dated_of(16) == [0, 3, 6, 9, 12, 15] and dated_of(60) == [0, 10, 20, 30, 40, 50, 59]
+
+## The races `dated` marks, of `count`: for the tests.
+dated_of : U64 -> List(U64)
+dated_of = |count| {
+	var $marked = []
+	for i in 0..<count {
+		if dated(count, i) {
+			$marked = $marked.append(i)
+		}
+	}
+	$marked
+}
 
 import "test/latest.json" as latest_sample : Str
 import "test/index.json" as index_sample : Str
