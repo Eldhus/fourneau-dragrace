@@ -98,6 +98,11 @@ func workerRace(ctx context.Context, root string, config WorkerConfig, site *Sit
 	target := Target{Class: config.Class, Server: server, Loader: loader, ServerHome: home,
 		LoaderHome: home + "/loader", Address: config.ServerHost, Report: poster.send,
 		Begin: poster.begin}
+	// The racer reached the server, but its sshd can still reset a new
+	// connection for a moment after (2026-10-16): wait, as the racer does.
+	if err := waitSSH(ctx, server); err != nil {
+		return err
+	}
 	for _, competitor := range competitors {
 		binary := filepath.Join(binDir(root), competitor.Name)
 		if err := server.Put(ctx, binary, home+"/bin/"+competitor.Name); err != nil {
