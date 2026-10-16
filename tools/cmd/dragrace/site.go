@@ -75,9 +75,12 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 // dragrace binary, pinned), the site's two tokens from the owner's keyring
 // (made there if missing), and a first deploy. Run again after a change to
 // hosts/ or the agent; never needed for a new site: a push deploys that.
+// -host reaches a new droplet by its address before the name points at it
+// (a move); its host key is pinned under the address, apart.
 func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site install-server")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
+	host := flags.String("host", siteName, "the site host's address, while "+siteName+" points elsewhere")
 	flags.Parse(args)
 	agent, err := os.Executable()
 	if err != nil {
@@ -86,7 +89,11 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
 		return err
 	}
-	machine := ownerMachine(root, siteName, *key, "site-known-hosts")
+	knownHosts := "site-known-hosts"
+	if *host != siteName {
+		knownHosts = "site-known-hosts-" + *host
+	}
+	machine := ownerMachine(root, *host, *key, knownHosts)
 	if err := machine.Put(ctx, agent, "/tmp/dragrace-host-agent"); err != nil {
 		return err
 	}
