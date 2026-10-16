@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -191,5 +192,64 @@ func TestStore(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(binary); string(got) != "build 2" {
 		t.Errorf("the store gave %q for key 2", got)
+	}
+}
+
+// The harness key moves with tools/ and race.json, not with the site.
+func TestHarnessKey(t *testing.T) {
+	root, _ := keyRepo(t)
+	writeFile(t, filepath.Join(root, "tools/cmd/dragrace/main.go"), "package main\n")
+	key := func() string {
+		t.Helper()
+		got, err := harnessKey(context.Background(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	first := key()
+	writeFile(t, filepath.Join(root, "site/main.roc"), "app []\n")
+	if key() != first {
+		t.Error("the site moved the harness key")
+	}
+	writeFile(t, filepath.Join(root, "tools/cmd/dragrace/main.go"), "package main // changed\n")
+	second := key()
+	if second == first {
+		t.Error("tools/ did not move the harness key")
+	}
+	writeFile(t, filepath.Join(root, "race.json"), "{\"rounds\": 1}\n")
+	if key() == second {
+		t.Error("race.json did not move the harness key")
+	}
+}
+
+// A smoke race races every competitor on a new harness or with no release
+// before, else only those whose key moved: none for the site alone.
+func TestSmokeSet(t *testing.T) {
+	names := []string{"go", "axum", "roux"}
+	keys := map[string]string{"go": "g1", "axum": "a2", "roux": "r1"}
+	last := &BuildInfo{HarnessKey: "h1", Competitors: map[string]string{"go": "g1", "axum": "a1", "roux": "r1"}}
+	cases := []struct {
+		name    string
+		keys    map[string]string
+		harness string
+		last    *BuildInfo
+		want    []string
+	}{
+		{"one competitor moved", keys, "h1", last, []string{"axum"}},
+		{"the harness moved", keys, "h2", last, names},
+		{"no release before", keys, "h1", nil, names},
+		{"a release before harness keys", keys, "h1", &BuildInfo{Competitors: last.Competitors}, names},
+		{"nothing moved", last.Competitors, "h1", last, nil},
+		{"a new competitor", map[string]string{"go": "g1", "axum": "a1", "roux": "r1", "new": "n1"}, "h1", last, []string{"new"}},
+	}
+	for _, c := range cases {
+		order := names
+		if c.keys["new"] != "" {
+			order = append(slices.Clone(names), "new")
+		}
+		if got := smokeSet(order, c.keys, c.harness, c.last); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
 	}
 }

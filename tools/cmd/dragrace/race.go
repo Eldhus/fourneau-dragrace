@@ -97,7 +97,7 @@ func planSteps(race Race, competitors []Competitor, seed int64) []Step {
 			seconds := 0
 			for _, workload := range race.Workloads {
 				// A mixed workload is open loop only, after the rounds.
-				if workload.Mixed == nil && competitor.offers(workload) {
+				if workload.Mixed == nil && competitor.offers(workload) && race.loads(workload) {
 					seconds += race.WarmupSeconds + race.MeasureSeconds
 				}
 			}
@@ -106,7 +106,7 @@ func planSteps(race Race, competitors []Competitor, seed int64) []Step {
 		}
 	}
 	for _, workload := range race.Workloads {
-		if workload.Mixed == nil {
+		if workload.Mixed == nil || !race.loads(workload) {
 			continue
 		}
 		mixed := workload.Mixed
@@ -252,7 +252,8 @@ func raceCompetitor(ctx context.Context, race Race, competitor Competitor, targe
 		var workloads []Workload
 		for _, workload := range shuffled(race.Workloads, seed) {
 			// A mixed workload is open loop only, after the rounds (mixedLoop).
-			if workload.Mixed == nil && workload.mode() == mode && competitor.offers(workload) {
+			if workload.Mixed == nil && workload.mode() == mode && competitor.offers(workload) &&
+				race.loads(workload) {
 				workloads = append(workloads, workload)
 			}
 		}

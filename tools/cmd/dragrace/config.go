@@ -43,6 +43,15 @@ type Race struct {
 	Menu string `json:"-"`
 	// The SSE workload's stream, event by event (workloads/sse.txt).
 	Stream string `json:"-"`
+	// loaded, when set, names the workloads measured (a smoke race's,
+	// smokeWorkloads); the checks still ask every workload's path
+	// (validate), as Workloads has them all.
+	loaded []string
+}
+
+// loads says whether a race measures a workload.
+func (race Race) loads(workload Workload) bool {
+	return race.loaded == nil || slices.Contains(race.loaded, workload.Name)
 }
 
 // Test is one of race.json's workloads: one request, checked the same and

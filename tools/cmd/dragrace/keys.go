@@ -361,6 +361,45 @@ func raceKey(ctx context.Context, root string, competitors map[string]string) (s
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+// harnessKeyRecipe is to the harness key what competitorKeyRecipe is to a
+// competitor's.
+const harnessKeyRecipe = "harness-key 1"
+
+// harnessKey is a hash of what races a competitor besides its own build:
+// the tool's code (tools/, Go's pin in its go.mod) and race.json (the
+// workloads' settings, oha's pin). workloads/ and the machine image are
+// in every competitor's key already.
+func harnessKey(ctx context.Context, root string) (string, error) {
+	hash := sha256.New()
+	fmt.Fprintf(hash, "%s\x00", harnessKeyRecipe)
+	for _, sub := range []string{"tools", "race.json"} {
+		tree, err := treeHash(ctx, root, sub)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(hash, "%s\x00%s\x00", sub, tree)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// smokeSet is what a build's smoke race races, in race.json's order: every
+// competitor when the harness is not the last release's (or there is no
+// last), else each whose key is not the last's; none for a change to the
+// site alone. So every competitor's key in a release was smoked with the
+// release's harness, in this build or one before it.
+func smokeSet(names []string, keys map[string]string, harness string, last *BuildInfo) []string {
+	if last == nil || last.HarnessKey == "" || last.HarnessKey != harness {
+		return slices.Clone(names)
+	}
+	var moved []string
+	for _, name := range names {
+		if keys[name] != last.Competitors[name] {
+			moved = append(moved, name)
+		}
+	}
+	return moved
+}
+
 // competitorKeysPath is out/competitors.json, each competitor's key as it
 // was built, which the bundle records.
 func competitorKeysPath(root string) string { return filepath.Join(outDir(root), "competitors.json") }

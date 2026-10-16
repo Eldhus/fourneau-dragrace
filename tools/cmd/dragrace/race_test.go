@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -508,6 +509,43 @@ func TestCompetitorsLoad(t *testing.T) {
 		if competitor.TLS == (competitor.Name == "basic-webserver") {
 			t.Errorf("%s: tls %t", competitor.Name, competitor.TLS)
 		}
+	}
+}
+
+// A smoke race measures smokeWorkloads, each in race.json, at 2 s a cell
+// and one rate a ladder, and keeps every workload for the checks.
+func TestQuickRace(t *testing.T) {
+	race, err := loadRace("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitors, err := loadCompetitors("../../..", race.Competitors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quick := raceFlags{quick: true}.narrow(race)
+	if len(quick.Workloads) != len(race.Workloads) {
+		t.Errorf("the checks see %d workloads of %d", len(quick.Workloads), len(race.Workloads))
+	}
+	for _, name := range smokeWorkloads {
+		if !slices.ContainsFunc(race.Workloads, func(w Workload) bool { return w.Name == name }) {
+			t.Errorf("smoke workload %s is not in race.json", name)
+		}
+	}
+	measured := map[string]bool{}
+	for _, step := range planSteps(quick, competitors, 42) {
+		if step.Workload != "" {
+			measured[step.Workload] = true
+			if rates := len(step.workload.Mixed.Rates); rates != 1 {
+				t.Errorf("%s: %d rates", step.Workload, rates)
+			}
+		}
+	}
+	if !maps.Equal(measured, map[string]bool{"conduit": true}) {
+		t.Errorf("ladders: %v", measured)
+	}
+	if quick.WarmupSeconds+quick.MeasureSeconds != 2 {
+		t.Errorf("a cell is %d s", quick.WarmupSeconds+quick.MeasureSeconds)
 	}
 }
 

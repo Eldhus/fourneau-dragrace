@@ -100,12 +100,18 @@ jobs:
         name: The site
         working-directory: fourneau-dragrace
         run: out/dragrace site build
-      # Every competitor (from the store, or built and stored), checked and
-      # raced briefly: nothing is released that did not pass.
+      # Every competitor (from the store, or built and stored); those that
+      # moved since the latest release checked and raced briefly, all of
+      # them when the harness moved (keys.go, smokeSet), none for the site
+      # alone. Nothing is released that did not pass. No build.json (no
+      # release, or GitHub failing) races them all.
       - if: steps.key.outputs.built != 'true'
         name: The smoke race
         working-directory: fourneau-dragrace
-        run: out/dragrace race local -quick -server-cpus 0-1 -loader-cpus 2-3
+        run: |
+          gh release download -R "$GITHUB_REPOSITORY" --pattern build.json -D out/last --clobber \
+            || echo "no latest build.json: every competitor races"
+          out/dragrace race local -quick -since out/last/build.json -server-cpus 0-1 -loader-cpus 2-3
       - if: steps.key.outputs.built != 'true' && env.RELEASE == 'true'
         name: Release, and keep the newest 20
         working-directory: fourneau-dragrace

@@ -87,6 +87,9 @@ type BuildInfo struct {
 	// builds with one race key race the same.
 	Competitors map[string]string `json:"competitors"`
 	RaceKey     string            `json:"race_key"`
+	// The harness the competitors were smoked with (keys.go, harnessKey);
+	// "" before 2026-10-16.
+	HarnessKey string `json:"harness_key"`
 }
 
 // Build is a release of build.yml.

@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -42,12 +46,23 @@ type raceFlags struct {
 	competitors string
 	workloads   string
 	results     string
+	since       string
 }
+
+// smokeWorkloads are what -quick races, unless -workloads says: a cell of
+// each protocol, connections made and closed, and the database. The
+// checks before each server's cells (race.go, checkServer) ask every
+// workload's path in each mode, so a wrong answer anywhere fails without
+// loading it.
+var smokeWorkloads = []string{"plaintext", "plaintext-h2", "plaintext-tls", "churn", "conduit"}
 
 func parseRaceFlags(name, root string, args []string) raceFlags {
 	flags := newFlags(name)
 	var parsed raceFlags
-	flags.BoolVar(&parsed.quick, "quick", false, "one short round: a smoke test, not a result")
+	flags.BoolVar(&parsed.quick, "quick", false,
+		"a smoke test, not a result: one 2 s round of a few workloads; any invalid result fails it")
+	flags.StringVar(&parsed.since, "since", "",
+		"a release's build.json: race only the competitors that moved since (keys.go, smokeSet); a missing file races all")
 	flags.StringVar(&parsed.serverCPUs, "server-cpus", "", "local race: the server's CPUs (default race.json's)")
 	flags.StringVar(&parsed.loaderCPUs, "loader-cpus", "", "local race: oha's CPUs (default race.json's)")
 	flags.StringVar(&parsed.competitors, "competitors", "", "comma-separated (default: all)")
@@ -67,18 +82,21 @@ func (flags raceFlags) narrow(race Race) Race {
 		race.Local.LoaderCPUs = flags.loaderCPUs
 	}
 	if flags.quick {
-		race.Rounds, race.WarmupSeconds, race.MeasureSeconds = 1, 1, 3
+		race.Rounds, race.WarmupSeconds, race.MeasureSeconds = 1, 1, 1
 		workloads := append([]Workload(nil), race.Workloads...)
 		for i, workload := range workloads {
 			if workload.Mixed == nil {
 				continue
 			}
 			mixed := *workload.Mixed
-			mixed.Rates = mixed.Rates[:min(2, len(mixed.Rates))]
-			mixed.WarmupSeconds, mixed.MeasureSeconds = 1, 2
+			mixed.Rates = mixed.Rates[:min(1, len(mixed.Rates))]
+			mixed.WarmupSeconds, mixed.MeasureSeconds = 1, 1
 			workloads[i].Mixed = &mixed
 		}
 		race.Workloads = workloads
+		if flags.workloads == "" {
+			race.loaded = smokeWorkloads
+		}
 	}
 	if flags.competitors != "" {
 		race.Competitors = strings.Split(flags.competitors, ",")
@@ -125,6 +143,22 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 	}
 	if err := buildAll(ctx, root, tools, competitors); err != nil {
 		return err
+	}
+	if flags.since != "" {
+		// Every competitor is built (the bundle takes them all); only
+		// those that moved are raced.
+		if competitors, err = movedSince(ctx, root, flags.since, competitors); err != nil {
+			return err
+		}
+		if len(competitors) == 0 {
+			fmt.Println("nothing to race: no competitor and not the harness moved since", flags.since)
+			return nil
+		}
+		race.Competitors = nil
+		for _, competitor := range competitors {
+			race.Competitors = append(race.Competitors, competitor.Name)
+		}
+		log.Printf("racing what moved since %s: %s", flags.since, strings.Join(race.Competitors, ", "))
 	}
 	run, err := newRun(root, "local", race)
 	if err != nil {
@@ -173,5 +207,54 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 	}
 	fmt.Print(summaryTable(run))
 	fmt.Println("results:", path)
+	if flags.quick {
+		return invalidResults(run)
+	}
 	return nil
+}
+
+// movedSince keeps the competitors smokeSet picks against a release's
+// build.json; a missing file is no release yet, and races them all.
+func movedSince(ctx context.Context, root, since string, competitors []Competitor) ([]Competitor,
+	error) {
+	var last *BuildInfo
+	var info BuildInfo
+	if err := readJSON(since, &info); err == nil {
+		last = &info
+	} else if errors.Is(err, fs.ErrNotExist) {
+		log.Printf("%s: none, so every competitor races", since)
+	} else {
+		return nil, err
+	}
+	var keys map[string]string
+	if err := readJSON(competitorKeysPath(root), &keys); err != nil {
+		return nil, err
+	}
+	harness, err := harnessKey(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(competitors))
+	for _, competitor := range competitors {
+		names = append(names, competitor.Name)
+	}
+	picked := smokeSet(names, keys, harness, last)
+	return slices.DeleteFunc(competitors, func(c Competitor) bool {
+		return !slices.Contains(picked, c.Name)
+	}), nil
+}
+
+// invalidResults is a smoke race's verdict: an error naming every result
+// that is not valid, nil when all are.
+func invalidResults(run Run) error {
+	var invalid []string
+	for _, result := range run.Results {
+		if !result.Valid {
+			invalid = append(invalid, fmt.Sprintf("%s %s: %s", result.Competitor, result.Workload, result.Note))
+		}
+	}
+	if len(invalid) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d results not valid:\n  %s", len(invalid), strings.Join(invalid, "\n  "))
 }

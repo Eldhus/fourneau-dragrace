@@ -88,6 +88,9 @@ func commandBundle(ctx context.Context, root string, args []string) error {
 	if info.RaceKey, err = raceKey(ctx, root, info.Competitors); err != nil {
 		return err
 	}
+	if info.HarnessKey, err = harnessKey(ctx, root); err != nil {
+		return err
+	}
 	if info.Files["race.tar.gz"], err = writeTarball(filepath.Join(*out, "race.tar.gz"),
 		raceFiles, trees); err != nil {
 		return err
