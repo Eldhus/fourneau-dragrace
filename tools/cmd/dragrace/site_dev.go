@@ -21,8 +21,9 @@ import (
 // edit needs (a template's bytecode is reread by the running app, with no
 // compiler and no restart; Roc or a query rebuilds and restarts it), and
 // the host itself serves the reload stream and adds the script to each
-// page, so no proxy. Here: `roux dev` on site/,
-// its static files watched, once the toolchain has built roux's checkout.
+// page, so no proxy. Here: `roux dev` on site/, once the toolchain has
+// built roux's checkout; it watches the static files the site's `init!`
+// names.
 func siteDevCommand(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site dev")
 	port := flags.Int("port", 8090, "the site's port: open http://127.0.0.1:PORT/")
@@ -32,7 +33,7 @@ func siteDevCommand(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	roux := filepath.Join(tools.Roux, "zig-out", "bin", "roux")
-	argv := []string{roux, "dev", "--roc=" + tools.Roc, fmt.Sprintf("--port=%d", *port), "--static=static", "main.roc"}
+	argv := []string{roux, "dev", "--roc=" + tools.Roc, fmt.Sprintf("--port=%d", *port), "main.roc"}
 	log.Printf("dev: http://127.0.0.1:%d/; editing site/ rebuilds", *port)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = filepath.Join(root, "site")
