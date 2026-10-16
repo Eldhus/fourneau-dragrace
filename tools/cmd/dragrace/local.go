@@ -141,6 +141,13 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Before the build, which can take minutes; with -since, once the
+	// competitors raced are known.
+	if flags.since == "" {
+		if err := checkKernelTLS(race, competitors, readULPs()); err != nil {
+			return err
+		}
+	}
 	if err := buildAll(ctx, root, tools, competitors); err != nil {
 		return err
 	}
@@ -159,6 +166,9 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 			race.Competitors = append(race.Competitors, competitor.Name)
 		}
 		log.Printf("racing what moved since %s: %s", flags.since, strings.Join(race.Competitors, ", "))
+		if err := checkKernelTLS(race, competitors, readULPs()); err != nil {
+			return err
+		}
 	}
 	run, err := newRun(root, "local", race)
 	if err != nil {
@@ -211,6 +221,51 @@ func commandRaceLocal(ctx context.Context, root string, args []string) error {
 		return invalidResults(run)
 	}
 	return nil
+}
+
+// ulpsPath lists the kernel's TCP upper-layer protocols: `tls` once its
+// module is loaded.
+const ulpsPath = "/proc/sys/net/ipv4/tcp_available_ulp"
+
+// readULPs is ulpsPath's list, "" when it cannot be read.
+func readULPs() string {
+	bytes, err := os.ReadFile(ulpsPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(bytes))
+}
+
+// checkKernelTLS refuses a race whose kernel-TLS competitors (KernelTLS)
+// would race a TLS workload on a kernel without `tls` in ulps: each would
+// not start, and say so only in its results, after the race.
+func checkKernelTLS(race Race, competitors []Competitor, ulps string) error {
+	if slices.Contains(strings.Fields(ulps), "tls") {
+		return nil
+	}
+	if !slices.ContainsFunc(race.Workloads, func(w Workload) bool { return w.TLS && race.loads(w) }) {
+		return nil
+	}
+	var need, rest []string
+	for _, competitor := range competitors {
+		if competitor.TLS && competitor.KernelTLS {
+			need = append(need, competitor.Name)
+		} else {
+			rest = append(rest, competitor.Name)
+		}
+	}
+	if len(need) == 0 {
+		return nil
+	}
+	escape := ""
+	if len(rest) > 0 {
+		escape = "\nor race without them: -competitors " + strings.Join(rest, ",")
+	}
+	return fmt.Errorf("%s serve HTTPS through the kernel's TLS, which this kernel has not loaded "+
+		"(%s lists %q). Load it:\n"+
+		"  sudo modprobe tls                                 # now\n"+
+		"  echo tls | sudo tee /etc/modules-load.d/tls.conf  # and at every boot%s",
+		strings.Join(need, " and "), ulpsPath, ulps, escape)
 }
 
 // movedSince keeps the competitors smokeSet picks against a release's

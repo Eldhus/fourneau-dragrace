@@ -549,6 +549,39 @@ func TestQuickRace(t *testing.T) {
 	}
 }
 
+// Without the kernel's tls, a race refuses at once when fourneau-zig or
+// roux would race a TLS workload, and says how to load it; it races when
+// neither would.
+func TestCheckKernelTLS(t *testing.T) {
+	race, err := loadRace("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitors, err := loadCompetitors("../../..", race.Competitors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkKernelTLS(race, competitors, "espintcp mptcp")
+	if err == nil || !strings.Contains(err.Error(), "sudo modprobe tls") ||
+		!strings.Contains(err.Error(), "-competitors go,axum,basic-webserver") {
+		t.Errorf("no tls: %v", err)
+	}
+	if err := checkKernelTLS(race, competitors, "espintcp mptcp tls"); err != nil {
+		t.Errorf("tls loaded: %v", err)
+	}
+	others := slices.DeleteFunc(slices.Clone(competitors), func(c Competitor) bool { return c.KernelTLS })
+	if len(others) != 3 {
+		t.Errorf("%d competitors without kernel TLS", len(others))
+	}
+	if err := checkKernelTLS(race, others, "espintcp mptcp"); err != nil {
+		t.Errorf("go, axum and basic-webserver: %v", err)
+	}
+	plain := raceFlags{workloads: "plaintext,churn"}.narrow(race)
+	if err := checkKernelTLS(plain, competitors, ""); err != nil {
+		t.Errorf("no TLS workload: %v", err)
+	}
+}
+
 // A class's plan is its rounds, every competitor in each round's seeded
 // order, then the ladders; each step planned at its loads' seconds.
 func TestPlanSteps(t *testing.T) {

@@ -6,5 +6,6 @@
     "argv": ["roux", "build", "--roc=roc", "main.roc"],
     "binary": "main"
   },
-  "tls": true
+  "tls": true,
+  "kernel_tls": true
 }

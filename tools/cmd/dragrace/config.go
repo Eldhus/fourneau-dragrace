@@ -237,6 +237,10 @@ type Competitor struct {
 	// TLS: it serves HTTPS on the same port when given a certificate and
 	// key. false: it sits the TLS workloads out.
 	TLS bool `json:"tls"`
+	// KernelTLS: its HTTPS needs Linux's kernel TLS (the `tls` module):
+	// fourneau hands each connection's keys to the kernel after the
+	// handshake, and does not start without it.
+	KernelTLS bool `json:"kernel_tls"`
 }
 
 // CompetitorBuild is one command, run in competitors/NAME

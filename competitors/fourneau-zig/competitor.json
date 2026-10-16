@@ -7,5 +7,6 @@
     "argv": ["zig", "build"],
     "binary": "zig-out/bin/fourneau-zig"
   },
-  "tls": true
+  "tls": true,
+  "kernel_tls": true
 }
