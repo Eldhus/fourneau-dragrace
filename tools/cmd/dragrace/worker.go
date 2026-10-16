@@ -66,6 +66,12 @@ func runWorker(ctx context.Context, root string, config WorkerConfig) error {
 	} else if postErr != nil {
 		status, reason = "failed", "results not all posted: "+postErr.Error()
 	}
+	if status == "failed" {
+		// The racer's reason when no results came (failedPath).
+		if err := os.WriteFile(failedPath(config.Results), []byte(reason), 0o600); err != nil {
+			log.Printf("the reason's file: %v", err)
+		}
+	}
 	// Past a cancel too: the site should hear how the class ended.
 	end := context.WithoutCancel(ctx)
 	if err := site.post(end, classPath, map[string]any{"status": status, "reason": reason,
@@ -213,6 +219,13 @@ func normalizedResult(result Result) Result {
 	}
 	result.summarize()
 	return result
+}
+
+// failedPath is where a failed worker leaves its reason, beside its
+// results: a worker that failed before any result leaves none, and the
+// racer says why from this rather than that the results are missing.
+func failedPath(results string) string {
+	return filepath.Join(filepath.Dir(results), "failed.txt")
 }
 
 func writeResults(path string, results []Result) error {

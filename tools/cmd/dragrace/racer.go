@@ -673,8 +673,12 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 			return nil, fmt.Errorf("the worker ran past %s", workerTime)
 		}
 	}
-	text, err := loader.Shell(ctx, "cat "+home+"/results.json")
+	text, err := loader.Shell(ctx, "cat "+config.Results)
 	if err != nil {
+		reason, _ := loader.Shell(ctx, "cat "+failedPath(config.Results))
+		if reason != "" {
+			return nil, fmt.Errorf("the worker failed: %s", reason)
+		}
 		return nil, fmt.Errorf("the worker's results: %w", err)
 	}
 	var results []Result
