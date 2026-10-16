@@ -104,11 +104,15 @@ jobs:
       # moved since the latest release checked and raced briefly, all of
       # them when the harness moved (keys.go, smokeSet), none for the site
       # alone. Nothing is released that did not pass. No build.json (no
-      # release, or GitHub failing) races them all.
+      # release, or GitHub failing) races them all. fourneau-zig and roux
+      # serve HTTPS through the kernel's TLS, a module the runner has but
+      # has not loaded; without it their TLS cells cannot start, and the
+      # race refuses at once (local.go, checkKernelTLS).
       - if: steps.key.outputs.built != 'true'
         name: The smoke race
         working-directory: fourneau-dragrace
         run: |
+          sudo modprobe tls
           gh release download -R "$GITHUB_REPOSITORY" --pattern build.json -D out/last --clobber \
             || echo "no latest build.json: every competitor races"
           out/dragrace race local -quick -since out/last/build.json -server-cpus 0-1 -loader-cpus 2-3
