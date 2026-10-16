@@ -22,6 +22,15 @@ out/dragrace toolchain          # Zig, roc and musl at their pins
 out/dragrace race local -quick  # a smoke race; without -quick, hours
 ```
 
+The TLS workloads need Linux's kernel TLS: fourneau hands each connection's keys to the kernel
+after the handshake, and fourneau-zig and roux do not start over HTTPS without it. Load its module
+if `/proc/sys/net/ipv4/tcp_available_ulp` does not list `tls`:
+
+```sh
+sudo modprobe tls                                 # now
+echo tls | sudo tee /etc/modules-load.d/tls.conf  # and at every boot
+```
+
 
 ## The road ahead
 
