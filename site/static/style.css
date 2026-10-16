@@ -390,6 +390,12 @@ details.history > summary { cursor: pointer; font-family: var(--pixel); font-siz
   line-height: 1.5; color: var(--text-3); margin: 22px 0 8px; }
 details.history > summary:hover, details.history[open] > summary { color: var(--gold); }
 details.history .h2c { margin-top: 18px; border-top: 0; }
+/* What the history's lines are drawn as: req/s, or a share of one
+   competitor's, whose 100% is a dashed rule. */
+nav.bases { padding: 0 0 14px; }
+nav.bases a { display: flex; align-items: center; gap: 6px; }
+nav.bases .swatch { width: 8px; height: 8px; }
+.chart .base { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 4 4; }
 @media (max-width: 560px) { details.history > summary { font-size: 11px; } }
 .h2c .table { margin-top: 0; }
 /* Plaintext three ways on a phone (412 px): four columns, not six. Rates in three figures, each

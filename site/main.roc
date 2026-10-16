@@ -243,17 +243,17 @@ workloads! = |db, request| {
 	})))
 }
 
-history_view! : Sqlite.Db, Server.Request, Str => Try(View.History, [DbErr(Sqlite.Err)])
-history_view! = |db, request, section|
+history_view! : Sqlite.Db, Server.Request, Str, Str => Try(View.History, [DbErr(Sqlite.Err)])
+history_view! = |db, request, section, base|
 	match Store.latest!(db, request) {
-		Ok(run) => Ok(View.history(run, Store.history!(db, request)?, section))
+		Ok(run) => Ok(View.history(run, Store.history!(db, request)?, section, base))
 		Err(NotFound) => Ok(no_history)
 		Err(DbErr(err)) => Err(DbErr(err))
 	}
 
 ## Before the first race: the pages say so.
 no_history : View.History
-no_history = { waiting: Bool.True, sections: [], section: "", classes: [] }
+no_history = { waiting: Bool.True, sections: [], section: "", base: "", bases: [], classes: [] }
 
 no_race : View.Latest
 no_race = { id: "", started: "", took: "", timed: Bool.False, commits: [], competitors: [], sections: [], section: "", classes: [] }
@@ -431,10 +431,19 @@ race_classes! = |db, request, wanted| {
 ## patch replacing it closed when a tab is clicked.
 history_panel! : Sqlite.Db, Server.Request, Wanted => Try(Server.Response(_), Err)
 history_panel! = |db, request, wanted| {
-	view = history_view!(db, request, wanted.protocol)?
+	view = history_view!(db, request, wanted.protocol, query_value(request.target, "base"))?
 	current = View.chosen(view.classes.map(|class| class.name), wanted.class, View.default_class)
 	classes = view.classes.keep_if(|class| class.name == current).map(history_class)
-	patch!(request, HistoryPanel.template({ waiting: view.waiting, classes }))
+	# What the lines are drawn as: req/s, or a share of one competitor's;
+	# each choice fetches the panel again.
+	bases = view.bases.map(|base| {
+		label: if base == "raw" "req/s" else "% of ${base}",
+		swatch: base != "raw",
+		name: base,
+		current: base == view.base,
+		action: "@get('/history-panel?class=${current}&protocol=${view.section}&base=${base}')",
+	})
+	patch!(request, HistoryPanel.template({ waiting: view.waiting, bases, classes }))
 }
 
 ## The race page's live banner, kept current while a run races: a

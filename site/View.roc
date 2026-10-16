@@ -87,10 +87,14 @@ View :: [].{
 	## another race shares the day (one line, "Oct 10 12:26", overlapped
 	## its neighbours on a phone).
 	DateMark : { x : Str, day : Str, time : Str }
-	Chart : { key : Str, title : Str, variant : List(Str), empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
+	## `scale` says what the y axis is; `based`, it is a share of one
+	## competitor's (`base_y`, that competitor's 100%).
+	Chart : { key : Str, title : Str, variant : List(Str), scale : Str, based : Bool, base_y : Str, empty : Bool, lines : List(Line), ticks : List(Tick), dates : List(DateMark) }
 	## A class's history in one section; `h2c`, HTTP/2 without TLS, below it.
 	Charts : { name : Str, label : Str, title : Str, charts : List(Chart), h2c : List(Chart) }
-	History : { waiting : Bool, sections : List(Section), section : Str, classes : List(Charts) }
+	## `base`: the competitor every line is a share of, or `raw` for
+	## req/s; `bases`, the choices.
+	History : { waiting : Bool, sections : List(Section), section : Str, base : Str, bases : List(Str), classes : List(Charts) }
 
 	Pin : { name : Str, version : Str }
 
@@ -196,11 +200,15 @@ View :: [].{
 
 	## Every race's best rounds, a chart per server class and workload of
 	## one section, and h2c's below; two races at least.
-	history : Data.Run, List(Data.Entry), Str -> History
-	history = |run, entries, wanted| {
+	## Each line is a share of `wanted_base`'s best round (axum's unless
+	## asked), or req/s when it is `raw`.
+	history : Data.Run, List(Data.Entry), Str, Str -> History
+	history = |run, entries, wanted, wanted_base| {
 		sections = sections_of(run)
 		section = chosen_section(sections, wanted)
-		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(entries, class.name, as_test(run.race.workloads, workload), run.race.competitors))
+		bases = List.concat(["raw"], run.race.competitors)
+		base = chosen(bases, wanted_base, "axum")
+		charted = |name, class| in_section(closed(run.race.workloads), name).map(|workload| chart(entries, class.name, as_test(run.race.workloads, workload), run.race.competitors, base))
 		classes = classes_of(run).map(|class| {
 			name: class.name,
 			label: class.label,
@@ -208,7 +216,7 @@ View :: [].{
 			charts: charted(section, class),
 			h2c: charted("h2c", class),
 		})
-		{ waiting: List.len(entries) < 2, sections, section, classes }
+		{ waiting: List.len(entries) < 2, sections, section, base, bases, classes }
 	}
 
 	## The race page's live banner while a run races (LiveRace.rocstache):
@@ -717,13 +725,36 @@ right = 40.0
 top = 14.0
 bottom = 56.0
 
-chart : List(Data.Entry), Str, Data.Workload, List(Str) -> View.Chart
-chart = |all_entries, class, workload, competitors| {
+chart : List(Data.Entry), Str, Data.Workload, List(Str), Str -> View.Chart
+chart = |all_entries, class, workload, competitors, base| {
 	value = |entry, competitor|
 		match entry.results.find_first(|r| r.class == class and r.workload == workload.name and r.competitor == competitor and r.valid) {
 			Ok(found) => Ok(found.best_rps)
 			Err(_) => Err(Missing)
 		}
+	based = base != "raw"
+	# What a dot plots: req/s, or a share of the base's in the same race
+	# (none where the base has no valid result).
+	plotted = |entry, competitor|
+		match value(entry, competitor) {
+			Ok(v) =>
+				if based {
+					match value(entry, base) {
+						Ok(b) =>
+							if b > 0.0 {
+								share = v / b * 100.0
+								Ok({ y: share, said: "${Format.compact(share)}% of ${base} (${Format.thousands(v)} req/s)" })
+							} else {
+								Err(Missing)
+							}
+						Err(_) => Err(Missing)
+					}
+				} else {
+					Ok({ y: v, said: "${Format.thousands(v)} req/s" })
+				}
+			Err(_) => Err(Missing)
+		}
+	scale = if based "best round as a % of ${base}'s, race by race" else "best round's req/s, race by race"
 	# From the first race that ran this workload: a workload added later
 	# drew its lines in the right third of an axis of empty dates.
 	ran = |entry| competitors.any(|c|
@@ -734,21 +765,21 @@ chart = |all_entries, class, workload, competitors| {
 	entries = all_entries.drop_first(all_entries.find_first_index(ran) ?? 0)
 	most = entries.fold(0.0, |top_value, entry|
 		competitors.fold(top_value, |t, c|
-			match value(entry, c) {
-				Ok(v) => if v > t v else t
+			match plotted(entry, c) {
+				Ok(p) => if p.y > t p.y else t
 				Err(_) => t
 			}))
 	if most <= 0.0 {
-		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), empty: Bool.True, lines: [], ticks: [], dates: [] }
+		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), scale, based, base_y: "", empty: Bool.True, lines: [], ticks: [], dates: [] }
 	} else {
-		ceiling = nice_ceiling(most)
+		ceiling = if based share_ceiling(most) else nice_ceiling(most)
 		count = List.len(entries)
 		x = |i| left + (if count == 1 0.5 else i.to_f64() / (count - 1).to_f64()) * (width - left - right)
 		y = |v| top + (1.0 - v / ceiling) * (height - top - bottom)
-		lines = competitors.map(|competitor| line(entries, competitor, value, x, y))
+		lines = competitors.map(|competitor| line(entries, competitor, plotted, x, y))
 		ticks = [0.0, 1.0, 2.0, 3.0, 4.0].map(|t| {
 			v = ceiling * t / 4.0
-			{ line_y: Format.one_decimal(y(v)), text_y: Format.one_decimal(y(v) + 4.0), label: Format.compact(v) }
+			{ line_y: Format.one_decimal(y(v)), text_y: Format.one_decimal(y(v) + 4.0), label: if based "${Format.compact(v)}%" else Format.compact(v) }
 		})
 		every = if count <= 6 1 else (count + 5) // 6
 		dates = entries
@@ -759,13 +790,24 @@ chart = |all_entries, class, workload, competitors| {
 				day: day(e.entry.started_at),
 				time: axis_time(entries, e.entry.started_at),
 			})
-		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), empty: Bool.False, lines, ticks, dates }
+		{ key: chart_key(workload), title: workload.title, variant: workload_variant(workload), scale, based, base_y: Format.one_decimal(y(100.0)), empty: Bool.False, lines, ticks, dates }
+	}
+}
+
+## A share chart's top: four steps of 10, 20, 25 or 50 times a power of
+## ten, so 100% falls on a grid line whenever the step divides it.
+share_ceiling : F64 -> F64
+share_ceiling = |most| {
+	steps = [10.0, 20.0, 25.0, 50.0, 100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 2500.0, 5000.0]
+	match steps.find_first(|step| 4.0 * step >= most) {
+		Ok(step) => 4.0 * step
+		Err(_) => nice_ceiling(most)
 	}
 }
 
 ## A competitor's best rounds as an SVG path, lifting the pen over races it
 ## did not finish.
-line : List(Data.Entry), Str, (Data.Entry, Str -> Try(F64, [Missing])), (U64 -> F64), (F64 -> F64) -> View.Line
+line : List(Data.Entry), Str, (Data.Entry, Str -> Try({ y : F64, said : Str }, [Missing])), (U64 -> F64), (F64 -> F64) -> View.Line
 line = |entries, competitor, value, x, y| {
 	var $path = ""
 	var $pen = "M"
@@ -775,16 +817,16 @@ line = |entries, competitor, value, x, y| {
 	var $i = 0
 	for entry in entries {
 		match value(entry, competitor) {
-			Ok(v) => {
+			Ok(p) => {
 				$last_x = x($i)
-				$last_y = y(v)
+				$last_y = y(p.y)
 				$path = "${$path}${$pen}${Format.one_decimal($last_x)} ${Format.one_decimal($last_y)} "
 				$pen = "L"
 				$dots = $dots.append({
 					cx: Format.one_decimal($last_x),
 					cy: Format.one_decimal($last_y),
 					r: if $i + 1 == List.len(entries) "4" else "3",
-					title: "${competitor}, ${entry.id}: ${Format.thousands(v)} req/s",
+					title: "${competitor}, ${entry.id}: ${p.said}",
 				})
 			}
 			Err(_) => {
@@ -823,6 +865,9 @@ expect started("2026-10-06T13:58:49.000800103Z") == "2026-10-06 13:58 UTC"
 expect day("2026-10-06T13:58:49Z") == "Oct 6"
 expect nice_ceiling(167971.0) == 200000.0
 expect nice_ceiling(45620.0) == 50000.0
+# A share chart's top: four steps, 100% on a grid line when the step divides it.
+expect share_ceiling(220.0) == 400.0 and share_ceiling(150.0) == 200.0 and share_ceiling(101.0) == 200.0
+expect share_ceiling(35.0) == 40.0 and share_ceiling(900.0) == 1000.0
 
 import "test/latest.json" as latest_sample : Str
 import "test/index.json" as index_sample : Str
@@ -850,8 +895,20 @@ expect
 expect
 	match (Data.run(latest_sample), Data.index(index_sample)) {
 		(Ok(run), Ok(entries)) => {
-			page = View.history(run, entries, "tls")
+			page = View.history(run, entries, "tls", "")
 			List.len(page.classes) == 2 and page.waiting
+		}
+		_ => Bool.False
+	}
+
+# The base: axum's unless asked, `raw` for req/s, a name the race lacks
+# axum's again; the choices, req/s first.
+expect
+	match (Data.run(latest_sample), Data.index(index_sample)) {
+		(Ok(run), Ok(entries)) => {
+			based = |wanted| View.history(run, entries, "tls", wanted).base
+			bases_ok = View.history(run, entries, "tls", "").bases == ["raw", "go", "axum", "fourneau-zig", "roux"]
+			based("") == "axum" and based("raw") == "raw" and based("roux") == "roux" and based("nope") == "axum" and bases_ok
 		}
 		_ => Bool.False
 	}

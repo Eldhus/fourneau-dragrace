@@ -7,10 +7,21 @@ HistoryPanel :: [].{
 
 	## What `HistoryPanel.rocstache` reads, inferred from its tags.
 	Ctx : {
+		bases : List(
+			{
+				action : Str,
+				current : Bool,
+				label : Str,
+				name : Str,
+				swatch : Bool,
+			},
+		),
 		classes : List(
 			{
 				charts : List(
 					{
+						base_y : Str,
+						based : Bool,
 						dates : List({ day : Str, time : Str, x : Str }),
 						empty : Bool,
 						key : Str,
@@ -29,6 +40,7 @@ HistoryPanel :: [].{
 								path : Str,
 							},
 						),
+						scale : Str,
 						ticks : List(
 							{ label : Str, line_y : Str, text_y : Str },
 						),
@@ -38,6 +50,8 @@ HistoryPanel :: [].{
 				),
 				h2c : List(
 					{
+						base_y : Str,
+						based : Bool,
 						dates : List({ day : Str, time : Str, x : Str }),
 						empty : Bool,
 						key : Str,
@@ -56,6 +70,7 @@ HistoryPanel :: [].{
 								path : Str,
 							},
 						),
+						scale : Str,
 						ticks : List(
 							{ label : Str, line_y : Str, text_y : Str },
 						),

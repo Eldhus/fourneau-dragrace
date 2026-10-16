@@ -7,6 +7,8 @@ HistoryChart :: [].{
 
 	## What `HistoryChart.rocstache` reads, inferred from its tags.
 	Ctx : {
+		base_y : Str,
+		based : Bool,
 		dates : List({ day : Str, time : Str, x : Str }),
 		empty : Bool,
 		key : Str,
@@ -18,6 +20,7 @@ HistoryChart :: [].{
 				path : Str,
 			},
 		),
+		scale : Str,
 		ticks : List({ label : Str, line_y : Str, text_y : Str }),
 		title : Str,
 		variant : List(Str),
