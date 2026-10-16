@@ -658,7 +658,8 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 	log.Printf("[%s] worker started on its loader", class.Name)
 	// Whatever ends the worker, its log and the black box come home before
 	// the droplets go (the newest runs' directories are kept).
-	defer keepWorkerLogs(context.WithoutCancel(ctx), loader, class.Name, home, filepath.Dir(tarball))
+	defer keepWorkerLogs(context.WithoutCancel(ctx), loader, fleet.machines[server.ID], class.Name,
+		home, filepath.Dir(tarball))
 	deadline := time.Now().Add(workerTime)
 	for {
 		if err := sleepContext(ctx, 30*time.Second); err != nil {
@@ -690,15 +691,21 @@ func (racer *Racer) raceClassWorker(ctx context.Context, fleet *Fleet, class Ser
 	return results, nil
 }
 
-// keepWorkerLogs copies a class's worker log and black box from its loader
-// into the run's directory on the racer.
-func keepWorkerLogs(ctx context.Context, loader Machine, class, home, dir string) {
-	files := map[string]string{
-		"worker-" + class + ".log": "journalctl -u dragrace-worker --no-pager -o short-iso",
-		"server-" + class + ".log": "cat " + home + "/server.log",
+// keepWorkerLogs copies a class's worker log and black box from its loader,
+// and its server's sshd log (a reset at a worker's first connection,
+// 2026-10-16, left no trace of why), into the run's directory on the racer.
+func keepWorkerLogs(ctx context.Context, loader, server Machine, class, home, dir string) {
+	files := []struct {
+		machine      Machine
+		name, script string
+	}{
+		{loader, "worker-" + class + ".log", "journalctl -u dragrace-worker --no-pager -o short-iso"},
+		{loader, "server-" + class + ".log", "cat " + home + "/server.log"},
+		{server, "sshd-" + class + ".log", "journalctl -u ssh -u ssh.socket --no-pager -o short-iso"},
 	}
-	for name, script := range files {
-		text, err := loader.Shell(ctx, script)
+	for _, file := range files {
+		name := file.name
+		text, err := file.machine.Shell(ctx, file.script)
 		if err != nil {
 			log.Printf("[%s] keeping %s: %v", class, name, err)
 		}
