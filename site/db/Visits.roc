@@ -8,7 +8,7 @@ Visits :: [].{
 	## `count`, Visits.sql:3: no rows.
 	count! : Sqlite.Write, { path : Str, referrer : Str, kind : Str } => Try({}, [DbErr(Sqlite.Err)])
 	count! = |db, params| {
-		_ = Sqlite.run_write!(db, 45, [Sqlite.Param.str(params.path), Sqlite.Param.str(params.referrer), Sqlite.Param.str(params.kind)])? # Visits.sql:7
+		_ = Sqlite.run_write!(db, 44, [Sqlite.Param.str(params.path), Sqlite.Param.str(params.referrer), Sqlite.Param.str(params.kind)])? # Visits.sql:7
 		Ok({})
 	}
 
@@ -18,7 +18,7 @@ Visits :: [].{
 	## `recent`, Visits.sql:12: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	recent! : Sqlite.Read => Try(List(Recent), [DbErr(Sqlite.Err)])
 	recent! = |db| {
-		rows = Sqlite.run_read!(db, 46, [])? # Visits.sql:13
+		rows = Sqlite.run_read!(db, 45, [])? # Visits.sql:13
 		Ok(
 			rows.map(
 				|row| match row {

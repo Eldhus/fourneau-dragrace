@@ -35,21 +35,4 @@ Live :: [].{
 			),
 		)
 	}
-
-	## A row of `ended`.
-	Ended : { class : Str, competitor : Str, round : I64, rounds : I64, workload : Str, valid : Bool, note : Str, rps : F64 }
-
-	## `ended`, Live.sql:89: the rows, at most `:many`'s bound (more is `TooManyRows`).
-	ended! : Sqlite.Read, { run_id : Str } => Try(List(Ended), [DbErr(Sqlite.Err)])
-	ended! = |db, params| {
-		rows = Sqlite.run_read!(db, 5, [Sqlite.Param.str(params.run_id)])? # Live.sql:94
-		Ok(
-			rows.map(
-				|row| match row {
-					[c0, c1, c2, c3, c4, c5, c6, c7] => { class: Sqlite.Cell.str(c0), competitor: Sqlite.Cell.str(c1), round: Sqlite.Cell.i64(c2), rounds: Sqlite.Cell.i64(c3), workload: Sqlite.Cell.str(c4), valid: Sqlite.Cell.bool(c5), note: Sqlite.Cell.str(c6), rps: Sqlite.Cell.f64(c7) }
-					_ => crash "roux-db: Live.ended: a row the host should have refused"
-				},
-			),
-		)
-	}
 }

@@ -11,7 +11,7 @@ Pages :: [].{
 	## `latest`, Pages.sql:5: one row, or `NotFound`.
 	latest! : Sqlite.Read => Try(Latest, [NotFound, DbErr(Sqlite.Err)])
 	latest! = |db| {
-		rows = Sqlite.run_read!(db, 6, [])? # Pages.sql:6
+		rows = Sqlite.run_read!(db, 5, [])? # Pages.sql:6
 		match rows {
 			[] => Err(NotFound)
 			[[c0]] => Ok({ id: Sqlite.Cell.str(c0) })
@@ -25,7 +25,7 @@ Pages :: [].{
 	## `run`, Pages.sql:8: one row, or `NotFound`.
 	run! : Sqlite.Read, { id : Str } => Try(Run, [NotFound, DbErr(Sqlite.Err)])
 	run! = |db, params| {
-		rows = Sqlite.run_read!(db, 7, [Sqlite.Param.str(params.id)])? # Pages.sql:10
+		rows = Sqlite.run_read!(db, 6, [Sqlite.Param.str(params.id)])? # Pages.sql:10
 		match rows {
 			[] => Err(NotFound)
 			[[c0, c1, c2, c3, c4, c5]] => Ok({ id: Sqlite.Cell.str(c0), status: Sqlite.Cell.str(c1), trigger: Sqlite.Cell.str(c2), started_at: Sqlite.Cell.str(c3), seconds: Sqlite.Cell.f64(c4), cost_usd: Sqlite.Cell.f64(c5) })
@@ -39,7 +39,7 @@ Pages :: [].{
 	## `commits`, Pages.sql:12: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	commits! : Sqlite.Read, { run_id : Str } => Try(List(Commits), [DbErr(Sqlite.Err)])
 	commits! = |db, params| {
-		rows = Sqlite.run_read!(db, 8, [Sqlite.Param.str(params.run_id)])? # Pages.sql:15
+		rows = Sqlite.run_read!(db, 7, [Sqlite.Param.str(params.run_id)])? # Pages.sql:15
 		Ok(
 			rows.map(
 				|row| match row {
@@ -56,7 +56,7 @@ Pages :: [].{
 	## `versions`, Pages.sql:17: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	versions! : Sqlite.Read, { run_id : Str } => Try(List(Versions), [DbErr(Sqlite.Err)])
 	versions! = |db, params| {
-		rows = Sqlite.run_read!(db, 9, [Sqlite.Param.str(params.run_id)])? # Pages.sql:19
+		rows = Sqlite.run_read!(db, 8, [Sqlite.Param.str(params.run_id)])? # Pages.sql:19
 		Ok(
 			rows.map(
 				|row| match row {
@@ -73,7 +73,7 @@ Pages :: [].{
 	## `competitors`, Pages.sql:21: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	competitors! : Sqlite.Read, { run_id : Str } => Try(List(Competitors), [DbErr(Sqlite.Err)])
 	competitors! = |db, params| {
-		rows = Sqlite.run_read!(db, 10, [Sqlite.Param.str(params.run_id)])? # Pages.sql:23
+		rows = Sqlite.run_read!(db, 9, [Sqlite.Param.str(params.run_id)])? # Pages.sql:23
 		Ok(
 			rows.map(
 				|row| match row {
@@ -90,7 +90,7 @@ Pages :: [].{
 	## `workloads`, Pages.sql:25: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	workloads! : Sqlite.Read, { run_id : Str } => Try(List(Workloads), [DbErr(Sqlite.Err)])
 	workloads! = |db, params| {
-		rows = Sqlite.run_read!(db, 11, [Sqlite.Param.str(params.run_id)])? # Pages.sql:30
+		rows = Sqlite.run_read!(db, 10, [Sqlite.Param.str(params.run_id)])? # Pages.sql:30
 		Ok(
 			rows.map(
 				|row| match row {
@@ -107,7 +107,7 @@ Pages :: [].{
 	## `classes`, Pages.sql:34: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	classes! : Sqlite.Read, { run_id : Str } => Try(List(Classes), [DbErr(Sqlite.Err)])
 	classes! = |db, params| {
-		rows = Sqlite.run_read!(db, 12, [Sqlite.Param.str(params.run_id)])? # Pages.sql:36
+		rows = Sqlite.run_read!(db, 11, [Sqlite.Param.str(params.run_id)])? # Pages.sql:36
 		Ok(
 			rows.map(
 				|row| match row {
@@ -124,7 +124,7 @@ Pages :: [].{
 	## `machines`, Pages.sql:38: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	machines! : Sqlite.Read, { run_id : Str } => Try(List(Machines), [DbErr(Sqlite.Err)])
 	machines! = |db, params| {
-		rows = Sqlite.run_read!(db, 13, [Sqlite.Param.str(params.run_id)])? # Pages.sql:40
+		rows = Sqlite.run_read!(db, 12, [Sqlite.Param.str(params.run_id)])? # Pages.sql:40
 		Ok(
 			rows.map(
 				|row| match row {
@@ -141,7 +141,7 @@ Pages :: [].{
 	## `results`, Pages.sql:43: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	results! : Sqlite.Read, { run_id : Str } => Try(List(Results), [DbErr(Sqlite.Err)])
 	results! = |db, params| {
-		rows = Sqlite.run_read!(db, 14, [Sqlite.Param.str(params.run_id)])? # Pages.sql:47
+		rows = Sqlite.run_read!(db, 13, [Sqlite.Param.str(params.run_id)])? # Pages.sql:47
 		Ok(
 			rows.map(
 				|row| match row {
@@ -158,7 +158,7 @@ Pages :: [].{
 	## `rounds`, Pages.sql:50: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	rounds! : Sqlite.Read, { run_id : Str } => Try(List(Rounds), [DbErr(Sqlite.Err)])
 	rounds! = |db, params| {
-		rows = Sqlite.run_read!(db, 15, [Sqlite.Param.str(params.run_id)])? # Pages.sql:54
+		rows = Sqlite.run_read!(db, 14, [Sqlite.Param.str(params.run_id)])? # Pages.sql:54
 		Ok(
 			rows.map(
 				|row| match row {
@@ -175,7 +175,7 @@ Pages :: [].{
 	## `steps`, Pages.sql:59: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	steps! : Sqlite.Read, { run_id : Str } => Try(List(Steps), [DbErr(Sqlite.Err)])
 	steps! = |db, params| {
-		rows = Sqlite.run_read!(db, 16, [Sqlite.Param.str(params.run_id)])? # Pages.sql:61
+		rows = Sqlite.run_read!(db, 15, [Sqlite.Param.str(params.run_id)])? # Pages.sql:61
 		Ok(
 			rows.map(
 				|row| match row {
@@ -192,7 +192,7 @@ Pages :: [].{
 	## `history`, Pages.sql:67: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	history! : Sqlite.Read => Try(List(History), [DbErr(Sqlite.Err)])
 	history! = |db| {
-		rows = Sqlite.run_read!(db, 17, [])? # Pages.sql:70
+		rows = Sqlite.run_read!(db, 16, [])? # Pages.sql:70
 		Ok(
 			rows.map(
 				|row| match row {
@@ -209,7 +209,7 @@ Pages :: [].{
 	## `recent`, Pages.sql:79: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	recent! : Sqlite.Read => Try(List(Recent), [DbErr(Sqlite.Err)])
 	recent! = |db| {
-		rows = Sqlite.run_read!(db, 18, [])? # Pages.sql:80
+		rows = Sqlite.run_read!(db, 17, [])? # Pages.sql:80
 		Ok(
 			rows.map(
 				|row| match row {
@@ -226,7 +226,7 @@ Pages :: [].{
 	## `workload_specs`, Pages.sql:91: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	workload_specs! : Sqlite.Read, { run_id : Str } => Try(List(WorkloadSpecs), [DbErr(Sqlite.Err)])
 	workload_specs! = |db, params| {
-		rows = Sqlite.run_read!(db, 19, [Sqlite.Param.str(params.run_id)])? # Pages.sql:100
+		rows = Sqlite.run_read!(db, 18, [Sqlite.Param.str(params.run_id)])? # Pages.sql:100
 		Ok(
 			rows.map(
 				|row| match row {
@@ -243,7 +243,7 @@ Pages :: [].{
 	## `race_settings`, Pages.sql:119: one row, or `NotFound`.
 	race_settings! : Sqlite.Read, { run_id : Str } => Try(RaceSettings, [NotFound, DbErr(Sqlite.Err)])
 	race_settings! = |db, params| {
-		rows = Sqlite.run_read!(db, 20, [Sqlite.Param.str(params.run_id)])? # Pages.sql:121
+		rows = Sqlite.run_read!(db, 19, [Sqlite.Param.str(params.run_id)])? # Pages.sql:121
 		match rows {
 			[] => Err(NotFound)
 			[[c0, c1, c2]] => Ok({ rounds: Sqlite.Cell.i64(c0), warmup_seconds: Sqlite.Cell.i64(c1), measure_seconds: Sqlite.Cell.i64(c2) })

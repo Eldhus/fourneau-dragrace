@@ -80,36 +80,3 @@ LEFT JOIN racing r ON r.class = c.name
 LEFT JOIN run_workloads w ON w.run_id = c.run_id AND w.name = r.workload
 WHERE c.run_id = :run_id
 ORDER BY c.position;
-
--- Each class's last step ended: the step before the one racing, or the
--- class over, its last begun. A row each result it measured, in the race's
--- order of workloads: a round's rate, or a ladder's highest achieved; 0
--- and not valid for a competitor that did not start or failed its checks
--- (its note says why).
--- name: ended :many(64)
--- @param run_id : Str
--- @column rounds : I64
--- @column valid : Bool
--- @column rps : F64
-WITH begun AS (
-  SELECT t.class, max(t.step) AS step FROM class_steps t
-  WHERE t.run_id = :run_id AND t.started_at IS NOT NULL GROUP BY t.class
-),
-ended AS (
-  SELECT t.class, t.competitor, t.round, t.workload FROM class_steps t
-  JOIN begun b ON b.class = t.class
-  WHERE t.run_id = :run_id AND t.step = b.step - (
-    CASE WHEN EXISTS (SELECT 1 FROM class_status s WHERE s.run_id = :run_id
-      AND s.class = t.class AND s.status IN ('done', 'failed')) THEN 0 ELSE 1 END)
-)
-SELECT e.class, e.competitor, e.round,
-  (SELECT g.rounds FROM run_settings g WHERE g.run_id = :run_id) AS rounds, w.title AS workload, r.valid, r.note,
-  coalesce(o.rps, (SELECT max(s.achieved_rps) FROM open_steps s WHERE s.run_id = r.run_id
-      AND s.class = r.class AND s.workload = r.workload AND s.competitor = r.competitor), 0.0) AS rps
-FROM ended e
-JOIN results r ON r.run_id = :run_id AND r.class = e.class AND r.competitor = e.competitor
-JOIN run_workloads w ON w.run_id = r.run_id AND w.name = r.workload
-  AND ((e.workload = '' AND w.kind = 'closed') OR w.name = e.workload)
-LEFT JOIN rounds o ON o.run_id = r.run_id AND o.class = r.class AND o.workload = r.workload
-  AND o.competitor = r.competitor AND o.round = e.round
-ORDER BY e.class, w.position;

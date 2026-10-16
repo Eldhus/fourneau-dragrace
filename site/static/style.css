@@ -445,14 +445,15 @@ details.history .h2c { margin-top: 18px; border-top: 0; }
    all, its time left (the column as wide as "about 01:59 left"). On the
    right, the step racing: its name, and when its result lands, over
    its bar; under it the track, a mark a step, ending where the bar
-   does; then the last step's results. The bar
+   does. The bar
    fills by itself (a CSS animation from where the step is to its
    estimated end), so it moves every frame though the page is patched
-   only when the words change. On a phone it stacks: the class and
+   only when the words change; each patch draws a new fill (View.Lane,
+   `fill`), its animation from there. On a phone it stacks: the class and
    when the result lands, the step, its bar, the track, then the step
    count and time left. */
 .racer .lane { display: grid; grid-template-columns: 17ch minmax(0, 1fr) auto;
-  grid-template-areas: "label now soon" "count step step" "left track track" ". last last";
+  grid-template-areas: "label now soon" "count step step" "left track track";
   align-items: center; gap: 3px 12px; margin-top: 9px; padding-top: 8px;
   border-top: 1px dashed rgba(255,215,110,.22); font-variant-numeric: tabular-nums; }
 .racer .lane .label { grid-area: label; color: #fff3d6; white-space: nowrap; }
@@ -480,26 +481,11 @@ details.history .h2c { margin-top: 18px; border-top: 0; }
 .racer .track .bad { background: var(--magenta); }
 @media (max-width: 560px) {
   .racer .lane { grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "label soon" "now now" "step step" "track track" "count left" "last last"; }
+    grid-template-areas: "label soon" "now now" "step step" "track track" "count left"; }
   .racer .lane .soon, .racer .lane .left { justify-self: end; }
 }
 @media (prefers-reduced-motion: reduce) {
   .racer .step .fill, .racer .step.late .fill, .racer .track .now { animation: none; }
-}
-/* The last step's results, one line: still when it fits, else scrolling
-   right to left as a marquee does, round and round (three lines were
-   cut off on a phone). demo.js measures it
-   and, when it is wider, adds the second copy that follows it in. */
-.racer .ticker { grid-area: last; display: block; overflow: hidden; white-space: nowrap; color: var(--text-2); text-shadow: none; }
-/* Its own width, not the banner's: a turn moves exactly one copy. */
-.racer .ticker-text { display: inline-block; width: max-content; }
-.racer .ticker.moving .ticker-text { padding-right: 4em; animation: marquee var(--marquee-seconds, 12s) linear infinite; }
-@keyframes marquee { to { transform: translateX(-100%); } }
-@media (prefers-reduced-motion: reduce) {
-  .racer .ticker .ticker-text { text-overflow: ellipsis; }
-  .racer .ticker { text-overflow: ellipsis; }
-  .racer .ticker.moving .ticker-text { animation: none; padding-right: 0; }
-  .racer .ticker.moving .ticker-text + .ticker-text { display: none; }
 }
 .racer.live .flare {
   position: absolute; left: 0; bottom: 0; width: 100%; height: 260%; z-index: 2;

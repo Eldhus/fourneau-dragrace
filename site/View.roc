@@ -212,19 +212,19 @@ View :: [].{
 	}
 
 	## The race page's live banner while a run races (LiveRace.rocstache):
-	## the run's steps
-	## raced of all its classes', when the next result lands (the flare) and
-	## the time left; then a lane per server class. `flare`: a result has
-	## just landed; `done` (the steps raced) names the flare's canvas, so
-	## each result's is a new element and its animation runs.
-	LiveBanner : { items : List(Str), lanes : List(Lane), flare : Bool, done : Str }
+	## "Racing now", then a lane per server class. `flare`: a result has
+	## just landed; `done` (the steps raced of all the classes') names the
+	## flare's canvas, so each result's is a new element and its animation
+	## runs.
+	LiveBanner : { lanes : List(Lane), flare : Bool, done : Str }
 	## A server class: its name, its step count and time left beside
 	## its bars; the step racing (`now`, and when its result lands, `soon`)
-	## over the step's bar; under it the class's track, a mark a step; and
-	## the last step's results, one line that scrolls when it is wider than
-	## the banner (none before the first lands).
+	## over the step's bar; under it the class's track, a mark a step.
 	## `stepping`: a step is racing: its bar fills from `from` (0 to 1) to
 	## the end in `seconds`, the estimate's rest; `late`, past it.
+	## `fill` names the bar's fill by the class, the step and its seconds,
+	## so each patch draws a new one: a CSS animation already running keeps
+	## its start and runs on (full, a step later) whatever the patch says.
 	## `track`: each step "done", "now", "next" or, failed, "bad".
 	Lane : {
 		label : Str,
@@ -237,40 +237,14 @@ View :: [].{
 		failed : Bool,
 		from : Str,
 		seconds : Str,
+		fill : Str,
 		track : List(Str),
-		last : List(Str),
 	}
 
-	live_banner : List(Live.Classes), List(Live.Ended), Bool -> LiveBanner
-	live_banner = |classes, ended, flare| {
-		steps = classes.fold(0.I64, |sum, c| sum + c.steps)
+	live_banner : List(Live.Classes), Bool -> LiveBanner
+	live_banner = |classes, flare| {
 		done = classes.fold(0.I64, |sum, c| sum + raced(c))
-		racing = classes.keep_if(|c| c.status == "racing" and c.steps > 0)
-		left = racing.fold(0.0, |most, c| if c.left_seconds > most c.left_seconds else most)
-		# The next result: the step racing nearest the end of its estimate.
-		next = racing.keep_if(|c| c.step > 0).fold(Err(NoStep), |soonest, c| {
-			rest = c.step_estimate - c.step_seconds
-			match soonest {
-				Ok(s) => Ok(if rest < s rest else s)
-				Err(_) => Ok(rest)
-			}
-		})
-		items =
-			if steps == 0 {
-				[]
-			} else if racing.is_empty() {
-				["${done.to_str()} of ${steps.to_str()} steps", "finishing"]
-			} else {
-				coming =
-					match next {
-						Ok(rest) => if rest > 0.0 ["next result ${View.in_minutes(rest)}"] else ["next result any moment"]
-						Err(_) => []
-					}
-				ending = if left > 0.0 ["about ${View.clock(left)} left"] else []
-				["${done.to_str()} of ${steps.to_str()} steps"].concat(coming).concat(ending)
-			}
-		lanes = classes.map(|c| lane(c, ended.keep_if(|e| e.class == c.class)))
-		{ items, lanes, flare, done: done.to_str() }
+		{ lanes: classes.map(lane), flare, done: done.to_str() }
 	}
 
 	## Every word the banner says, and its marks: the stream patches the
@@ -278,7 +252,7 @@ View :: [].{
 	## CSS).
 	said : LiveBanner -> Str
 	said = |banner|
-		Str.join_with(banner.items.concat(banner.lanes.map(|l| "${l.label} ${l.count} ${l.left} ${l.now} ${l.soon} ${Str.join_with(l.track, ",")} ${Str.join_with(l.last, "")}")), "|")
+		Str.join_with(banner.lanes.map(|l| "${l.label} ${l.count} ${l.left} ${l.now} ${l.soon} ${Str.join_with(l.track, ",")}"), "|")
 
 	## A class's steps raced: before the step racing, or all begun once
 	## it is done (a failed class's last begun did not finish).
@@ -290,8 +264,8 @@ View :: [].{
 
 	## A class's lane. A class whose worker tells no steps (one older than
 	## the plan, race.go's Step) says only its time.
-	lane : Live.Classes, List(Live.Ended) -> Lane
-	lane = |c, ended| {
+	lane : Live.Classes -> Lane
+	lane = |c| {
 		over = c.status != "racing"
 		failed = c.status == "failed"
 		stepping = !over and c.step > 0
@@ -345,8 +319,8 @@ View :: [].{
 			failed,
 			from: Format.two_decimals(from),
 			seconds: seconds.to_str(),
+			fill: "${c.class}-${c.step.to_str()}-${(c.step_seconds.round_to_u64_try() ?? 0).to_str()}",
 			track: $track,
-			last: ended_line(ended),
 		}
 	}
 
@@ -355,27 +329,6 @@ View :: [].{
 	step_name = |competitor, round, rounds, workload|
 		if round > 0 "${competitor} · round ${round.to_str()} of ${rounds.to_str()}"
 		else "${competitor} · ${workload} ladder"
-
-	## The last step's results on one line: its name, then each workload's
-	## rate (a round's, or a ladder's highest achieved), or DNF; a step none
-	## of whose results is valid says why once.
-	ended_line : List(Live.Ended) -> List(Str)
-	ended_line = |rows|
-		match rows.first() {
-			Err(_) => []
-			Ok(first) => {
-				name = step_name(first.competitor, first.round, first.rounds, first.workload)
-				rates =
-					if rows.all(|r| !r.valid) {
-						if first.note == "" "DNF" else "DNF, ${first.note}"
-					} else if first.round == 0 {
-						"best ${Format.thousands(first.rps)} req/s"
-					} else {
-						Str.join_with(rows.map(|r| if r.valid "${r.workload} ${Format.compact(r.rps)}" else "${r.workload} DNF"), " · ")
-					}
-				["${name}: ${rates}"]
-			}
-		}
 
 	## Seconds to come, said in minutes: "in under a minute", "in about 3 min".
 	in_minutes : F64 -> Str
@@ -1330,37 +1283,31 @@ live_class = |class, steps, step| {
 }
 
 expect {
-	ended = [
-		{ class: "a", competitor: "go", round: 1, rounds: 3, workload: "Plaintext", valid: Bool.True, note: "", rps: 1112034.0 },
-		{ class: "a", competitor: "go", round: 1, rounds: 3, workload: "Echo 4 KiB", valid: Bool.False, note: "", rps: 0.0 },
-		{ class: "b", competitor: "axum", round: 0, rounds: 3, workload: "RealWorld (Conduit)", valid: Bool.True, note: "", rps: 4012.4 },
-	]
 	b = { ..live_class("b", 3, 3), competitor: "go", round: 0, workload: "RealWorld (Conduit)", step_seconds: 700.0, step_estimate: 600.0, left_seconds: 0.0 }
-	banner = View.live_banner([live_class("a", 4, 2), b, { ..live_class("c", 4, 0), left_seconds: 600.0 }], ended, Bool.True)
+	banner = View.live_banner([live_class("a", 4, 2), b, { ..live_class("c", 4, 0), left_seconds: 600.0 }], Bool.True)
 	when = |l| { now: l.now, soon: l.soon, count: l.count, left: l.left, from: l.from, seconds: l.seconds, late: l.late }
-	banner.items == ["3 of 11 steps", "next result any moment", "about 00:10 left"] and banner.done == "3"
+	banner.done == "3"
 	and banner.lanes.map(when) == [
 		{ now: "roux · round 1 of 3", soon: "result in about 2 min", count: "step 2 of 4", left: "about 00:07 left", from: "0.25", seconds: "90", late: Bool.False },
 		{ now: "go · RealWorld (Conduit) ladder", soon: "running 2 min long", count: "step 3 of 3", left: "running long", from: "1.00", seconds: "0", late: Bool.True },
 		{ now: "readying the server and the loader", soon: "", count: "0 of 4 steps", left: "about 00:10 left", from: "0.00", seconds: "0", late: Bool.False },
 	]
 	and banner.lanes.map(|l| l.track) == [["done", "now", "next", "next"], ["done", "done", "now"], ["next", "next", "next", "next"]]
-	and banner.lanes.map(|l| l.last) == [["go · round 1 of 3: Plaintext 1112k · Echo 4 KiB DNF"], ["axum · RealWorld (Conduit) ladder: best 4,012 req/s"], []]
 	and banner.lanes.map(|l| l.stepping) == [Bool.True, Bool.True, Bool.False]
+	and banner.lanes.map(|l| l.fill) == ["a-2-30", "b-3-700", "c-0-30"]
 }
 
 expect {
 	no_plan = live_class("a", 0, 0)
 	done = { ..live_class("b", 4, 4), status: "done", elapsed_seconds: 6720.0 }
 	failed = { ..live_class("c", 4, 2), status: "failed", reason: "the server went away" }
-	ended = [{ class: "c", competitor: "roux", round: 1, rounds: 3, workload: "Plaintext", valid: Bool.False, note: "did not start", rps: 0.0 }]
-	banner = View.live_banner([no_plan, done, failed], ended, Bool.False)
-	when = |l| { now: l.now, count: l.count, left: l.left, stepping: l.stepping, failed: l.failed, track: l.track, last: l.last }
-	banner.items == ["5 of 8 steps", "finishing"]
+	banner = View.live_banner([no_plan, done, failed], Bool.False)
+	when = |l| { now: l.now, count: l.count, left: l.left, stepping: l.stepping, failed: l.failed, track: l.track }
+	banner.done == "5"
 	and banner.lanes.map(when) == [
-		{ now: "racing", count: "", left: "00:42 elapsed", stepping: Bool.False, failed: Bool.False, track: [], last: [] },
-		{ now: "every step raced", count: "4 of 4 steps", left: "done in 01:52", stepping: Bool.False, failed: Bool.False, track: ["done", "done", "done", "done"], last: [] },
-		{ now: "failed: the server went away", count: "1 of 4 steps", left: "failed at 00:42", stepping: Bool.False, failed: Bool.True, track: ["done", "bad", "next", "next"], last: ["roux · round 1 of 3: DNF, did not start"] },
+		{ now: "racing", count: "", left: "00:42 elapsed", stepping: Bool.False, failed: Bool.False, track: [] },
+		{ now: "every step raced", count: "4 of 4 steps", left: "done in 01:52", stepping: Bool.False, failed: Bool.False, track: ["done", "done", "done", "done"] },
+		{ now: "failed: the server went away", count: "1 of 4 steps", left: "failed at 00:42", stepping: Bool.False, failed: Bool.True, track: ["done", "bad", "next", "next"] },
 	]
 }
 

@@ -24,88 +24,86 @@ statements = [
 	{ name: "Live.racing", sql: "SELECT id, started_at FROM runs WHERE status = 'racing' ORDER BY started_at DESC LIMIT 1;", writes: Bool.False, rows_max: 1, params: [], columns: [3, 3] },
 	# 4: Live.sql:20
 	{ name: "Live.classes", sql: "WITH previous AS (\n  SELECT id FROM runs WHERE status = 'finished'\n    AND started_at < (SELECT started_at FROM runs WHERE id = :run_id)\n  ORDER BY started_at DESC LIMIT 1\n),\ntook AS (\n  SELECT p.class, p.competitor, p.round, p.workload,\n    (julianday(coalesce(\n        (SELECT n.started_at FROM class_steps n\n          WHERE n.run_id = p.run_id AND n.class = p.class AND n.step = p.step + 1),\n        (SELECT s.updated_at FROM class_status s\n          WHERE s.run_id = p.run_id AND s.class = p.class AND s.status = 'done')))\n      - julianday(p.started_at)) * 86400.0 AS seconds\n  FROM class_steps p WHERE p.run_id = (SELECT id FROM previous) AND p.started_at IS NOT NULL\n),\nsteps AS (\n  SELECT t.class, t.step, t.competitor, t.round, t.workload, t.started_at,\n    coalesce((SELECT k.seconds FROM took k WHERE k.class = t.class AND k.competitor = t.competitor\n        AND k.round = t.round AND k.workload = t.workload AND k.seconds > 0),\n      t.planned_seconds) AS estimate\n  FROM class_steps t WHERE t.run_id = :run_id\n),\nracing AS (\n  SELECT s.*, (julianday('now') - julianday(s.started_at)) * 86400.0 AS age\n  FROM steps s WHERE s.started_at IS NOT NULL AND s.step = (\n    SELECT max(m.step) FROM steps m WHERE m.class = s.class AND m.started_at IS NOT NULL)\n)\nSELECT c.name AS class, c.label,\n  coalesce(st.status, 'racing') AS status, coalesce(st.reason, '') AS reason,\n  coalesce(CASE WHEN st.status IN ('done', 'failed') THEN st.seconds END,\n    (julianday('now') - julianday((SELECT started_at FROM runs WHERE id = :run_id))) * 86400.0)\n    AS elapsed_seconds,\n  (SELECT count(*) FROM steps s WHERE s.class = c.name) AS steps,\n  coalesce(r.step, 0) AS step,\n  coalesce(r.competitor, '') AS competitor,\n  coalesce(r.round, 0) AS round,\n  coalesce((SELECT g.rounds FROM run_settings g WHERE g.run_id = c.run_id), 0) AS rounds,\n  coalesce(w.title, r.workload, '') AS workload,\n  coalesce(r.age, 0.0) AS step_seconds,\n  coalesce(r.estimate, 0.0) AS step_estimate,\n  coalesce(max(0.0, r.estimate - r.age), 0.0)\n    + coalesce((SELECT sum(s.estimate) FROM steps s\n        WHERE s.class = c.name AND s.step > coalesce(r.step, 0)), 0.0) AS left_seconds\nFROM run_classes c\nLEFT JOIN class_status st ON st.run_id = c.run_id AND st.class = c.name\nLEFT JOIN racing r ON r.class = c.name\nLEFT JOIN run_workloads w ON w.run_id = c.run_id AND w.name = r.workload\nWHERE c.run_id = :run_id\nORDER BY c.position;", writes: Bool.False, rows_max: 32, params: [3], columns: [3, 3, 3, 3, 2, 1, 1, 3, 1, 1, 3, 2, 2, 2] },
-	# 5: Live.sql:89
-	{ name: "Live.ended", sql: "WITH begun AS (\n  SELECT t.class, max(t.step) AS step FROM class_steps t\n  WHERE t.run_id = :run_id AND t.started_at IS NOT NULL GROUP BY t.class\n),\nended AS (\n  SELECT t.class, t.competitor, t.round, t.workload FROM class_steps t\n  JOIN begun b ON b.class = t.class\n  WHERE t.run_id = :run_id AND t.step = b.step - (\n    CASE WHEN EXISTS (SELECT 1 FROM class_status s WHERE s.run_id = :run_id\n      AND s.class = t.class AND s.status IN ('done', 'failed')) THEN 0 ELSE 1 END)\n)\nSELECT e.class, e.competitor, e.round,\n  (SELECT g.rounds FROM run_settings g WHERE g.run_id = :run_id) AS rounds, w.title AS workload, r.valid, r.note,\n  coalesce(o.rps, (SELECT max(s.achieved_rps) FROM open_steps s WHERE s.run_id = r.run_id\n      AND s.class = r.class AND s.workload = r.workload AND s.competitor = r.competitor), 0.0) AS rps\nFROM ended e\nJOIN results r ON r.run_id = :run_id AND r.class = e.class AND r.competitor = e.competitor\nJOIN run_workloads w ON w.run_id = r.run_id AND w.name = r.workload\n  AND ((e.workload = '' AND w.kind = 'closed') OR w.name = e.workload)\nLEFT JOIN rounds o ON o.run_id = r.run_id AND o.class = r.class AND o.workload = r.workload\n  AND o.competitor = r.competitor AND o.round = e.round\nORDER BY e.class, w.position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 1, 1, 3, 5, 3, 2] },
-	# 6: Pages.sql:5
+	# 5: Pages.sql:5
 	{ name: "Pages.latest", sql: "SELECT id FROM runs WHERE status = 'finished' ORDER BY started_at DESC LIMIT 1;", writes: Bool.False, rows_max: 1, params: [], columns: [3] },
-	# 7: Pages.sql:8
+	# 6: Pages.sql:8
 	{ name: "Pages.run", sql: "SELECT id, status, trigger, started_at, seconds, cost_usd FROM runs WHERE id = :id;", writes: Bool.False, rows_max: 1, params: [3], columns: [3, 3, 3, 3, 2, 2] },
-	# 8: Pages.sql:12
+	# 7: Pages.sql:12
 	{ name: "Pages.commits", sql: "SELECT repository, commit_sha, new FROM run_commits WHERE run_id = :run_id;", writes: Bool.False, rows_max: 3, params: [3], columns: [3, 3, 5] },
-	# 9: Pages.sql:17
+	# 8: Pages.sql:17
 	{ name: "Pages.versions", sql: "SELECT name, version FROM run_versions WHERE run_id = :run_id ORDER BY name;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3] },
-	# 10: Pages.sql:21
+	# 9: Pages.sql:21
 	{ name: "Pages.competitors", sql: "SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3] },
-	# 11: Pages.sql:25
+	# 10: Pages.sql:25
 	{ name: "Pages.workloads", sql: "SELECT name, test, kind, title, summary, protocol, connections, streams, keepalive, http2, tls\nFROM run_workloads WHERE run_id = :run_id\nORDER BY position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 3, 3, 1, 1, 5, 5, 5] },
-	# 12: Pages.sql:34
+	# 11: Pages.sql:34
 	{ name: "Pages.classes", sql: "SELECT name, label, title FROM run_classes WHERE run_id = :run_id ORDER BY position;", writes: Bool.False, rows_max: 32, params: [3], columns: [3, 3, 3] },
-	# 13: Pages.sql:38
+	# 12: Pages.sql:38
 	{ name: "Pages.machines", sql: "SELECT role, class, size, cpu, cpus, kernel, memory_mib\nFROM machines WHERE run_id = :run_id ORDER BY class, role;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 1, 3, 1] },
-	# 14: Pages.sql:43
+	# 13: Pages.sql:43
 	{ name: "Pages.results", sql: "SELECT class, workload, competitor, valid, note\nFROM results WHERE run_id = :run_id ORDER BY class, workload, competitor;", writes: Bool.False, rows_max: 2000, params: [3], columns: [3, 3, 3, 5, 3] },
-	# 15: Pages.sql:50
+	# 14: Pages.sql:50
 	{ name: "Pages.rounds", sql: "SELECT class, workload, competitor, rps, p95_ms, p99_ms, p999_ms, cpu_busy_pct, steal_pct,\n  CAST(rss_kib AS REAL) AS rss_kib, loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps,\n  CAST(tcp_retransmits AS REAL) AS tcp_retransmits, load_seconds\nFROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;", writes: Bool.False, rows_max: 10000, params: [3], columns: [3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] },
-	# 16: Pages.sql:59
+	# 15: Pages.sql:59
 	{ name: "Pages.steps", sql: "SELECT class, workload, competitor, offered_rps, achieved_rps, p99_ms, p999_ms,\n  cpu_busy_pct, loader_cpu_busy_pct\nFROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;", writes: Bool.False, rows_max: 5000, params: [3], columns: [3, 3, 3, 2, 2, 2, 2, 2, 2] },
-	# 17: Pages.sql:67
+	# 16: Pages.sql:67
 	{ name: "Pages.history", sql: "SELECT r.id, r.started_at, s.class, s.workload, s.competitor, s.valid,\n  coalesce((SELECT max(x.rps) FROM rounds x WHERE x.run_id = s.run_id AND x.class = s.class\n    AND x.workload = s.workload AND x.competitor = s.competitor), 0.0) AS best_rps\nFROM (SELECT id, started_at FROM runs WHERE status = 'finished'\n      ORDER BY started_at DESC LIMIT 400) AS r\nJOIN results s ON s.run_id = r.id\nORDER BY r.started_at, s.class, s.workload, s.competitor;", writes: Bool.False, rows_max: 40000, params: [], columns: [3, 3, 3, 3, 3, 5, 2] },
-	# 18: Pages.sql:79
+	# 17: Pages.sql:79
 	{ name: "Pages.recent", sql: "SELECT id, trigger, status, reason, started_at, finished_at FROM runs\nORDER BY started_at DESC LIMIT 10;", writes: Bool.False, rows_max: 10, params: [], columns: [3, 3, 3, 3, 3, 19] },
-	# 19: Pages.sql:91
+	# 18: Pages.sql:91
 	{ name: "Pages.workload_specs", sql: "SELECT w.name, w.test, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes,\n  w.connections, w.keepalive, w.http2, w.streams, w.tls, w.protocol,\n  coalesce((SELECT json_extract(d.value, '\$.detail')\n    FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), '') AS detail,\n  coalesce((SELECT group_concat(json_extract(p.value, '\$.name') || ' '\n      || CAST(round(json_extract(p.value, '\$.share') * 100) AS INTEGER) || '%', ', ')\n    FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.parts') AS p\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), '') AS mix,\n  coalesce((SELECT min(r.value) FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.rates') AS r\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), 0) AS lowest,\n  coalesce((SELECT max(r.value) FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.rates') AS r\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), 0) AS highest\nFROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 3, 3, 3, 1, 1, 5, 5, 1, 5, 3, 3, 3, 1, 1] },
-	# 20: Pages.sql:119
+	# 19: Pages.sql:119
 	{ name: "Pages.race_settings", sql: "SELECT s.rounds, s.warmup_seconds, s.measure_seconds\nFROM run_settings s WHERE s.run_id = :run_id;", writes: Bool.False, rows_max: 1, params: [3], columns: [1, 1, 1] },
-	# 21: Requests.sql:3
+	# 20: Requests.sql:3
 	{ name: "Requests.add", sql: "INSERT INTO requests (kind, asked_by) VALUES (:kind, :asked_by)\nRETURNING id, asked_at;", writes: Bool.True, rows_max: 1, params: [3, 3], columns: [1, 3] },
-	# 22: Requests.sql:10
+	# 21: Requests.sql:10
 	{ name: "Requests.waiting", sql: "SELECT id, kind, asked_by, asked_at FROM requests\nWHERE taken_at IS NULL ORDER BY id LIMIT 50;", writes: Bool.False, rows_max: 50, params: [], columns: [1, 3, 3, 3] },
-	# 23: Requests.sql:14
+	# 22: Requests.sql:14
 	{ name: "Requests.take", sql: "UPDATE requests SET taken_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')\nWHERE id = :id AND taken_at IS NULL;", writes: Bool.True, rows_max: 0, params: [1], columns: [] },
-	# 24: Results.sql:4
+	# 23: Results.sql:4
 	{ name: "Results.set", sql: "INSERT INTO results (run_id, class, workload, competitor, valid, note)\nVALUES (:run_id, :class, :workload, :competitor, :valid, :note)\nON CONFLICT (run_id, class, workload, competitor) DO UPDATE SET valid = excluded.valid,\n  note = excluded.note,\n  updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 5, 3], columns: [] },
-	# 25: Results.sql:17
+	# 24: Results.sql:17
 	{ name: "Results.clear_rounds", sql: "DELETE FROM rounds WHERE run_id = :run_id AND class = :class AND workload = :workload\n  AND competitor = :competitor;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3], columns: [] },
-	# 26: Results.sql:25
+	# 25: Results.sql:25
 	{ name: "Results.clear_parts", sql: "DELETE FROM open_step_parts WHERE run_id = :run_id AND class = :class\n  AND workload = :workload AND competitor = :competitor;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3], columns: [] },
-	# 27: Results.sql:33
+	# 26: Results.sql:33
 	{ name: "Results.clear_steps", sql: "DELETE FROM open_steps WHERE run_id = :run_id AND class = :class AND workload = :workload\n  AND competitor = :competitor;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3], columns: [] },
-	# 28: Results.sql:41
+	# 27: Results.sql:41
 	{ name: "Results.add_round", sql: "INSERT INTO rounds (run_id, class, workload, competitor, round, rps, p50_ms, p90_ms,\n  p95_ms, p99_ms, p999_ms, p9999_ms, mean_ms, max_ms, first_byte_p50_ms,\n  first_byte_p99_ms, success_rate, errors, non_2xx, rps_per_second_stddev,\n  connect_mean_ms, bytes_per_response, cpu_busy_pct, cpu_user_pct, cpu_system_pct,\n  cpu_irq_pct, cpu_softirq_pct, steal_pct, loader_cpu_busy_pct, rss_kib, net_rx_mbps,\n  net_tx_mbps, net_rx_pps, net_tx_pps, tcp_retransmits, threads, voluntary_switches,\n  involuntary_switches, load_seconds, seconds)\nVALUES (:run_id, :class, :workload, :competitor, :round, :rps, :p50_ms, :p90_ms,\n  :p95_ms, :p99_ms, :p999_ms, :p9999_ms, :mean_ms, :max_ms, :first_byte_p50_ms,\n  :first_byte_p99_ms, :success_rate, :errors, :non_2xx, :rps_per_second_stddev,\n  :connect_mean_ms, :bytes_per_response, :cpu_busy_pct, :cpu_user_pct, :cpu_system_pct,\n  :cpu_irq_pct, :cpu_softirq_pct, :steal_pct, :loader_cpu_busy_pct, :rss_kib, :net_rx_mbps,\n  :net_tx_mbps, :net_rx_pps, :net_tx_pps, :tcp_retransmits, :threads, :voluntary_switches,\n  :involuntary_switches, :load_seconds, :seconds);", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 1, 1, 1, 2, 2], columns: [] },
-	# 29: Results.sql:99
+	# 28: Results.sql:99
 	{ name: "Results.add_step", sql: "INSERT INTO open_steps (run_id, class, workload, competitor, step, share, offered_rps,\n  achieved_rps, p50_ms, p90_ms, p99_ms, p999_ms, errors, non_2xx, cpu_busy_pct,\n  loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps, mean_ms)\nVALUES (:run_id, :class, :workload, :competitor, :step, 0.0, :offered_rps,\n  :achieved_rps, :p50_ms, 0.0, :p99_ms, :p999_ms, :errors, :non_2xx, :cpu_busy_pct,\n  :loader_cpu_busy_pct, :net_rx_mbps, :net_tx_mbps, :mean_ms);", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 1, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2], columns: [] },
-	# 30: Results.sql:124
+	# 29: Results.sql:124
 	{ name: "Results.add_part", sql: "INSERT INTO open_step_parts (run_id, class, workload, competitor, step, part, offered_rps,\n  achieved_rps, mean_ms, p50_ms, p99_ms, p999_ms, errors, non_2xx)\nVALUES (:run_id, :class, :workload, :competitor, :step, :part, :offered_rps,\n  :achieved_rps, :mean_ms, :p50_ms, :p99_ms, :p999_ms, :errors, :non_2xx);", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 1, 3, 2, 2, 2, 2, 2, 2, 1, 1], columns: [] },
-	# 31: Runs.sql:4
+	# 30: Runs.sql:4
 	{ name: "Runs.add", sql: "INSERT INTO runs (id, request_id, trigger, status, reason, where_raced, started_at,\n  finished_at, worker_token)\nVALUES (:id, :request_id, :trigger, :status, :reason, :where_raced, :started_at,\n  CASE WHEN :status IN ('skipped', 'refused') THEN :started_at END, :worker_token)\nON CONFLICT (id) DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 17, 3, 3, 3, 3, 3, 19], columns: [] },
-	# 32: Runs.sql:19
+	# 31: Runs.sql:19
 	{ name: "Runs.add_commit", sql: "INSERT INTO run_commits (run_id, repository, commit_sha, new)\nVALUES (:run_id, :repository, :commit_sha, :new)\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 5], columns: [] },
-	# 33: Runs.sql:30
+	# 32: Runs.sql:30
 	{ name: "Runs.add_settings", sql: "INSERT INTO run_settings (run_id, seed, region, image, port, rounds, warmup_seconds,\n  measure_seconds, open_loop_shares, open_loop_warmup_seconds,\n  open_loop_measure_seconds, race_json, versions_json)\nVALUES (:run_id, :seed, :region, :image, :port, :rounds, :warmup_seconds,\n  :measure_seconds, '[]', 0, 0, :race_json, '')\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 1, 3, 3, 1, 1, 1, 1, 3], columns: [] },
-	# 34: Runs.sql:47
+	# 33: Runs.sql:47
 	{ name: "Runs.add_version", sql: "INSERT INTO run_versions (run_id, name, version) VALUES (:run_id, :name, :version)\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 3, 3], columns: [] },
-	# 35: Runs.sql:54
+	# 34: Runs.sql:54
 	{ name: "Runs.add_competitor", sql: "INSERT INTO run_competitors (run_id, name, position, title, language, framework)\nVALUES (:run_id, :name, :position, :title, :language, :framework)\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 3, 1, 3, 3, 3], columns: [] },
-	# 36: Runs.sql:66
+	# 35: Runs.sql:66
 	{ name: "Runs.add_workload", sql: "INSERT INTO run_workloads (run_id, name, test, position, kind, title, summary, method, path,\n  body_bytes, content_type, connections, keepalive, http2, streams, tls, protocol, ladder)\nVALUES (:run_id, :name, :test, :position, :kind, :title, :summary, :method, :path,\n  :body_bytes, :content_type, :connections, :keepalive, :http2, :streams, :tls, :protocol,\n  0)\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 1, 3, 3, 3, 3, 3, 1, 3, 1, 5, 5, 1, 5, 3], columns: [] },
-	# 37: Runs.sql:91
+	# 36: Runs.sql:91
 	{ name: "Runs.add_class", sql: "INSERT INTO run_classes (run_id, name, position, label, title, size, loader_size)\nVALUES (:run_id, :name, :position, :label, :title, :size, :loader_size)\nON CONFLICT DO NOTHING;", writes: Bool.True, rows_max: 0, params: [3, 3, 1, 3, 3, 3, 3], columns: [] },
-	# 38: Runs.sql:104
+	# 37: Runs.sql:104
 	{ name: "Runs.end", sql: "UPDATE runs SET status = :status, reason = :reason, finished_at = :finished_at,\n  worker_token = NULL, seconds = :seconds, build_seconds = :build_seconds,\n  launch_seconds = :launch_seconds, racing_seconds = :racing_seconds, cost_usd = :cost_usd\nWHERE id = :id;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 2, 2, 2, 2, 2, 3], columns: [] },
-	# 39: Runs.sql:119
+	# 38: Runs.sql:119
 	{ name: "Runs.add_droplet", sql: "INSERT INTO droplets (run_id, position, role, class, size, price_hourly, seconds, cost_usd)\nVALUES (:run_id, :position, :role, :class, :size, :price_hourly, :seconds, :cost_usd)\nON CONFLICT (run_id, position) DO UPDATE SET role = excluded.role, class = excluded.class,\n  size = excluded.size, price_hourly = excluded.price_hourly, seconds = excluded.seconds,\n  cost_usd = excluded.cost_usd;", writes: Bool.True, rows_max: 0, params: [3, 1, 3, 3, 3, 2, 2, 2], columns: [] },
-	# 40: Runs.sql:135
+	# 39: Runs.sql:135
 	{ name: "Runs.access", sql: "SELECT status, worker_token FROM runs WHERE id = :id;", writes: Bool.False, rows_max: 1, params: [3], columns: [3, 19] },
-	# 41: Runs.sql:139
+	# 40: Runs.sql:139
 	{ name: "Runs.set_class", sql: "INSERT INTO class_status (run_id, class, status, reason, seconds)\nVALUES (:run_id, :class, :status, :reason, :seconds)\nON CONFLICT (run_id, class) DO UPDATE SET status = excluded.status,\n  reason = excluded.reason, seconds = excluded.seconds,\n  updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 2], columns: [] },
-	# 42: Runs.sql:153
+	# 41: Runs.sql:153
 	{ name: "Runs.set_step", sql: "INSERT INTO class_steps (run_id, class, step, competitor, round, workload, planned_seconds)\nVALUES (:run_id, :class, :step, :competitor, :round, :workload, :planned_seconds)\nON CONFLICT (run_id, class, step) DO UPDATE SET competitor = excluded.competitor,\n  round = excluded.round, workload = excluded.workload,\n  planned_seconds = excluded.planned_seconds;", writes: Bool.True, rows_max: 0, params: [3, 3, 1, 3, 1, 3, 2], columns: [] },
-	# 43: Runs.sql:168
+	# 42: Runs.sql:168
 	{ name: "Runs.begin_step", sql: "UPDATE class_steps SET started_at = coalesce(started_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))\nWHERE run_id = :run_id AND class = :class AND step = :step;", writes: Bool.True, rows_max: 0, params: [3, 3, 1], columns: [] },
-	# 44: Runs.sql:175
+	# 43: Runs.sql:175
 	{ name: "Runs.set_machine", sql: "INSERT INTO machines (run_id, class, role, size, cpu, cpus, kernel, cpu_id, memory_mib)\nVALUES (:run_id, :class, :role, :size, :cpu, :cpus, :kernel, :cpu_id, :memory_mib)\nON CONFLICT (run_id, class, role) DO UPDATE SET size = excluded.size, cpu = excluded.cpu,\n  cpus = excluded.cpus, kernel = excluded.kernel, cpu_id = excluded.cpu_id,\n  memory_mib = excluded.memory_mib;", writes: Bool.True, rows_max: 0, params: [3, 3, 3, 3, 3, 1, 3, 3, 1], columns: [] },
-	# 45: Visits.sql:3
+	# 44: Visits.sql:3
 	{ name: "Visits.count", sql: "INSERT INTO visits (day, path, referrer, kind, count)\nVALUES (strftime('%Y-%m-%d', 'now'), :path, :referrer, :kind, 1)\nON CONFLICT (day, path, referrer, kind) DO UPDATE SET count = count + 1;", writes: Bool.True, rows_max: 0, params: [3, 3, 3], columns: [] },
-	# 46: Visits.sql:12
+	# 45: Visits.sql:12
 	{ name: "Visits.recent", sql: "SELECT day, path, referrer, kind, count FROM visits\nWHERE day >= strftime('%Y-%m-%d', 'now', '-14 days')\nORDER BY day DESC, count DESC LIMIT 2000;", writes: Bool.False, rows_max: 2000, params: [], columns: [3, 3, 3, 3, 1] },
 ]

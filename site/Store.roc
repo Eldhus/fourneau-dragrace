@@ -221,17 +221,15 @@ Store :: [].{
 
 	## The run racing now, as the race page's live banner shows it: each
 	## class's step racing, its time and the
-	## seconds left, and its last step's results (db/Live.sql says how
-	## they are estimated).
-	LiveRun : { id : Str, classes : List(Live.Classes), ended : List(Live.Ended) }
+	## seconds left (db/Live.sql says how they are estimated).
+	LiveRun : { id : Str, classes : List(Live.Classes) }
 
 	live! : Sqlite.Db, Server.Request => Try([Racing(LiveRun), Idle], [DbErr(Sqlite.Err)])
 	live! = |db, request| {
 		reads = Sqlite.read(db, request)
 		match Live.racing!(reads) {
 			Ok({ id, .. }) => {
-				key = { run_id: id }
-				Ok(Racing({ id, classes: Live.classes!(reads, key)?, ended: Live.ended!(reads, key)? }))
+				Ok(Racing({ id, classes: Live.classes!(reads, { run_id: id })? }))
 			}
 			Err(NotFound) => Ok(Idle)
 			Err(DbErr(err)) => Err(DbErr(err))

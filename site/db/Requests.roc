@@ -11,7 +11,7 @@ Requests :: [].{
 	## `add`, Requests.sql:3: one row, or `NotFound`.
 	add! : Sqlite.Write, { kind : Str, asked_by : Str } => Try(Add, [NotFound, DbErr(Sqlite.Err)])
 	add! = |db, params| {
-		rows = Sqlite.run_write!(db, 21, [Sqlite.Param.str(params.kind), Sqlite.Param.str(params.asked_by)])? # Requests.sql:6
+		rows = Sqlite.run_write!(db, 20, [Sqlite.Param.str(params.kind), Sqlite.Param.str(params.asked_by)])? # Requests.sql:6
 		match rows {
 			[] => Err(NotFound)
 			[[c0, c1]] => Ok({ id: Sqlite.Cell.i64(c0), asked_at: Sqlite.Cell.str(c1) })
@@ -25,7 +25,7 @@ Requests :: [].{
 	## `waiting`, Requests.sql:10: the rows, at most `:many`'s bound (more is `TooManyRows`).
 	waiting! : Sqlite.Read => Try(List(Waiting), [DbErr(Sqlite.Err)])
 	waiting! = |db| {
-		rows = Sqlite.run_read!(db, 22, [])? # Requests.sql:11
+		rows = Sqlite.run_read!(db, 21, [])? # Requests.sql:11
 		Ok(
 			rows.map(
 				|row| match row {
@@ -39,7 +39,7 @@ Requests :: [].{
 	## `take`, Requests.sql:14: no rows.
 	take! : Sqlite.Write, { id : I64 } => Try({}, [DbErr(Sqlite.Err)])
 	take! = |db, params| {
-		_ = Sqlite.run_write!(db, 23, [Sqlite.Param.i64(params.id)])? # Requests.sql:16
+		_ = Sqlite.run_write!(db, 22, [Sqlite.Param.i64(params.id)])? # Requests.sql:16
 		Ok({})
 	}
 }

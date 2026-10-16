@@ -174,7 +174,7 @@ index! = |db, request, wanted| {
 	racer = Store.status(Store.racer!(db, request)?)
 	live =
 		match Store.live!(db, request)? {
-			Racing(run) => [View.live_banner(run.classes, run.ended, Bool.False)]
+			Racing(run) => [View.live_banner(run.classes, Bool.False)]
 			Idle => []
 		}
 	shown = race_tabs(latest, wanted)
@@ -461,7 +461,7 @@ race_live! = |db, request| {
 				$racing = Bool.False
 			}
 			Racing(run) => {
-				calm = View.live_banner(run.classes, run.ended, Bool.False)
+				calm = View.live_banner(run.classes, Bool.False)
 				said = View.said(calm)
 				# The times move by the minute; the step bars fill in CSS.
 				if said != $said or calm.done != $done {

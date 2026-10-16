@@ -9,14 +9,13 @@ LiveRace :: [].{
 	Ctx : {
 		done : Str,
 		flare : Bool,
-		items : List(Str),
 		lanes : List(
 			{
 				count : Str,
 				failed : Bool,
+				fill : Str,
 				from : Str,
 				label : Str,
-				last : List(Str),
 				late : Bool,
 				left : Str,
 				now : Str,
