@@ -566,8 +566,7 @@ func deleteSession(ctx context.Context, root string, do Provider, session *adhoc
 			log.Printf("adhoc: deleting droplet %d (attempt %d): %v", node.ID, attempt+1, err)
 			time.Sleep(5 * time.Second)
 		}
-		exec.Command("ssh", "-o", "ControlPath="+session.machine(root, node).Control, "-O", "exit",
-			"x").Run()
+		session.machine(root, node).closeControl()
 	}
 	os.Remove(sessionPath(root))
 }

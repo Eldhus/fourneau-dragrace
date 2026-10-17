@@ -18,7 +18,9 @@ type SSHMachine struct {
 	KnownHosts string // this run's own known_hosts
 	// Control, if set, is an ssh ControlPath: every call shares one kept
 	// connection, a round trip a call instead of a handshake's several
-	// (an ad-hoc race from afar: 90-140 ms to the region).
+	// (an ad-hoc race from afar: 90-140 ms to the region), and only the
+	// first meets a new droplet's sshd while bots flood it (its MaxStartups
+	// drops new connections at random, ours too: 2026-10-16 and 10-17).
 	Control string
 }
 
@@ -29,6 +31,14 @@ func (machine SSHMachine) options() []string {
 			"-o", "ControlPersist=600")
 	}
 	return options
+}
+
+// closeControl ends the kept connection, if any.
+func (machine SSHMachine) closeControl() {
+	if machine.Control == "" {
+		return
+	}
+	exec.Command("ssh", "-o", "ControlPath="+machine.Control, "-O", "exit", "x").Run()
 }
 
 func (machine SSHMachine) baseOptions() []string {
