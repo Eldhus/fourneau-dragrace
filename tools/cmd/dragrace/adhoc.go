@@ -487,7 +487,7 @@ func makeSession(ctx context.Context, root string, do *DigitalOcean, race Race, 
 	create := func(role, size string) (adhocNode, error) {
 		droplet, err := do.createDroplet(ctx, DropletRequest{
 			Name: "dragrace-adhoc-" + role, Region: up.region, Size: size, Image: race.Cloud.Image,
-			SSHKeys: []int{adminKeyID}, Tags: []string{adhocTag}, UserData: raceUserData(public),
+			SSHKeys: []int{adminKeyID}, Tags: []string{adhocTag}, UserData: raceUserData(public, ""),
 		})
 		return adhocNode{ID: droplet.ID, Size: size}, err
 	}

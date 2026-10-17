@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,13 +20,30 @@ import (
 // same on every droplet. The key is cloud-init's to install, so
 // DigitalOcean never has it: nothing to register before a race or delete
 // after (DigitalOcean's own ssh_keys name only the owner's admin key).
-func raceUserData(public string) string {
+//
+// sshFrom, if set, is the one public address SSH is answered from (the
+// racer's): bots flood a new droplet's sshd from its first second, and its
+// MaxStartups then drops new connections at random, the race's too
+// (2026-10-16 and 10-17). The private network (eth1, the worker's way in)
+// is untouched. Stateless: no connection tracking, which would cost the
+// load test's connections.
+func raceUserData(public, sshFrom string) string {
 	keys, _ := json.Marshal([]string{public}) // a JSON list is a YAML flow sequence
+	boot := ""
+	if sshFrom != "" {
+		filter, _ := json.Marshal([]string{
+			"nft add table inet race_ssh",
+			"nft add chain inet race_ssh input { type filter hook input priority 0 \\; policy accept \\; }",
+			"nft add rule inet race_ssh input iifname eth0 tcp dport 22 ip saddr " + sshFrom + " accept",
+			"nft add rule inet race_ssh input iifname eth0 tcp dport 22 drop",
+		})
+		boot = "bootcmd: " + string(filter) + "\n"
+	}
 	return `#cloud-config
 disable_root: false
 ssh_pwauth: false
 ssh_authorized_keys: ` + string(keys) + `
-runcmd:
+` + boot + `runcmd:
   - systemctl stop unattended-upgrades apt-daily.timer apt-daily-upgrade.timer snapd || true
   - systemctl disable unattended-upgrades apt-daily.timer apt-daily-upgrade.timer || true
   - sysctl -w net.core.somaxconn=65535
@@ -118,6 +138,32 @@ func (fleet *Fleet) costs(prices map[string]float64) []DropletCost {
 	return costs
 }
 
+// publicAddress is this droplet's public IPv4, from DigitalOcean's metadata
+// service: the racer's, the one address its race droplets answer SSH from.
+// None (a failed read) races with SSH open to all, as before.
+func publicAddress(ctx context.Context) string {
+	const url = "http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ""
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Printf("the racer's address: %v; race droplets answer SSH from anywhere", err)
+		return ""
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 64))
+	address := net.ParseIP(strings.TrimSpace(string(body))).To4()
+	if err != nil || response.StatusCode != http.StatusOK || address == nil {
+		log.Printf("the racer's address: %s %q; race droplets answer SSH from anywhere",
+			response.Status, body)
+		return ""
+	}
+	return address.String()
+}
+
 func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 	fleet := &Fleet{loaders: map[string]Droplet{}, servers: map[string]Droplet{},
 		machines: map[int]SSHMachine{}, lives: map[int]*dropletLife{}}
@@ -131,6 +177,7 @@ func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 		return fleet, err
 	}
 	fleet.private = private
+	sshFrom := publicAddress(ctx)
 	create := func(role, class, size string) (Droplet, error) {
 		requested := time.Now()
 		droplet, err := do.createDroplet(ctx, DropletRequest{
@@ -141,7 +188,7 @@ func launchFleet(ctx context.Context, do Provider, race Race) (*Fleet, error) {
 			// None: the guard names the admin key.
 			SSHKeys:  []int{},
 			Tags:     []string{race.Cloud.Tag},
-			UserData: raceUserData(public),
+			UserData: raceUserData(public, sshFrom),
 		})
 		if err == nil {
 			fleet.created = append(fleet.created, droplet.ID)

@@ -106,7 +106,7 @@ func testGuard(t *testing.T, capUSD float64) (*Guard, *fakeDigitalOcean, *time.T
 func raceDroplet(size string) DropletRequest {
 	return DropletRequest{Name: "dragrace-server-x", Region: "lon1", Size: size,
 		Image: "ubuntu-26-04-x64", SSHKeys: []int{}, Tags: []string{"fourneau-dragrace-race"},
-		UserData: raceUserData("ssh-ed25519 AAAA dragrace-race")}
+		UserData: raceUserData("ssh-ed25519 AAAA dragrace-race", "203.0.113.7")}
 }
 
 func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
@@ -143,12 +143,28 @@ func TestGuardRefusesWhatTheOwnerDidNotAllow(t *testing.T) {
 // A race droplet's user data gives root the run's key, as cloud-init reads
 // it: one JSON (so YAML) string in a list.
 func TestRaceUserDataHasTheRunsKey(t *testing.T) {
-	data := raceUserData("ssh-ed25519 AAAA dragrace-race")
+	data := raceUserData("ssh-ed25519 AAAA dragrace-race", "")
 	for _, want := range []string{"#cloud-config\n", "\ndisable_root: false\n", "\nssh_pwauth: false\n",
 		"\nssh_authorized_keys: [\"ssh-ed25519 AAAA dragrace-race\"]\n"} {
 		if !strings.Contains(data, want) {
 			t.Fatalf("%q missing from:\n%s", want, data)
 		}
+	}
+	if strings.Contains(data, "bootcmd") {
+		t.Fatalf("a filter with no address to allow:\n%s", data)
+	}
+}
+
+// With the racer's address, the droplet answers SSH on its public side from
+// that address alone, from boot; its private side is untouched.
+func TestRaceUserDataFiltersSSH(t *testing.T) {
+	data := raceUserData("ssh-ed25519 AAAA dragrace-race", "203.0.113.7")
+	want := `bootcmd: ["nft add table inet race_ssh",` +
+		`"nft add chain inet race_ssh input { type filter hook input priority 0 \\; policy accept \\; }",` +
+		`"nft add rule inet race_ssh input iifname eth0 tcp dport 22 ip saddr 203.0.113.7 accept",` +
+		`"nft add rule inet race_ssh input iifname eth0 tcp dport 22 drop"]` + "\nruncmd:\n"
+	if !strings.Contains(data, want) {
+		t.Fatalf("%q missing from:\n%s", want, data)
 	}
 }
 
