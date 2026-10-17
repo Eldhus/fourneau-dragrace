@@ -149,9 +149,13 @@ func commandHosts(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	owner, err := keyFingerprint(ctx, *key+".pub")
+	if err != nil {
+		return err
+	}
 	differences := 0
 	for _, want := range hostWants(root, *racer, *key, self) {
-		found, err := checkHost(ctx, root, want, release)
+		found, err := checkHost(ctx, root, want, release, owner)
 		if err != nil {
 			return fmt.Errorf("%s %s: %w", want.name, want.address, err)
 		}
@@ -212,6 +216,10 @@ func probeScript(want hostWant) string {
 		"for u in " + strings.Join(want.units, " ") + "; do echo active $u $(systemctl is-active $u); done",
 		"systemctl --failed --plain --no-legend | awk '{print \"failed\", $1}'",
 		"test -e /run/reboot-required && echo reboot-required",
+		// -m: every machine's journal, so one written under a machine ID
+		// changed after boot (the site host's, 2026-10-16) is read too.
+		"sudo journalctl -m -t sshd-session -t sshd --since -" + loginDays + "d -o cat --no-pager " +
+			"| grep '^Accepted ' | sed 's/^/login /'",
 	}
 	if want.racerBin {
 		lines = append(lines, "echo racerbin $(sudo -u racer /var/lib/dragrace-racer/bin/dragrace version 2>/dev/null)")
@@ -223,8 +231,10 @@ func probeScript(want hostWant) string {
 	return strings.Join(lines, "; ") + "; true"
 }
 
-// checkHost prints the host's findings; it returns how many differ.
-func checkHost(ctx context.Context, root string, want hostWant, release BuildInfo) (int, error) {
+// checkHost prints the host's findings; it returns how many differ. owner
+// is the owner's key's fingerprint: the one key that should log in.
+func checkHost(ctx context.Context, root string, want hostWant, release BuildInfo,
+	owner string) (int, error) {
 	out, err := want.machine.Shell(ctx, probeScript(want))
 	if err != nil {
 		return 0, err
@@ -246,7 +256,60 @@ func checkHost(ctx context.Context, root string, want hostWant, release BuildInf
 	}
 	compareState(report, want, lines, seen)
 	compareVersions(report, want, seen, release)
+	compareLogins(report, lines, owner)
 	return report.differ, nil
+}
+
+// loginDays is how far back the check reads the logins.
+const loginDays = "14"
+
+// compareLogins reads sshd's "Accepted" lines: any user but cook, any way
+// in but the owner's key, or a line not in sshd's form, differs; the
+// addresses are listed, each with its count, for the owner to know.
+func compareLogins(report *findings, lines [][]string, owner string) {
+	addresses := map[string]int{}
+	strange := 0
+	for _, fields := range lines {
+		if fields[0] != "login" {
+			continue
+		}
+		// login Accepted publickey for USER from ADDRESS port N ssh2: TYPE SHA256:...
+		login := fields[1:]
+		if len(login) != 11 || login[2] != "for" || login[4] != "from" || login[6] != "port" {
+			report.diff("a login sshd logged in an unknown form: %s", strings.Join(login, " "))
+			strange++
+			continue
+		}
+		if login[1] != "publickey" || login[3] != "cook" || login[10] != owner {
+			report.diff("a login not cook's with the owner's key: %s", strings.Join(login, " "))
+			strange++
+			continue
+		}
+		addresses[login[5]]++
+	}
+	if strange == 0 {
+		total := 0
+		for _, count := range addresses {
+			total += count
+		}
+		report.ok(fmt.Sprintf("%d logins in %s days, each cook's with the owner's key", total, loginDays))
+	}
+	for _, address := range slices.Sorted(maps.Keys(addresses)) {
+		fmt.Printf("  note  logged in from %s, %d times\n", address, addresses[address])
+	}
+}
+
+// keyFingerprint is a public key file's SHA256 fingerprint, as sshd logs it.
+func keyFingerprint(ctx context.Context, path string) (string, error) {
+	out, err := exec.CommandContext(ctx, "ssh-keygen", "-lf", path).Output()
+	if err != nil {
+		return "", fmt.Errorf("the owner's key %s: %w", path, err)
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) < 2 || !strings.HasPrefix(fields[1], "SHA256:") {
+		return "", fmt.Errorf("the owner's key %s: no fingerprint in %q", path, out)
+	}
+	return fields[1], nil
 }
 
 type findings struct{ differ int }
