@@ -17,8 +17,8 @@ Environment=ROUX_ACME_IDENTIFIER=fourneau.y2kbugger.com
 Environment=ROUX_ACME_STATE=/var/lib/dragrace-site
 Environment=ROUX_ACME_PROFILE=shortlived
 ExecStart=/opt/dragrace-site/current/dragrace-site
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=
+IPAddressDeny=100.64.0.0/10 fd7a:115c:a1e0::/48
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

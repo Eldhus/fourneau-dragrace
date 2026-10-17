@@ -87,6 +87,25 @@ func TestSiteUnitEnvironment(t *testing.T) {
 	}
 }
 
+// The site holds no capability (systemd's sockets bind 80 and 443 for it)
+// and reaches no Tailscale address: a site broken into reaches no other
+// machine of a tailnet its host might join.
+func TestSiteUnitPrivileges(t *testing.T) {
+	service := hostFile(t, "site", "/etc/systemd/system/dragrace-site.service")
+	for _, want := range []string{
+		"CapabilityBoundingSet=\n",
+		"IPAddressDeny=100.64.0.0/10 fd7a:115c:a1e0::/48\n",
+		"NoNewPrivileges=yes\n",
+	} {
+		if !strings.Contains(service, want) {
+			t.Fatalf("no %q in:\n%s", want, service)
+		}
+	}
+	if strings.Contains(service, "AmbientCapabilities") {
+		t.Fatalf("a capability given:\n%s", service)
+	}
+}
+
 // The site's sockets are systemd's, named as fourneau's listen.zig and
 // roux's host look for them, and the service takes both.
 func TestSiteSockets(t *testing.T) {
