@@ -22,10 +22,11 @@ import (
 // host. The check compares that list with the one this checkout and this
 // binary make now, has the host check its files against it (sha256sum -c),
 // and looks at the rest: the generated configs and credentials there, the
-// firewall's ports, the boot without an initramfs, the services up, no
-// unit failed, a reboot pending, and each binary that updates itself (the
-// site, the racer) against the newest release. It prints each finding and
-// exits 1 on any difference.
+// firewall's rules, the boot without an initramfs, the services up, no
+// unit failed, a reboot pending, each binary that updates itself (the
+// site, the racer) against the newest release, Tailscale's version and the
+// host's place on the tailnet (tailnet.go). It reaches each host by its
+// tailnet name. It prints each finding and exits 1 on any difference.
 
 // sumsPath is where an install lists what it put there, with each SHA-256.
 const sumsPath = "/etc/dragrace-host/SHA256SUMS"
@@ -122,23 +123,25 @@ func installHost(ctx context.Context, machine SSHMachine, root, host string,
 
 // hostWant is what one host should be, by this checkout.
 type hostWant struct {
-	name       string // its directory in hosts/
-	address    string
-	machine    SSHMachine
-	binaries   map[string]string // installed: path, local file
-	present    []string          // generated (prices, secrets): there
-	ports      []string
-	units      []string // services and timers, active
-	racerBin   bool     // the racer's own binary, updated from releases
-	siteDeploy bool     // the site's code, deployed from releases
+	name        string // its directory in hosts/
+	address     string
+	tailnetName string // and its tag's
+	machine     SSHMachine
+	binaries    map[string]string // installed: path, local file
+	present     []string          // generated (prices, secrets): there
+	rules       []string          // the firewall's, as `ufw show added` lists them
+	units       []string          // services and timers, active
+	racerBin    bool              // the racer's own binary, updated from releases
+	siteDeploy  bool              // the site's code, deployed from releases
 }
 
 func commandHosts(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 || args[0] != "check" {
-		return fmt.Errorf("usage: dragrace hosts check [-racer HOST]")
+		return fmt.Errorf("usage: dragrace hosts check [-site HOST] [-racer HOST]")
 	}
 	flags := newFlags("hosts check")
-	racer := flags.String("racer", "", "the racer's address (none: the site host alone)")
+	site := flags.String("site", siteTailnetName, "the site host's address")
+	racer := flags.String("racer", racerTailnetName, "the racer's address (empty: the site host alone)")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
 	flags.Parse(args[1:])
 	self, err := os.Executable()
@@ -154,7 +157,7 @@ func commandHosts(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	differences := 0
-	for _, want := range hostWants(root, *racer, *key, self) {
+	for _, want := range hostWants(root, *site, *racer, *key, self) {
 		found, err := checkHost(ctx, root, want, release, owner)
 		if err != nil {
 			return fmt.Errorf("%s %s: %w", want.name, want.address, err)
@@ -169,10 +172,10 @@ func commandHosts(ctx context.Context, root string, args []string) error {
 	return nil
 }
 
-func hostWants(root, racer, key, self string) []hostWant {
-	wants := []hostWant{{name: "site", address: siteName,
-		machine:  ownerMachine(root, siteName, key, "site-known-hosts"),
-		binaries: map[string]string{hostAgentBinary: self}, ports: []string{"22", "80", "443"},
+func hostWants(root, site, racer, key, self string) []hostWant {
+	wants := []hostWant{{name: "site", address: site, tailnetName: siteTailnetName,
+		machine:  ownerMachine(root, site, key, "site-known-hosts"),
+		binaries: map[string]string{hostAgentBinary: self}, rules: firewallRules("80", "443"),
 		units: []string{"dragrace-site.service", "dragrace-site-https.socket",
 			"dragrace-site-http.socket", "dragrace-host-agent.timer",
 			"dragrace-site-renew.timer", "apt-daily-upgrade.timer"},
@@ -180,12 +183,12 @@ func hostWants(root, racer, key, self string) []hostWant {
 	if racer == "" {
 		return wants
 	}
-	return append(wants, hostWant{name: "racer", address: racer,
+	return append(wants, hostWant{name: "racer", address: racer, tailnetName: racerTailnetName,
 		machine:  ownerMachine(root, racer, key, "racer-known-hosts"),
 		binaries: map[string]string{guardBinary: self},
 		present: []string{"/etc/dragrace-guard/config.json",
 			"/etc/credstore.encrypted/digitalocean-token", "/etc/credstore.encrypted/racer-token"},
-		ports: []string{"22"},
+		rules: firewallRules(),
 		units: []string{"dragrace-guard.service", "dragrace-racer.service",
 			"dragrace-racer-check.timer", "apt-daily-upgrade.timer"},
 		racerBin: true})
@@ -209,7 +212,8 @@ func probeScript(want hostWant) string {
 	lines := []string{
 		"for f in " + strings.Join(want.present, " ") + "; do sudo test -e $f || echo missing $f; done",
 		"sudo ufw status | sed -n 1p | sed 's/^/ufw /'",
-		"sudo ufw status | awk '$2==\"ALLOW\" && $1!~/v6/ {print \"port\", $1}'",
+		"sudo ufw show added | grep '^ufw ' | sed 's/^/rule /'",
+		"echo tailscale-version $(dpkg-query -W -f='${Version}' tailscale 2>/dev/null)",
 		"echo partuuid $(findmnt -no PARTUUID /) $(sed -n 's/^GRUB_FORCE_PARTUUID=//p' " +
 			"/etc/default/grub.d/40-force-partuuid.cfg 2>/dev/null)",
 		"echo booted $(grep -c 'root=PARTUUID.*panic=-1' /proc/cmdline)",
@@ -256,8 +260,37 @@ func checkHost(ctx context.Context, root string, want hostWant, release BuildInf
 	}
 	compareState(report, want, lines, seen)
 	compareVersions(report, want, seen, release)
+	if err := compareTailnet(ctx, report, root, want, seen); err != nil {
+		return 0, err
+	}
 	compareLogins(report, lines, owner)
 	return report.differ, nil
+}
+
+// compareTailnet: Tailscale at the pinned version, the host on the tailnet
+// as its name, with its tag alone.
+func compareTailnet(ctx context.Context, report *findings, root string, want hostWant,
+	seen map[string]string) error {
+	pinned, err := tailscaleVersion(root)
+	if err != nil {
+		return err
+	}
+	if got := seen["tailscale-version"]; got != pinned {
+		report.diff("tailscale at %q, pinned %s (%s): install again", got, pinned, tailscalePin)
+	} else {
+		report.ok("tailscale at the pinned " + pinned)
+	}
+	status, err := readTailscaleStatus(ctx, want.machine)
+	if err != nil {
+		report.diff("tailscale status: %v", err)
+		return nil
+	}
+	if err := status.joined(want.tailnetName); err != nil {
+		report.diff("tailnet: %v", err)
+	} else {
+		report.ok("on the tailnet as " + want.tailnetName + ", tag:" + want.tailnetName + " alone")
+	}
+	return nil
 }
 
 // loginDays is how far back the check reads the logins.
@@ -388,19 +421,20 @@ func compareState(report *findings, want hostWant, lines [][]string, seen map[st
 	if seen["ufw"] != "Status: active" {
 		report.diff("firewall: %q", seen["ufw"])
 	}
-	var ports []string
+	// rule ufw allow 80/tcp
+	var rules []string
 	for _, fields := range lines {
-		if fields[0] == "port" && len(fields) == 2 {
-			ports = append(ports, strings.TrimSuffix(fields[1], "/tcp"))
+		if fields[0] == "rule" && len(fields) > 2 {
+			rules = append(rules, strings.Join(fields[2:], " "))
 		}
 	}
-	sort.Strings(ports)
-	expected := append([]string{}, want.ports...)
+	sort.Strings(rules)
+	expected := append([]string{}, want.rules...)
 	sort.Strings(expected)
-	if strings.Join(ports, ",") != strings.Join(expected, ",") {
-		report.diff("firewall ports %v, want %v", ports, expected)
+	if !slices.Equal(rules, expected) {
+		report.diff("firewall rules %q, want %q", rules, expected)
 	} else if seen["ufw"] == "Status: active" {
-		report.ok(fmt.Sprintf("firewall on, ports %v", ports))
+		report.ok(fmt.Sprintf("firewall on, rules %q", rules))
 	}
 	parts := strings.Fields(seen["partuuid"])
 	if len(parts) != 2 || parts[0] != parts[1] {

@@ -27,9 +27,9 @@ import (
 // in DigitalOcean's panel. Its units and configs are files in hosts/site/
 // (and hosts/common/).
 
-// siteName is the site's name (an A record): the host the installs
-// and the check reach, and the one hosts/ names (the certificate's, the host
-// agent's health check's, the racer's site).
+// siteName is the site's name (an A record): the one hosts/ names (the
+// certificate's, the host agent's health check's, the racer's site). The
+// installs and the check reach the host by its tailnet name (tailnet.go).
 const siteName = "fourneau.y2kbugger.com"
 
 // siteHome is the site's code: releases/ID, and current, a link to one.
@@ -72,15 +72,15 @@ func ownerMachine(root, host, key, knownHosts string) SSHMachine {
 
 // siteInstallServer sets the site host up,
 // as cook: its files (hosts/site/, hosts/common/), the host agent (this
-// dragrace binary, pinned), the site's two tokens from the owner's keyring
-// (made there if missing), and a first deploy. Run again after a change to
-// hosts/ or the agent; never needed for a new site: a push deploys that.
-// -host reaches a new droplet by its address before the name points at it
-// (a move); its host key is pinned under the address, apart.
+// dragrace binary, pinned), the tailnet (tailnet.go), the site's two tokens
+// from the owner's keyring (made there if missing), and a first deploy. Run
+// again after a change to hosts/ or the agent; never needed for a new site:
+// a push deploys that. It reaches the host by its tailnet name; -host, by
+// its public address, a host not yet on the tailnet (its first install).
 func siteInstallServer(ctx context.Context, root string, args []string) error {
 	flags := newFlags("site install-server")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
-	host := flags.String("host", siteName, "the site host's address, while "+siteName+" points elsewhere")
+	host := flags.String("host", siteTailnetName, "the site host's public address, for its first install")
 	flags.Parse(args)
 	agent, err := os.Executable()
 	if err != nil {
@@ -89,11 +89,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	if err := os.MkdirAll(secretsDir(root), 0o700); err != nil {
 		return err
 	}
-	knownHosts := "site-known-hosts"
-	if *host != siteName {
-		knownHosts = "site-known-hosts-" + *host
-	}
-	machine := ownerMachine(root, *host, *key, knownHosts)
+	machine := ownerMachine(root, *host, *key, "site-known-hosts")
 	if err := machine.Put(ctx, agent, "/tmp/dragrace-host-agent"); err != nil {
 		return err
 	}
@@ -101,7 +97,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		nil); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup("22", "80", "443"),
+	setup := strings.Join(append(hostSetup("80", "443"),
 		"sudo install -m 755 /tmp/dragrace-host-agent "+hostAgentBinary,
 		"rm /tmp/dragrace-host-agent",
 		"sudo install -d -m 755 "+siteHome,
@@ -127,6 +123,9 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 	if _, err := machine.Shell(ctx, setup); err != nil {
 		return err
 	}
+	if machine, err = joinTailnet(ctx, root, machine, siteTailnetName); err != nil {
+		return err
+	}
 	for _, name := range []string{"racer-token", "manual-token"} {
 		token, err := keyringToken(ctx, name)
 		if err != nil {
@@ -143,7 +142,7 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		"sudo systemctl restart dragrace-site.service; sleep 3; "+
 		"systemctl is-active dragrace-site.service"); err != nil {
 		log.Printf("the site is not up; its log: ssh cook@%s journalctl -u dragrace-site; "+
-			"the agent's: journalctl -u dragrace-host-agent", siteName)
+			"the agent's: journalctl -u dragrace-host-agent", siteTailnetName)
 		return err
 	}
 	fmt.Printf("the site is serving https://%s/\n", siteName)
@@ -166,17 +165,23 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 // droplet ("No working init found", "System is deadlocked on memory").
 // Only the boot changes: the initramfs is freed once the root is mounted.
 //
-// The firewall too: incoming refused but for `ports`. It was cloud-init's
-// alone, whose final stage stops at a failed package step, leaving ufw
-// inactive, while `status` says done.
-func hostSetup(ports ...string) []string {
+// The firewall too: incoming refused but for the `public` ports and SSH
+// from the tailnet (tailnet.go). It was cloud-init's alone, whose final
+// stage stops at a failed package step, leaving ufw inactive, while
+// `status` says done. The public SSH a droplet is made with stays until
+// joinTailnet has reached the host over the tailnet. And Tailscale, at its
+// pinned version (hosts/common/etc/apt/).
+func hostSetup(public ...string) []string {
 	firewall := "sudo ufw default deny incoming >/dev/null"
-	for _, port := range ports {
-		firewall += " && sudo ufw allow " + port + "/tcp >/dev/null"
+	for _, rule := range firewallRules(public...) {
+		firewall += " && sudo ufw " + rule + " >/dev/null"
 	}
 	return []string{
 		"(cloud-init status --wait >/dev/null; true)",
 		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q ufw >/dev/null 2>&1",
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 update -q >/dev/null 2>&1",
+		"sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1800 install -y -q " +
+			"--allow-downgrades tailscale >/dev/null 2>&1",
 		firewall,
 		"sudo ufw --force enable >/dev/null",
 		"sudo ufw status | grep -q '^Status: active'",

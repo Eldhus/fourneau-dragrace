@@ -18,5 +18,6 @@ package_upgrade: true
 packages: [ufw, unattended-upgrades]
 runcmd:
   - ufw default deny incoming
+  # The public SSH of the first install; it closes it once the host is on the tailnet.
   - ufw allow 22/tcp
   - ufw --force enable

@@ -14,7 +14,8 @@ import (
 )
 
 // The racer host: a small droplet in
-// the race region, with no inbound port but the owner's SSH. Users:
+// the race region, with no inbound port but the owner's SSH, over the
+// tailnet (tailnet.go). Users:
 //   - cook: the owner's key, sudo;
 //   - guard: runs `dragrace-guard guard` (a copy of this binary the owner
 //     installs, never updated by a build), the only reader of the
@@ -46,17 +47,16 @@ func guardConfigFor(race Race, hourlyMaxUSD, capUSD float64, adminKeyID int) Gua
 // admin key's id, looked up on the account), the racer's first binary, and
 // the two secrets as encrypted credentials, each sent on SSH's standard
 // input: the DigitalOcean token (DIGITALOCEAN_TOKEN, or else the keyring's)
-// and the racer token from the keyring.
+// and the racer token from the keyring. And the tailnet (tailnet.go): it
+// reaches the racer by its tailnet name; -host, by its public address, a
+// racer not yet on the tailnet (its first install).
 func racerInstall(ctx context.Context, root string, args []string) error {
 	flags := newFlags("racer install")
-	host := flags.String("host", "", "the racer's address")
+	host := flags.String("host", racerTailnetName, "the racer's public address, for its first install")
 	key := flags.String("key", filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"), "the owner's private key (the cook user)")
 	capUSD := flags.Float64("cap", 25, "the most the races may cost in a month, US dollars")
 	hourlyMaxUSD := flags.Float64("hourly-max", 0.25, "the most any droplet may cost an hour, US dollars")
 	flags.Parse(args)
-	if *host == "" {
-		return fmt.Errorf("-host is required")
-	}
 	race, err := loadRace(root)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		map[string]string{"/etc/dragrace-guard/config.json": string(guardJSON)}); err != nil {
 		return err
 	}
-	setup := strings.Join(append(hostSetup("22"),
+	setup := strings.Join(append(hostSetup(),
 		"sudo install -m 755 /tmp/dragrace "+guardBinary,
 		"sudo install -d -m 700 -o racer -g racer /var/lib/dragrace-racer /var/lib/dragrace-racer/bin",
 		// The installer's binary to start from: it replaces itself with the
@@ -113,6 +113,9 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 		"sudo install -d -m 700 /etc/credstore.encrypted",
 	), " && ")
 	if _, err := machine.Shell(ctx, setup); err != nil {
+		return err
+	}
+	if machine, err = joinTailnet(ctx, root, machine, racerTailnetName); err != nil {
 		return err
 	}
 	secrets := map[string]string{"digitalocean-token": strings.TrimSpace(os.Getenv("DIGITALOCEAN_TOKEN")),
@@ -138,7 +141,8 @@ func racerInstall(ctx context.Context, root string, args []string) error {
 	}, " && ")
 	if err := whenRacerIdle(ctx, func() error { _, err := machine.Shell(ctx, start); return err },
 		sleepContext); err != nil {
-		log.Printf("not running; the logs: ssh cook@%s journalctl -u dragrace-guard -u dragrace-racer", *host)
+		log.Printf("not running; the logs: ssh cook@%s journalctl -u dragrace-guard -u dragrace-racer",
+			racerTailnetName)
 		return err
 	}
 	fmt.Printf("the racer is serving: guard cap $%.2f a month, any size up to $%.4f an hour\n",

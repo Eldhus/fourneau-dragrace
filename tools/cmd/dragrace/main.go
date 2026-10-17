@@ -15,9 +15,9 @@
 //	                                edited (Roc's dev backend; for the UI)
 //	dragrace site install-server    set the 24/7 site droplet up
 //	dragrace site race-now -host H  ask the site for a race (the manual token)
-//	dragrace racer install -host H  set the racer droplet up
-//	dragrace hosts check [-racer H] both hosts against this checkout, read
-//	                                only
+//	dragrace racer install          set the racer droplet up
+//	dragrace hosts check            both hosts against this checkout, read
+//	                                only (each reached over the tailnet)
 //	dragrace worker [-config F]     race one class from its loader, posting
 //	                                to the site (the racer starts it)
 //	dragrace bundle [-out DIR]      pack a build for a release (build.yml)

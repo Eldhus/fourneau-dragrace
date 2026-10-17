@@ -421,25 +421,34 @@ func TestHostFiles(t *testing.T) {
 	var common []string
 	err := filepath.WalkDir("../../../hosts/common", func(path string, entry fs.DirEntry, err error) error {
 		if err == nil && !entry.IsDir() {
-			common = append(common, path)
+			common = append(common, strings.TrimPrefix(path, "../../../hosts/common"))
 		}
 		return err
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(common) != 2 {
-		t.Fatalf("stock updates: no file but sshd's and the reboot's, got %v", common)
+	// Ubuntu's own updates stock; Tailscale's repository beside them, its
+	// version pinned (tailnet.go).
+	want := []string{"/etc/apt/apt.conf.d/52dragrace-reboot", "/etc/apt/keyrings/tailscale.asc",
+		"/etc/apt/preferences.d/tailscale", "/etc/apt/sources.list.d/tailscale.sources",
+		"/etc/ssh/sshd_config.d/10-dragrace.conf"}
+	if !slices.Equal(common, want) {
+		t.Fatalf("common files %v, want %v", common, want)
 	}
-	setup := strings.Join(hostSetup("22", "443"), " && ")
-	for _, part := range []string{"ufw default deny incoming", "ufw allow 22/tcp", "ufw allow 443/tcp",
-		"ufw --force enable", "grep -q '^Status: active'"} {
+	if version, err := tailscaleVersion("../../.."); err != nil || version == "" {
+		t.Fatalf("tailscale's pin: %q, %v", version, err)
+	}
+	setup := strings.Join(hostSetup("443"), " && ")
+	for _, part := range []string{"ufw default deny incoming", "ufw allow 443/tcp",
+		"ufw allow in on tailscale0 to any port 22 proto tcp", "ufw --force enable",
+		"grep -q '^Status: active'", "install -y -q --allow-downgrades tailscale"} {
 		if !strings.Contains(setup, part) {
-			t.Fatalf("setup's firewall lacks %q", part)
+			t.Fatalf("setup lacks %q", part)
 		}
 	}
-	if strings.Contains(setup, "80/tcp") {
-		t.Fatalf("a port not asked for is open")
+	if strings.Contains(setup, "80/tcp") || strings.Contains(setup, "allow 22/tcp") {
+		t.Fatalf("a port not asked for is open: %s", setup)
 	}
 	if !strings.Contains(setup, "GRUB_FORCE_PARTUUID=$(findmnt -no PARTUUID /)") ||
 		!strings.Contains(setup, "sudo update-grub") {

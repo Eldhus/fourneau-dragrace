@@ -15,6 +15,7 @@ package_upgrade: true
 packages: [sqlite3, ufw, unattended-upgrades]
 runcmd:
   - ufw default deny incoming
+  # The public SSH of the first install; it closes it once the host is on the tailnet.
   - ufw allow 22/tcp
   - ufw allow 80/tcp
   - ufw allow 443/tcp

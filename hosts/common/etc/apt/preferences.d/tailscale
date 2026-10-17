@@ -1,0 +1,6 @@
+Explanation: The one version every host runs. To update: the newest in
+Explanation: https://pkgs.tailscale.com/stable/ubuntu/dists/resolute/main/binary-amd64/Packages
+Explanation: here, then each host's install again; hosts check names a host at another.
+Package: tailscale
+Pin: version 1.104.1
+Pin-Priority: 1001
