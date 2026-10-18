@@ -180,7 +180,9 @@ Store :: [].{
 
 	status : Racer -> List(Banner)
 	status = |racer| {
-		newest = racer.recent.first()
+		# A skipped check is the quiet night's banner already: the run before
+		# it is the one to speak of.
+		newest = racer.recent.drop_if(|run| run.status == "skipped").first()
 		said = |text| { text, items: [], countdown: Bool.False }
 		racing =
 			match newest {
@@ -285,8 +287,13 @@ expect {
 	run = |status, reason| { id: "r1", trigger: "timer", status, reason, started_at: "", finished_at: Null }
 	racing = { recent: [run("racing", "")], waiting: [], heads: [], raced: [] }
 	skipped = { ..racing, recent: [run("skipped", "nothing new")] }
+	failed = { ..racing, recent: [run("skipped", "nothing new"), run("failed", "dedicated-2: the worker failed")] }
+	finished = { ..racing, recent: [run("skipped", "nothing new"), run("finished", "")] }
 	# A run racing is the live banner's; tonight's news waits for its end.
 	Store.status(racing) == []
 	and Store.status({ ..racing, heads: [{ repository: "roux", commit_sha: "abc", seen_at: "" }] }) == []
-	and Store.status(skipped) == [{ text: "The last run, r1, was skipped: nothing new.", items: [], countdown: Bool.False }]
+	# A skip says nothing; a failure before it is still said.
+	and Store.status(skipped) == []
+	and Store.status(finished) == []
+	and Store.status(failed) == [{ text: "The last run, r1, was failed: dedicated-2: the worker failed.", items: [], countdown: Bool.False }]
 }
