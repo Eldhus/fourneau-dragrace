@@ -98,6 +98,18 @@ func TestFailureMessageSaysFailedForAnExit(t *testing.T) {
 	}
 }
 
+func TestParseShownReadsWhatSystemctlShows(t *testing.T) {
+	shown := parseShown("Result=core-dump\nExecMainCode=3\nExecMainStatus=6\nNRestarts=\n",
+		[]string{"Result", "ExecMainCode", "ExecMainStatus", "NRestarts"})
+	if shown["Result"] != "core-dump" || exitCodeNames[shown["ExecMainCode"]] != "dumped" ||
+		shown["ExecMainStatus"] != "6" || shown["NRestarts"] != "?" {
+		t.Fatalf("shown %v", shown)
+	}
+	if parseShown("", []string{"Result"})["Result"] != "?" {
+		t.Fatal("nothing shown should read as ?")
+	}
+}
+
 func TestReadTopicChecksTheGrammarAndHidesIt(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "good")

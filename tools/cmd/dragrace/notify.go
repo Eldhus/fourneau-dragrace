@@ -60,6 +60,7 @@ type notifier struct {
 
 func commandNotify(ctx context.Context, args []string) error {
 	flags := newFlags("notify")
+	unit := flags.String("unit", "dragrace-site.service", "the unit, when systemd does not say")
 	flags.Parse(args)
 	credentials, state := os.Getenv("CREDENTIALS_DIRECTORY"), os.Getenv("STATE_DIRECTORY")
 	if credentials == "" || state == "" {
@@ -70,13 +71,23 @@ func commandNotify(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	// systemd leaves $MONITOR_* out when more than one unit could have
+	// started this one ("multiple trigger source candidates"): the unit's
+	// last result is then asked for. An alert is never skipped for want
+	// of its details.
 	failure := siteFailure{Unit: os.Getenv("MONITOR_UNIT"),
 		Result: os.Getenv("MONITOR_SERVICE_RESULT"), Code: os.Getenv("MONITOR_EXIT_CODE"),
 		Status: os.Getenv("MONITOR_EXIT_STATUS")}
 	if failure.Unit == "" {
-		return fmt.Errorf("no MONITOR_UNIT: notify is started by the site's OnFailure=")
+		failure.Unit = *unit
 	}
-	failure.Restarts = unitRestarts(ctx, failure.Unit)
+	shown := unitShow(ctx, failure.Unit, "Result", "ExecMainCode", "ExecMainStatus", "NRestarts")
+	if failure.Result == "" {
+		failure.Result = shown["Result"]
+		failure.Code = exitCodeNames[shown["ExecMainCode"]]
+		failure.Status = shown["ExecMainStatus"]
+	}
+	failure.Restarts = shown["NRestarts"]
 	alert := notifier{server: ntfyServer, topic: topic, state: state, now: time.Now,
 		client: &http.Client{Timeout: 30 * time.Second}}
 	return alert.send(ctx, failure)
@@ -96,15 +107,33 @@ func readTopic(path string) (string, error) {
 	return topic, nil
 }
 
-// unitRestarts is systemd's NRestarts for a unit; "?" when it cannot say.
-func unitRestarts(ctx context.Context, unit string) string {
-	output, err := exec.CommandContext(ctx, "systemctl", "show", "-p", "NRestarts", "--value",
-		unit).Output()
-	restarts := strings.TrimSpace(string(output))
-	if err != nil || restarts == "" {
-		return "?"
+// exitCodeNames are ExecMainCode's numbers (waitid's CLD_*) as
+// $MONITOR_EXIT_CODE names them.
+var exitCodeNames = map[string]string{"1": "exited", "2": "killed", "3": "dumped"}
+
+// unitShow is systemd's properties of a unit, each "?" when it cannot say.
+func unitShow(ctx context.Context, unit string, properties ...string) map[string]string {
+	output, err := exec.CommandContext(ctx, "systemctl", "show", "-p",
+		strings.Join(properties, ","), unit).Output()
+	if err != nil {
+		output = nil
 	}
-	return restarts
+	return parseShown(string(output), properties)
+}
+
+// parseShown reads `systemctl show`'s NAME=VALUE lines.
+func parseShown(output string, properties []string) map[string]string {
+	shown := map[string]string{}
+	for _, property := range properties {
+		shown[property] = "?"
+	}
+	for line := range strings.Lines(output) {
+		name, value, found := strings.Cut(strings.TrimSpace(line), "=")
+		if _, wanted := shown[name]; found && wanted && value != "" {
+			shown[name] = value
+		}
+	}
+	return shown
 }
 
 // send posts the alert, unless one went within notifyQuiet.
