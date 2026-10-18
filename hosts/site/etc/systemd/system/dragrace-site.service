@@ -4,6 +4,7 @@ After=network-online.target dragrace-site-https.socket dragrace-site-http.socket
 Wants=network-online.target
 Requires=dragrace-site-https.socket dragrace-site-http.socket
 ConditionPathExists=/opt/dragrace-site/current/dragrace-site
+OnFailure=dragrace-site-crashed.service
 [Service]
 Sockets=dragrace-site-https.socket dragrace-site-http.socket
 User=site

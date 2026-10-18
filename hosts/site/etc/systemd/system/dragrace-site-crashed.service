@@ -1,0 +1,23 @@
+[Unit]
+Description=Push the site's failure to the owner's phone (ntfy.sh)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dragrace-host-agent notify
+LoadCredential=ntfy-topic:/etc/dragrace-host/ntfy-topic
+DynamicUser=yes
+StateDirectory=dragrace-site-crashed
+TimeoutStartSec=1min
+CapabilityBoundingSet=
+IPAddressDeny=100.64.0.0/10 fd7a:115c:a1e0::/48
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes

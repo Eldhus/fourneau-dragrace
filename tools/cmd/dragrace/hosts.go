@@ -175,7 +175,8 @@ func commandHosts(ctx context.Context, root string, args []string) error {
 func hostWants(root, site, racer, key, self string) []hostWant {
 	wants := []hostWant{{name: "site", address: site, tailnetName: siteTailnetName,
 		machine:  ownerMachine(root, site, key, "site-known-hosts"),
-		binaries: map[string]string{hostAgentBinary: self}, rules: firewallRules("80", "443"),
+		binaries: map[string]string{hostAgentBinary: self}, present: []string{ntfyTopicPath},
+		rules: firewallRules("80", "443"),
 		units: []string{"dragrace-site.service", "dragrace-site-https.socket",
 			"dragrace-site-http.socket", "dragrace-host-agent.timer",
 			"dragrace-site-renew.timer", "apt-daily-upgrade.timer"},

@@ -22,6 +22,8 @@ import (
 //     obtains its own certificate (fourneau's ACME, through roux's host).
 //   - the host agent (root, a timer, every minute): deploys the newest
 //     build's site, rolling back one that does not answer.
+//   - the crash alert: the site's failure pushed to the owner's phone
+//     (notify.go).
 //
 // Its users are hosts/site.cloud-init.yaml's, the user data it is made with
 // in DigitalOcean's panel. Its units and configs are files in hosts/site/
@@ -41,6 +43,9 @@ const siteState = "/var/lib/dragrace-site"
 
 // hostAgentBinary is the host agent: this dragrace binary, as installed.
 const hostAgentBinary = "/usr/local/bin/dragrace-host-agent"
+
+// ntfyTopicPath is the crash alert's topic on the site host (notify.go).
+const ntfyTopicPath = "/etc/dragrace-host/ntfy-topic"
 
 func commandSite(ctx context.Context, root string, args []string) error {
 	if len(args) == 0 {
@@ -124,6 +129,17 @@ func siteInstallServer(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	if machine, err = joinTailnet(ctx, root, machine, siteTailnetName); err != nil {
+		return err
+	}
+	// The crash alert's topic, root's: systemd hands it to
+	// dragrace-site-crashed.service (notify.go). Not made here: the owner
+	// subscribes their phone to it first.
+	topic, err := keyringLookup(ctx, "ntfy-topic")
+	if err != nil {
+		return err
+	}
+	if err := machine.ShellInput(ctx, "sudo sh -c 'umask 077; cat > "+ntfyTopicPath+"'",
+		topic+"\n"); err != nil {
 		return err
 	}
 	for _, name := range []string{"racer-token", "manual-token"} {

@@ -32,6 +32,8 @@
 //	dragrace racer serve            take the site's requests and race them
 //	dragrace racer check            ask the site for a check (the 05:00 timer)
 //	dragrace host-agent             deploy the newest build's site (a timer)
+//	dragrace notify                 push the site's failure to the owner's
+//	                                phone (the site's OnFailure=)
 //	dragrace version                the commit build.yml built this from
 //
 // Every other command runs from anywhere inside the repository.
@@ -90,6 +92,8 @@ func dispatchService(ctx context.Context, command string, args []string) error {
 		return commandRacer(ctx, args)
 	case "host-agent":
 		return commandHostAgent(ctx, args)
+	case "notify":
+		return commandNotify(ctx, args)
 	case "version":
 		// The commit build.yml built this from; "" built by hand.
 		fmt.Println(buildCommit)
@@ -143,7 +147,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: dragrace COMMAND
   toolchain | build | race local | adhoc race|down | diff |
   bundle | worker | site build|dev|install-server|race-now |
-  guard | racer serve|check|install | host-agent |
+  guard | racer serve|check|install | host-agent | notify |
   hosts check | version
 See README.md.`)
 	os.Exit(2)
