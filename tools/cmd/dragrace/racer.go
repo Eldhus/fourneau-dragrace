@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/url"
 	"os"
 	"os/exec"
@@ -39,10 +40,20 @@ var buildCommit = ""
 
 // Racer is one racer: its site, GitHub, and the droplets' provider.
 type Racer struct {
-	config   RacerConfig
-	site     *SiteClient
-	github   *GitHub
-	provider Provider
+	config    RacerConfig
+	site      *SiteClient
+	github    *GitHub
+	provider  Provider
+	buildWait buildWait
+}
+
+// buildWait is how a run waits for the build of masters newer than the
+// newest build (awaitBuild): asked again every `every`, for at most `most`.
+// build.yml runs hourly, and GitHub starts a scheduled run hours late at
+// times: four to five hours, 2026-10-16 to -18.
+type buildWait struct {
+	every, most time.Duration
+	sleep       func(context.Context, time.Duration) error
 }
 
 // Request is one thing asked of the racer, as the site lists it.
@@ -174,7 +185,8 @@ func commandRacer(ctx context.Context, args []string) error {
 		return fmt.Errorf("the site and its racer token (RACER_TOKEN) are required")
 	}
 	racer := &Racer{config: config, site: newSiteClient(config.Site, token),
-		github: newGitHub(config.Repository), provider: newGuardClient(config.Guard)}
+		github: newGitHub(config.Repository), provider: newGuardClient(config.Guard),
+		buildWait: buildWait{every: 10 * time.Minute, most: 6 * time.Hour, sleep: sleepContext}}
 	switch args[0] {
 	case "check":
 		return racer.site.post(ctx, "/api/requests?kind=check", nil, nil)
@@ -263,15 +275,20 @@ type Tonight struct {
 	Build   Build
 	New     bool
 	Raced   map[string]string
+	// Upstream repositories whose master is past Build: Commits has their
+	// masters, which the next build takes (awaitBuild).
+	Unbuilt []string
 }
 
 // tonight is the newest build of the commit the racer runs from: the one
-// the site serves, which it updated itself to (the daily build of new
+// the site serves, which it updated itself to (the hourly build of new
 // fourneau or roux commits makes another build of the same commit). New
 // when its race key is not the last race's, which is the race key of the
 // build with the last race's commits; with no such build (pruned, or from
 // before race keys) it counts as new. A change to the site or the tool
-// alone keeps the race key: no race.
+// alone keeps the race key: no race. A fourneau or roux master past that
+// build is tonight's too, before its build: it moves the race key, so it
+// is new unless it is what the last race raced.
 func (racer *Racer) tonight(ctx context.Context, raced map[string]string) (Tonight, error) {
 	builds, err := racer.github.builds(ctx)
 	if err != nil {
@@ -282,9 +299,55 @@ func (racer *Racer) tonight(ctx context.Context, raced map[string]string) (Tonig
 		return Tonight{}, fmt.Errorf("no build of this racer's commit %q among the newest "+
 			"(one just installed updates itself within 10 minutes)", short(buildCommit))
 	}
+	masters, err := racer.github.masters(ctx)
+	if err != nil {
+		return Tonight{}, err
+	}
 	last, found := buildWith(builds, raced)
 	isNew := !found || last.Info.RaceKey == "" || last.Info.RaceKey != own.Info.RaceKey
-	return Tonight{Commits: own.Info.Commits, Build: own, New: isNew, Raced: raced}, nil
+	commits := maps.Clone(own.Info.Commits)
+	var unbuilt []string
+	for _, name := range upstreamRepositories {
+		if masters[name] == commits[name] {
+			continue
+		}
+		unbuilt = append(unbuilt, name)
+		commits[name] = masters[name]
+		isNew = isNew || masters[name] != raced[name]
+	}
+	return Tonight{Commits: commits, Build: own, New: isNew, Raced: raced, Unbuilt: unbuilt}, nil
+}
+
+// awaitBuild waits for the build of tonight's unbuilt masters, asking
+// again every buildWait.every and telling the site each time, for at most
+// buildWait.most: then the run fails, saying which master was never built.
+// A master that moves meanwhile is waited for too.
+func (racer *Racer) awaitBuild(ctx context.Context, tonight Tonight) (Tonight, error) {
+	wait := racer.buildWait
+	deadline := time.Now().Add(wait.most)
+	for len(tonight.Unbuilt) > 0 {
+		var names []string
+		for _, name := range tonight.Unbuilt {
+			names = append(names, name+" "+short(tonight.Commits[name]))
+		}
+		unbuilt := strings.Join(names, ", ")
+		if time.Now().Add(wait.every).After(deadline) {
+			return Tonight{}, fmt.Errorf("no build of %s within %s", unbuilt, wait.most)
+		}
+		log.Printf("waiting for the build of %s", unbuilt)
+		if err := wait.sleep(ctx, wait.every); err != nil {
+			return Tonight{}, err
+		}
+		next, err := racer.tonight(ctx, tonight.Raced)
+		if err != nil {
+			return Tonight{}, err
+		}
+		tonight = next
+		if err := racer.postHeadsOf(ctx, tonight.posted()); err != nil {
+			log.Printf("heads: %v", err)
+		}
+	}
+	return tonight, nil
 }
 
 // posted is what the race page's line on tonight is told (Store.roc,
@@ -353,6 +416,12 @@ func (racer *Racer) handle(ctx context.Context, request Request, raced map[strin
 		log.Printf("check: nothing raced changed since the last finished run: skipped")
 		return racer.notRaced(ctx, run, "skipped", "nothing new since the last finished race")
 	}
+	// What the page said would race tonight is raced once it is built.
+	tonight, err = racer.awaitBuild(ctx, tonight)
+	if err != nil {
+		return racer.notRaced(ctx, run, "failed", "tonight's build: "+err.Error())
+	}
+	run.Commits, _ = commitsPost(tonight.Commits, raced)
 	root, err := racer.build(ctx, run.ID, tonight)
 	if err != nil {
 		return racer.notRaced(ctx, run, "failed", "the build: "+err.Error())

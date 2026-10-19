@@ -74,6 +74,37 @@ func statusError(what string, code int, text string) error {
 // the site's database; each is Eldhus/NAME.
 var racedRepositories = []string{"fourneau-dragrace", "fourneau", "roux"}
 
+// upstreamRepositories are the raced repositories build.yml takes at their
+// masters. A commit to either is in the next build (hourly), and always
+// moves the race key: each competitor's key hashes their whole trees
+// (keys.go). The racer asks GitHub for them every ten minutes; a push to
+// either could instead tell the racer, one day, and end the polling.
+var upstreamRepositories = []string{"fourneau", "roux"}
+
+// githubBranch is what masters reads of a branch.
+type githubBranch struct {
+	Commit struct {
+		SHA string `json:"sha"`
+	} `json:"commit"`
+}
+
+// masters are the upstream repositories' newest commits on master, by name.
+func (github *GitHub) masters(ctx context.Context) (map[string]string, error) {
+	owner, _, _ := strings.Cut(github.repository, "/")
+	masters := map[string]string{}
+	for _, name := range upstreamRepositories {
+		var branch githubBranch
+		if err := github.get(ctx, "/repos/"+owner+"/"+name+"/branches/master", &branch); err != nil {
+			return nil, err
+		}
+		if branch.Commit.SHA == "" {
+			return nil, fmt.Errorf("%s's master: no commit in GitHub's answer", name)
+		}
+		masters[name] = branch.Commit.SHA
+	}
+	return masters, nil
+}
+
 // BuildInfo is build.json: a release's commits and its files' hashes. The
 // release's body is this JSON, so a listing of releases says what each
 // built.

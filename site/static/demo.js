@@ -202,19 +202,40 @@ const firePalette = (() => {
   });
 })();
 
-// The time left to push before the daily build takes fourneau's and roux's
-// masters (Store.nothing_new says why `data-utc` is 17 minutes early),
-// counted in the reader's browser; past it, the next day's.
+// The time left to push before tonight's check (Store.nothing_new says why
+// a push until then is raced), counted in the reader's browser; past it,
+// the next day's. The check is at a time of day in its zone, so its UTC
+// hour moves with daylight saving time.
 (() => {
   const countdown = document.querySelector(".racer .countdown");
   if (!countdown) return;
-  const [hour, minute] = countdown.dataset.utc.split(":").map(Number);
+  const zone = countdown.dataset.zone;
+  const [hour, minute] = countdown.dataset.at.split(":").map(Number);
   const pad = (n) => String(n).padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric",
+  });
+  // The zone's wall clock at an instant, as milliseconds read as UTC.
+  const wall = (instant) => {
+    const p = Object.fromEntries(parts.formatToParts(instant).map((x) => [x.type, Number(x.value)]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  };
+  // The instant the zone's clock reads hour:minute on a day of its own: its
+  // offset read twice, the second time at the first answer, so a day the
+  // clocks change on is right too.
+  const at = (year, month, day) => {
+    const guess = Date.UTC(year, month, day, hour, minute);
+    const offset = (instant) => wall(new Date(instant)) - instant;
+    return new Date(guess - offset(guess - offset(guess)));
+  };
   const tick = () => {
     const now = new Date();
-    const deadline = new Date(now);
-    deadline.setUTCHours(hour, minute, 0, 0);
-    if (deadline <= now) deadline.setUTCDate(deadline.getUTCDate() + 1);
+    const today = new Date(wall(now));
+    let deadline = at(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    if (deadline <= now) {
+      deadline = at(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1);
+    }
     const left = Math.floor((deadline - now) / 1000);
     const h = Math.floor(left / 3600), m = Math.floor(left / 60) % 60, s = left % 60;
     countdown.textContent = `${h}h ${pad(m)}m ${pad(s)}s left to push`;

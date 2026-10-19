@@ -1,6 +1,6 @@
 {{> Top}}<section id="latest" class="results" aria-live="polite">
 {{#live}}<div class="live-wrap" data-init="@get('/race-live')">{{> LiveRace}}</div>
-{{/live}}{{#racer}}<p class="racer"><span class="news">{{ text }}</span><span class="items"><span class="row">{{#items}}<span class="item">{{ . }}</span>{{/items}}{{?countdown}}<span class="item countdown" data-utc="07:30">before the daily build</span>{{/countdown}}</span></span></p>
+{{/live}}{{#racer}}<p class="racer"><span class="news">{{ text }}</span><span class="items"><span class="row">{{#items}}<span class="item">{{ . }}</span>{{/items}}{{?countdown}}<span class="item countdown" data-zone="America/New_York" data-at="05:00">before tonight's check</span>{{/countdown}}</span></span></p>
 {{/racer}}{{?ready}}<p class="run-meta"><span>Race <b>{{ id }}</b></span> <span>{{ started }}</span>{{?timed}} <span>{{ took }}</span>{{/timed}}</p>
 <p class="run-meta">{{#commits}}<span>{{ name }} <a href="{{ url }}">{{ short }}</a></span> {{/commits}}</p>
 <ul class="legend" aria-label="Competitors">{{#competitors}}<li><span class="swatch s-{{ . }}"></span><a href="/competitors">{{ . }}</a></li>{{/competitors}}<li><span class="swatch hollow-bar"></span>server not saturated</li></ul>

@@ -2,8 +2,11 @@
 # the site, every competitor, oha's pin and the dragrace tool, at this
 # commit and fourneau's and roux's masters, checked by a smoke race and
 # released as one. A build is named by those three commits, so a run whose
-# build exists stops at once: on a push to master, daily (fourneau or roux
-# may have moved), and by hand. A pull request is built and raced the
+# build exists stops at once: on a push to master, hourly (fourneau or roux
+# may have moved), and by hand. Hourly, not daily: GitHub starts a
+# scheduled run hours late at times (four to five hours, October 2026), and
+# a daily one came after the morning's race; the racer waits for the build
+# of masters it has seen. A pull request is built and raced the
 # same, never released. roux's platform and tools, and each competitor,
 # are compiled only when their key is new (keys.go), from a store GitHub's
 # cache keeps. The newest 20 builds are kept. No secrets: the release is
@@ -15,7 +18,7 @@ on:
     branches: [master]
   pull_request:
   schedule:
-    - cron: '47 7 * * *'
+    - cron: '47 * * * *'
   workflow_dispatch:
 concurrency:
   group: build-${{ github.event_name == 'pull_request' && github.ref || 'master' }}

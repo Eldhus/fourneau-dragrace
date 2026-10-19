@@ -214,10 +214,11 @@ Store :: [].{
 		asked.concat(tonight).concat(last)
 	}
 
-	## The racer judges from its newest build, and fourneau's and roux's
-	## new commits reach a build at the latest with the daily one
-	## (build.yml, 07:47 UTC). The countdown ends at 07:30 UTC: a scheduled
-	## run starts late, never early, so a push by then is in it.
+	## The racer judges from its newest build and fourneau's and roux's
+	## masters, every ten minutes (racer.go, tonight): a push to either is
+	## "Racing tonight" within ten minutes, and the check waits for its build
+	## (hourly, build.yml). So the countdown ends at the check itself, 05:00
+	## New York time (dragrace-racer-check.timer).
 	nothing_new : Str
 	nothing_new = "Quiet night on the track: nothing new to race. Got something faster? Push it to fourneau or roux"
 

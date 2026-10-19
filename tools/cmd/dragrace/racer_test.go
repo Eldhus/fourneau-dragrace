@@ -32,10 +32,22 @@ func TestCommitsSayWhichAreNew(t *testing.T) {
 }
 
 // releasesServer answers GitHub's releases listing with these builds,
-// newest first, and the site's /api/racer/next with the raced commits.
-func releasesServer(t *testing.T, builds []BuildInfo, raced map[string]string) *httptest.Server {
+// newest first, fourneau's and roux's masters (masters, or else the
+// newest build's commits), and the site's /api/racer/next with the raced
+// commits.
+func releasesServer(t *testing.T, builds []BuildInfo, masters, raced map[string]string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if name, found := strings.CutPrefix(r.URL.Path, "/repos/Eldhus/"); found &&
+			strings.HasSuffix(name, "/branches/master") {
+			name = strings.TrimSuffix(name, "/branches/master")
+			sha := masters[name]
+			if masters == nil {
+				sha = builds[0].Commits[name]
+			}
+			json.NewEncoder(w).Encode(map[string]any{"commit": map[string]string{"sha": sha}})
+			return
+		}
 		switch r.URL.Path {
 		case "/repos/Eldhus/fourneau-dragrace/releases":
 			var releases []map[string]any
@@ -93,7 +105,7 @@ func TestTonight(t *testing.T) {
 			[]BuildInfo{{Commits: commits("a1", "r1"), RaceKey: "k1"}}, commits("a1", "r1"), "error", false},
 	}
 	for _, c := range cases {
-		server := releasesServer(t, c.builds, c.raced)
+		server := releasesServer(t, c.builds, nil, c.raced)
 		github := newGitHub("Eldhus/fourneau-dragrace")
 		github.api = server.URL
 		racer := &Racer{site: newSiteClient(server.URL, "token"), github: github}
@@ -118,6 +130,104 @@ func TestTonight(t *testing.T) {
 	}
 }
 
+// A fourneau or roux master past tonight's build is tonight's before its
+// build: new (it moves the race key), and named as unbuilt. The page says
+// it at once, not when the hourly build comes.
+func TestTonightTakesAMasterPastTheBuild(t *testing.T) {
+	defer func(saved string) { buildCommit = saved }(buildCommit)
+	buildCommit = "a1"
+	built := map[string]string{"fourneau-dragrace": "a1", "fourneau": "f1", "roux": "r1"}
+	server := releasesServer(t, []BuildInfo{{Commits: built, RaceKey: "k1"}},
+		map[string]string{"fourneau": "f2", "roux": "r1"}, built)
+	defer server.Close()
+	github := newGitHub("Eldhus/fourneau-dragrace")
+	github.api = server.URL
+	racer := &Racer{site: newSiteClient(server.URL, "token"), github: github}
+	tonight, err := racer.tonight(context.Background(), built)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tonight.New || len(tonight.Unbuilt) != 1 || tonight.Unbuilt[0] != "fourneau" {
+		t.Fatalf("new %v, unbuilt %v", tonight.New, tonight.Unbuilt)
+	}
+	if tonight.Commits["fourneau"] != "f2" || tonight.Build.Info.Commits["fourneau"] != "f1" {
+		t.Fatalf("commits %v, build %v", tonight.Commits, tonight.Build.Info.Commits)
+	}
+	if tonight.posted()["fourneau"] != "f2" {
+		t.Fatalf("the site told %v", tonight.posted())
+	}
+	if built["fourneau"] != "f1" {
+		t.Fatal("the build's commits changed under it")
+	}
+}
+
+// A run waits for the build of the masters it was told of, asking again
+// and telling the site each time; one never built fails the run, naming it.
+func TestAwaitBuildWaitsForTheMasters(t *testing.T) {
+	defer func(saved string) { buildCommit = saved }(buildCommit)
+	buildCommit = "a1"
+	old := BuildInfo{Commits: map[string]string{"fourneau-dragrace": "a1", "fourneau": "f1",
+		"roux": "r1"}, RaceKey: "k1"}
+	fresh := BuildInfo{Commits: map[string]string{"fourneau-dragrace": "a1", "fourneau": "f2",
+		"roux": "r1"}, RaceKey: "k2"}
+	builds := []BuildInfo{old}
+	headsPosted := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/repos/Eldhus/fourneau-dragrace/releases":
+			var releases []map[string]any
+			for i, info := range builds {
+				body, _ := json.Marshal(info)
+				releases = append(releases, map[string]any{"tag_name": fmt.Sprintf("build-%d", i),
+					"body": string(body)})
+			}
+			json.NewEncoder(w).Encode(releases)
+		case r.URL.Path == "/repos/Eldhus/fourneau/branches/master":
+			fmt.Fprint(w, `{"commit":{"sha":"f2"}}`)
+		case r.URL.Path == "/repos/Eldhus/roux/branches/master":
+			fmt.Fprint(w, `{"commit":{"sha":"r1"}}`)
+		case r.URL.Path == "/api/heads":
+			headsPosted++
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	github := newGitHub("Eldhus/fourneau-dragrace")
+	github.api = server.URL
+	sleeps := 0
+	racer := &Racer{site: newSiteClient(server.URL, "token"), github: github,
+		buildWait: buildWait{every: time.Millisecond, most: time.Hour,
+			sleep: func(context.Context, time.Duration) error {
+				sleeps++
+				if sleeps == 2 {
+					builds = []BuildInfo{fresh, old} // the hourly build came
+				}
+				return nil
+			}}}
+	tonight, err := racer.tonight(context.Background(), old.Commits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tonight, err = racer.awaitBuild(context.Background(), tonight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tonight.Unbuilt) != 0 || tonight.Build.Info.RaceKey != "k2" || sleeps != 2 ||
+		headsPosted != 2 {
+		t.Fatalf("unbuilt %v, race key %s, %d sleeps, %d posts", tonight.Unbuilt,
+			tonight.Build.Info.RaceKey, sleeps, headsPosted)
+	}
+
+	builds = []BuildInfo{old}
+	racer.buildWait.most = 0
+	tonight, _ = racer.tonight(context.Background(), old.Commits)
+	_, err = racer.awaitBuild(context.Background(), tonight)
+	if err == nil || !strings.Contains(err.Error(), "no build of fourneau f2") {
+		t.Fatalf("never built: %v", err)
+	}
+}
+
 // A run the site refuses is not recorded: the request stays, no backup is
 // asked for, and the racer asks again later and later.
 func TestARefusedRunIsNotBackedUp(t *testing.T) {
@@ -131,6 +241,8 @@ func TestARefusedRunIsNotBackedUp(t *testing.T) {
 			body, _ := json.Marshal(BuildInfo{RaceKey: "k", Commits: map[string]string{
 				"fourneau-dragrace": head, "fourneau": head, "roux": head}})
 			json.NewEncoder(w).Encode([]map[string]any{{"tag_name": "build-1", "body": string(body)}})
+		case strings.HasSuffix(r.URL.Path, "/branches/master"):
+			fmt.Fprintf(w, `{"commit":{"sha":%q}}`, head)
 		case r.URL.Path == "/api/racer/next":
 			raced := ""
 			for i, name := range racedRepositories {
