@@ -21,7 +21,9 @@ import Cloud
 import Flags
 import GitHub
 import Guard
+import GuardService
 import JsonValue
+import Ledger
 import Local
 import Machine
 import Mixed
@@ -37,6 +39,7 @@ import SiteApi
 import Seeded
 import Site
 import Snapshot
+import Time
 import Toolchain
 import Worker
 
@@ -56,6 +59,7 @@ main! = |raw_args| {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
 				}
+			["guard", .. as rest] => GuardService.command!(rest)
 			["racer", "serve", ..] | ["racer", "check", ..] =>
 				match Racer.command!(args.drop_first(1)) {
 					Ok({}) => Ok({})
@@ -90,7 +94,7 @@ main! = |raw_args| {
 ## time): run by `dragrace-go`, built beside this binary, in this
 ## process's place.
 go_commands : List(Str)
-go_commands = ["adhoc", "diff", "site", "guard", "racer", "host-agent", "notify", "hosts"]
+go_commands = ["adhoc", "diff", "site", "racer", "host-agent", "notify", "hosts"]
 
 go_tool! : List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
 go_tool! = |args| {

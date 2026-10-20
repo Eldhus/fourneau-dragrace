@@ -1,4 +1,5 @@
 import pf.Cmd
+import pf.Env
 import pf.OsStr
 import pf.Path
 import pf.Stderr
@@ -86,6 +87,23 @@ Run :: [].{
 				}
 			Err(Empty) => Err(Failed("with_input: no program"))
 		}
+
+	## A secret from the environment, or a systemd credential of that name
+	## (LoadCredentialEncrypted=): never in a unit file or on a command line.
+	## "" when there is neither.
+	secret! : Str, Str => Try(Str, [Failed(Str)])
+	secret! = |variable, credential| {
+		from_env = (Env.var_str!(OsStr.from_str(variable)) ?? "").trim()
+		if from_env != "" {
+			return Ok(from_env)
+		}
+		dir = Env.var_str!(OsStr.from_str("CREDENTIALS_DIRECTORY")) ?? ""
+		if dir == "" {
+			return Ok("")
+		}
+		text = Path.utf8("${dir}/${credential}").read_utf8!() ? |PathErr(err, _)| Failed("credential ${credential}: ${err.to_str()}")
+		Ok(text.trim())
+	}
 
 	## A string as one shell word: `it's` is `'it'\''s'`.
 	quote : Str -> Str

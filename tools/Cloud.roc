@@ -70,9 +70,9 @@ Cloud :: [].{
 
 	## The sizes race.json names, each checked (made, available, in the
 	## region; a loader bigger than its server), with their prices.
-	check_sizes! : Str, Config.Cloud => Try(List((Str, F64)), [Refused(Str), Failed(Str), Interrupted])
-	check_sizes! = |socket, cloud| {
-		sizes = Guard.sizes!(socket)?
+	check_sizes! : Guard.Way, Config.Cloud => Try(List((Str, F64)), [Refused(Str), Failed(Str), Interrupted])
+	check_sizes! = |guard, cloud| {
+		sizes = Guard.sizes!(guard)?
 		problems = Cloud.size_problems(sizes, cloud)
 		if problems.is_empty() {
 			Ok(sizes.map(|s| (s.slug, s.price_hourly)))
@@ -133,8 +133,8 @@ Cloud :: [].{
 	## server; each waited for until active with both addresses and
 	## answering SSH. A failure leaves the fleet as far as it got, for
 	## `destroy!`.
-	launch! : Str, Config.Race => { fleet : Fleet, error : Try({}, [Refused(Str), Failed(Str), Interrupted]) }
-	launch! = |socket, race| {
+	launch! : Guard.Way, Config.Race => { fleet : Fleet, error : Try({}, [Refused(Str), Failed(Str), Interrupted]) }
+	launch! = |guard, race| {
 		made =
 			match Env.create_temp_dir_with_prefix!("dragrace-cloud-") {
 				Ok(dir) => dir.display()
@@ -155,7 +155,7 @@ Cloud :: [].{
 			for (role, size) in [("loader", class.loader_size), ("server", class.size)] {
 				request = { name: "dragrace-${role}-${class.name}", region: race.cloud.region, size, image: race.cloud.image, ssh_keys: [], tags: [race.cloud.tag], user_data: Cloud.user_data(public, ssh_from), ipv6: Bool.False }
 				requested = (Utc.now!()).to_millis_since_epoch()
-				match Guard.create!(socket, request) {
+				match Guard.create!(guard, request) {
 					Ok(droplet) => {
 						Run.log!("droplet ${droplet.id.to_str()}: ${role} (${size})")
 						$fleet = { ..$fleet, lives: $fleet.lives.append({ id: droplet.id, role, class: class.name, size, created_ms: requested, deleted_ms: 0, public: "", private: "" }) }
@@ -165,7 +165,7 @@ Cloud :: [].{
 			}
 		}
 		for life in $fleet.lives {
-			match ready!(socket, $fleet, life) {
+			match ready!(guard, $fleet, life) {
 				Ok(addressed) => {
 					$fleet = { ..$fleet, lives: $fleet.lives.map(|l| if l.id == life.id addressed else l) }
 				}
@@ -188,8 +188,8 @@ Cloud :: [].{
 	}
 
 	## Delete one droplet, retrying, unless it is deleted already; when.
-	delete! : Str, Fleet, U64 => Fleet
-	delete! = |socket, fleet, id| {
+	delete! : Guard.Way, Fleet, U64 => Fleet
+	delete! = |guard, fleet, id| {
 		match fleet.lives.find_first(|l| l.id == id) {
 			Ok(life) if life.deleted_ms != 0 => return fleet
 			_ => {}
@@ -197,7 +197,7 @@ Cloud :: [].{
 		var $tries = 0.U64
 		var $done = Bool.False
 		while !$done and $tries < 5 {
-			match Guard.delete!(socket, id) {
+			match Guard.delete!(guard, id) {
 				Ok({}) => {
 					Run.log!("droplet ${id.to_str()} deleted")
 					$done = Bool.True
@@ -218,22 +218,22 @@ Cloud :: [].{
 
 	## Delete a class's pair as soon as its racing is over: classes finish at
 	## different times, and a droplet waiting is paid for doing nothing.
-	release_class! : Str, Fleet, Str => Fleet
-	release_class! = |socket, fleet, class| {
+	release_class! : Guard.Way, Fleet, Str => Fleet
+	release_class! = |guard, fleet, class| {
 		var $fleet = fleet
 		for life in fleet.lives.keep_if(|l| l.class == class) {
-			$fleet = Cloud.delete!(socket, $fleet, life.id)
+			$fleet = Cloud.delete!(guard, $fleet, life.id)
 		}
 		$fleet
 	}
 
 	## Delete every droplet (even after an interrupt: one left running costs
 	## money every second), then the run's key.
-	destroy! : Str, Fleet => Fleet
-	destroy! = |socket, fleet| {
+	destroy! : Guard.Way, Fleet => Fleet
+	destroy! = |guard, fleet| {
 		var $gone = fleet
 		for life in fleet.lives {
-			$gone = Cloud.delete!(socket, $gone, life.id)
+			$gone = Cloud.delete!(guard, $gone, life.id)
 		}
 		gone = $gone
 		if fleet.dir != "" {
@@ -259,13 +259,13 @@ Cloud :: [].{
 
 ## Active with both addresses (polled every 5 s, ten minutes at most), and
 ## answering SSH with cloud-init done (five minutes at most).
-ready! : Str, Cloud.Fleet, Cloud.Life => Try(Cloud.Life, [Refused(Str), Failed(Str), Interrupted])
-ready! = |socket, fleet, life| {
+ready! : Guard.Way, Cloud.Fleet, Cloud.Life => Try(Cloud.Life, [Refused(Str), Failed(Str), Interrupted])
+ready! = |guard, fleet, life| {
 	var $addressed = life
 	var $active = Bool.False
 	var $polls = 0
 	while !$active and $polls < 120 {
-		droplet = Guard.droplet!(socket, life.id)?
+		droplet = Guard.droplet!(guard, life.id)?
 		public = Guard.address(droplet, "public")
 		private = Guard.address(droplet, "private")
 		if droplet.status == "active" and public != "" and private != "" {

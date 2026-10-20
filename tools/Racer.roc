@@ -28,7 +28,27 @@ import Worker
 ## DigitalOcean token (the guard does) and no GitHub token (the builds are
 ## public).
 Racer :: [].{
-	Config : { site : Str, guard : Str, repository : Str, state : Str }
+	Config : { site : Str, guard : Guard.Way, repository : Str, state : Str }
+
+	## The config file: `guard_lines` names the socket of a guard that speaks
+	## lines; `guard`, Go's, which speaks HTTP. `racer install` writes the
+	## file with the guard it installs.
+	parse_config : Str -> Try(Config, [NotConfig])
+	parse_config = |text| {
+		lines : Try({ site : Str, guard_lines : Str, repository : Str, state : Str }, _)
+		lines = Json.parse(text)
+		match lines {
+			Ok(c) => Ok({ site: c.site, guard: Lines(c.guard_lines), repository: c.repository, state: c.state })
+			Err(_) => {
+				http : Try({ site : Str, guard : Str, repository : Str, state : Str }, _)
+				http = Json.parse(text)
+				match http {
+					Ok(c) => Ok({ site: c.site, guard: Http(c.guard), repository: c.repository, state: c.state })
+					Err(_) => Err(NotConfig)
+				}
+			}
+		}
+	}
 
 	Self : { config : Config, site : SiteApi.Client, commit : Str }
 
@@ -42,10 +62,8 @@ Racer :: [].{
 			}
 		flags = Flags.parse(rest, [{ name: "config", kind: Value("/etc/dragrace-racer/config.json"), usage: "the owner's config" }])?
 		path = Flags.value(flags, "config")
-		parsed : Try(Config, _)
-		parsed = Json.parse(Checkout.read!(path)?)
-		config = parsed ? |_| Failed("${path}: not the racer's config")
-		token = secret!("RACER_TOKEN", "racer-token")?
+		config = Racer.parse_config(Checkout.read!(path)?) ? |_| Failed("${path}: not the racer's config")
+		token = Run.secret!("RACER_TOKEN", "racer-token")?
 		if config.site == "" or token == "" {
 			return Err(Failed("the site and its racer token (RACER_TOKEN) are required"))
 		}
@@ -438,14 +456,14 @@ Class : { class : Config.ServerClass, started_ms : I128, seconds : F64, ended : 
 race_cloud! : Racer.Self, Str, RunPost, Config.Race, I64 => { results : List(Results.Result), timing : Timing, outcome : Try({}, [Refused(Str), Failed(Str), Interrupted]) }
 race_cloud! = |racer, root, run, race, seed| {
 	failed = |err| { results: [], timing: no_timing, outcome: Err(err) }
-	socket = racer.config.guard
+	guard = racer.config.guard
 	prices =
-		match Cloud.check_sizes!(socket, race.cloud) {
+		match Cloud.check_sizes!(guard, race.cloud) {
 			Ok(p) => p
 			Err(err) => return failed(err)
 		}
 	allowed =
-		match Guard.allowed!(socket) {
+		match Guard.allowed!(guard) {
 			Ok(a) => a
 			Err(err) => return failed(err)
 		}
@@ -459,12 +477,12 @@ race_cloud! = |racer, root, run, race, seed| {
 	worker_ms = Racer.worker_minutes(age).to_i128() * 60_000
 	tarball = "${Checkout.parent(root)}/race.tar.gz"
 	launched = Utc.now!()
-	{ fleet, error } = Cloud.launch!(socket, race)
+	{ fleet, error } = Cloud.launch!(guard, race)
 	match error {
 		Ok({}) => {}
 		Err(err) => {
 			_ = Signal.poll!()
-			gone = Cloud.destroy!(socket, fleet)
+			gone = Cloud.destroy!(guard, fleet)
 			return { results: [], timing: { ..no_timing, droplets: Cloud.costs(gone, prices, Utc.now!().to_millis_since_epoch()) }, outcome: Err(err) }
 		}
 	}
@@ -480,7 +498,7 @@ race_cloud! = |racer, root, run, race, seed| {
 			Ok({}) => Run.log!("[${class.name}] worker started on its loader")
 			Err(why) => {
 				$classes = end_class(Utc.now!(), $classes, class.name, Err(why))
-				$fleet = settle!(socket, $fleet, class.name, tarball)
+				$fleet = settle!(guard, $fleet, class.name, tarball)
 			}
 		}
 	}
@@ -496,20 +514,20 @@ race_cloud! = |racer, root, run, race, seed| {
 		for c in $classes.keep_if(|c| !c.ended) {
 			if $stopped {
 				$classes = end_class(Utc.now!(), $classes, c.class.name, Err("the racer stopped"))
-				$fleet = settle!(socket, $fleet, c.class.name, tarball)
+				$fleet = settle!(guard, $fleet, c.class.name, tarball)
 			} else {
 				match poll_worker!($fleet, c, worker_ms) {
 					Running => {}
 					Ended(how) => {
 						$classes = end_class(Utc.now!(), $classes, c.class.name, how)
-						$fleet = settle!(socket, $fleet, c.class.name, tarball)
+						$fleet = settle!(guard, $fleet, c.class.name, tarball)
 					}
 				}
 			}
 		}
 	}
 	racing_seconds = seconds_since!(racing)
-	gone = Cloud.destroy!(socket, $fleet)
+	gone = Cloud.destroy!(guard, $fleet)
 	timing = {
 		..no_timing,
 		launch_seconds,
@@ -545,10 +563,10 @@ end_class = |now, classes, name, how|
 	)
 
 ## A class ended: its logs home, its droplets deleted.
-settle! : Str, Cloud.Fleet, Str, Str => Cloud.Fleet
-settle! = |socket, fleet, class, tarball| {
+settle! : Guard.Way, Cloud.Fleet, Str, Str => Cloud.Fleet
+settle! = |guard, fleet, class, tarball| {
 	keep_logs!(fleet, class, Checkout.parent(tarball))
-	Cloud.release_class!(socket, fleet, class)
+	Cloud.release_class!(guard, fleet, class)
 }
 
 worker_home : Str
@@ -770,22 +788,6 @@ site_commit! = |racer|
 		Ok(text) => (JsonValue.parse(text) ?? Null).get("fourneau-dragrace").text()
 		Err(_) => ""
 	}
-
-## A secret from the environment, or a systemd credential of that name
-## (LoadCredentialEncrypted=): never in a unit file or on a command line.
-secret! : Str, Str => Try(Str, [Failed(Str)])
-secret! = |variable, credential| {
-	from_env = (Env.var_str!(OsStr.from_str(variable)) ?? "").trim()
-	if from_env != "" {
-		return Ok(from_env)
-	}
-	dir = Env.var_str!(OsStr.from_str("CREDENTIALS_DIRECTORY")) ?? ""
-	if dir == "" {
-		return Ok("")
-	}
-	text = Checkout.read!("${dir}/${credential}") ? |Failed(why)| Failed("credential ${credential}: ${why}")
-	Ok(text.trim())
-}
 
 ## 32 random bytes as hex: a run's worker token.
 random_token! : () => Try(Str, [Failed(Str)])
