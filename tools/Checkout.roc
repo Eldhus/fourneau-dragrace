@@ -77,6 +77,37 @@ Checkout :: [].{
 	read! : Str => Try(Str, [Failed(Str)])
 	read! = |path| Path.utf8(path).read_utf8!().map_err(|PathErr(err, _)| Failed("${path}: ${err.to_str()}"))
 
+	## The regular files under a directory, as paths relative to it; anything
+	## else in it (a link, a device) fails. At most 1024.
+	files_under! : Str => Try(List(Str), [Failed(Str), Interrupted])
+	files_under! = |dir| {
+		var $files = []
+		var $pending = [""]
+		while !$pending.is_empty() {
+			relative = $pending.last() ?? ""
+			$pending = $pending.drop_last(1)
+			here = if relative == "" dir else "${dir}/${relative}"
+			entries = Path.utf8(here).list!() ? |PathErr(err, _)| Failed("${here}: ${err.to_str()}")
+			for entry in entries {
+				name = Checkout.base(entry.display())
+				inner = if relative == "" name else "${relative}/${name}"
+				match entry.type!() {
+					Ok(IsDir) => {
+						$pending = $pending.append(inner)
+					}
+					Ok(IsFile) => {
+						$files = $files.append(inner)
+					}
+					_ => return Err(Failed("${dir}/${inner}: not a regular file"))
+				}
+			}
+			if $files.len() > 1024 {
+				return Err(Failed("${dir}: over 1024 files"))
+			}
+		}
+		Ok($files)
+	}
+
 	## The three checkouts' commits, and whether each has changes.
 	Fingerprint : { dragrace : Str, dragrace_dirty : Bool, fourneau : Str, fourneau_dirty : Bool, roux : Str, roux_dirty : Bool }
 

@@ -115,7 +115,7 @@ Bundle :: [].{
 				Directory => {
 					# A directory's files each linked, so a name given inside
 					# it lands beside them.
-					for relative in files_under!(source)? {
+					for relative in Checkout.files_under!(source)? {
 						made = "${link}/${relative}"
 						Path.utf8(Checkout.parent(made)).create_all!() ? |PathErr(err, _)| Failed("${made}: ${err.to_str()}")
 						Path.utf8("${source}/${relative}").symlink!(Path.utf8(made), File) ? |PathErr(err, _)| Failed("${made}: ${err.to_str()}")
@@ -142,35 +142,4 @@ Bundle :: [].{
 		_ = Path.utf8(staging).delete_all!()
 		Hash.file!(path)
 	}
-}
-
-## The regular files under a directory, as paths relative to it; anything
-## else in it (a link, a device) fails the bundle. At most 1024.
-files_under! : Str => Try(List(Str), [Failed(Str), Interrupted])
-files_under! = |dir| {
-	var $files = []
-	var $pending = [""]
-	while !$pending.is_empty() {
-		relative = $pending.last() ?? ""
-		$pending = $pending.drop_last(1)
-		here = if relative == "" dir else "${dir}/${relative}"
-		entries = Path.utf8(here).list!() ? |PathErr(err, _)| Failed("${here}: ${err.to_str()}")
-		for entry in entries {
-			name = Checkout.base(entry.display())
-			inner = if relative == "" name else "${relative}/${name}"
-			match entry.type!() {
-				Ok(IsDir) => {
-					$pending = $pending.append(inner)
-				}
-				Ok(IsFile) => {
-					$files = $files.append(inner)
-				}
-				_ => return Err(Failed("${dir}/${inner}: not a regular file"))
-			}
-		}
-		if $files.len() > 1024 {
-			return Err(Failed("${dir}: over 1024 files"))
-		}
-	}
-	Ok($files)
 }

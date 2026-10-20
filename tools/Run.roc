@@ -2,8 +2,10 @@ import pf.Cmd
 import pf.Env
 import pf.OsStr
 import pf.Path
+import pf.Random
 import pf.Stderr
 import pf.Utc
+import Text
 
 ## Running other programs, and saying so: every command the tool runs is
 ## logged first (`$ git ls-files ...`), its output goes to standard error so
@@ -103,6 +105,21 @@ Run :: [].{
 		}
 		text = Path.utf8("${dir}/${credential}").read_utf8!() ? |PathErr(err, _)| Failed("credential ${credential}: ${err.to_str()}")
 		Ok(text.trim())
+	}
+
+	## 32 random bytes as hex: a run's worker token, a site token.
+	random_token! : () => Try(Str, [Failed(Str)])
+	random_token! = || {
+		var $bytes = []
+		for _ in 0..<4 {
+			word = Random.seed_u64!() ? |_| Failed("no randomness")
+			var $w = word
+			for _ in 0..<8 {
+				$bytes = $bytes.append(($w % 256).to_u8_wrap())
+				$w = $w // 256
+			}
+		}
+		Ok(Text.hex($bytes))
 	}
 
 	## A string as one shell word: `it's` is `'it'\''s'`.

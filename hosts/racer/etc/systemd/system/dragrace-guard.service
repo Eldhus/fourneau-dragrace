@@ -10,6 +10,7 @@ RuntimeDirectory=dragrace-guard
 RuntimeDirectoryMode=0750
 StateDirectory=dragrace-guard
 StateDirectoryMode=0700
+UMask=0007
 ExecStart=/usr/local/bin/dragrace-guard guard
 NoNewPrivileges=yes
 ProtectSystem=strict

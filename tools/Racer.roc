@@ -1,7 +1,6 @@
 import pf.Env
 import pf.OsStr
 import pf.Path
-import pf.Random
 import pf.Signal
 import pf.Sleep
 import pf.System
@@ -401,7 +400,7 @@ race_run! = |racer, root, run, clock| {
 			Ok(p) => p
 			Err(Failed(why)) => return not_raced!(racer, run, "failed", why)
 		}
-	token = random_token!() ? |_| Failed("no randomness for the worker token")
+	token = Run.random_token!() ? |_| Failed("no randomness for the worker token")
 	racing = { ..run, status: "racing", worker_token: token }
 	body = Json.to_str({ id: racing.id, request_id: racing.request_id, trigger: racing.trigger, status: racing.status, reason: racing.reason, where_raced: racing.where_raced, started_at: racing.started_at, worker_token: racing.worker_token, commits: racing.commits, race: post })
 	match SiteApi.post!(racer.site, "/api/runs", body) {
@@ -788,21 +787,6 @@ site_commit! = |racer|
 		Ok(text) => (JsonValue.parse(text) ?? Null).get("fourneau-dragrace").text()
 		Err(_) => ""
 	}
-
-## 32 random bytes as hex: a run's worker token.
-random_token! : () => Try(Str, [Failed(Str)])
-random_token! = || {
-	var $bytes = []
-	for _ in 0..<4 {
-		word = Random.seed_u64!() ? |_| Failed("no randomness")
-		var $w = word
-		for _ in 0..<8 {
-			$bytes = $bytes.append(($w % 256).to_u8_wrap())
-			$w = $w // 256
-		}
-	}
-	Ok(Text.hex($bytes))
-}
 
 describe : [Failed(Str), Refused(Str), NotRecorded(Str), Interrupted, Restart] -> Str
 describe = |err|

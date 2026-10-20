@@ -423,13 +423,4 @@ func TestGuardConfigHasACeiling(t *testing.T) {
 			t.Fatalf("a file other than the guard's unit loads the DigitalOcean token:\n%s", unit)
 		}
 	}
-	// The racer's config (hosts/racer/) names the guard's socket and the
-	// owner's site.
-	var racer RacerConfig
-	if err := readJSON("../../../hosts/racer/etc/dragrace-racer/config.json", &racer); err != nil {
-		t.Fatal(err)
-	}
-	if racer.Guard != config.Socket || racer.Site != "https://"+siteName {
-		t.Fatalf("the racer's config: %+v; the guard's socket %s", racer, config.Socket)
-	}
 }

@@ -32,9 +32,13 @@ Machine :: [].{
 	## Run a script with `input` on its standard input: how a secret reaches
 	## a host, never on a command line.
 	shell_input! : Where, Str, Str => Try({}, [Failed(Str), Interrupted])
-	shell_input! = |machine, script, input| {
+	shell_input! = |machine, script, input| Machine.shell_bytes!(machine, script, input.to_utf8())
+
+	## Run a script with bytes on its standard input: a tarball.
+	shell_bytes! : Where, Str, List(U8) => Try({}, [Failed(Str), Interrupted])
+	shell_bytes! = |machine, script, input| {
 		argv = Machine.argv(machine, script)
-		_ = Run.with_input!("", argv, input.to_utf8())?
+		_ = Run.with_input_bytes!("", argv, input)?
 		Ok({})
 	}
 
@@ -56,26 +60,24 @@ Machine :: [].{
 
 	## Wait for a started script: its standard output, as `shell!`.
 	wait! : Running => Try(Str, [Failed(Str), Interrupted])
-	wait! = |running|
-		match running.child.wait!() {
-			Ok(output) => {
-				said = output.stderr_utf8_lossy()
-				if said != "" {
-					_ = Stderr.write!(said)
-				}
-				out = trim_line_breaks(output.stdout_utf8_lossy())
-				match output.status {
-					Exited(0) => Ok(out)
-					other => {
-						tail = Str.join_with(Text.fields(last_bytes(said, 300).replace_each("\n", " ")), " ")
-						Err(Failed(if tail == "" Run.status(other) else "${Run.status(other)}: ${tail}"))
-					}
-				}
+	wait! = |running| {
+		ended = finish!(running)?
+		match ended.status {
+			Exited(0) => Ok(ended.out)
+			other => {
+				tail = Str.join_with(Text.fields(last_bytes(ended.said, 300).replace_each("\n", " ")), " ")
+				Err(Failed(if tail == "" Run.status(other) else "${Run.status(other)}: ${tail}"))
 			}
-			Err(Interrupted) => Err(Interrupted)
-			Err(Closed) => Err(Failed("${running.what}: closed"))
-			Err(CmdErr(err)) => Err(Failed("${running.what}: ${err.to_str()}"))
 		}
+	}
+
+	## Run a script and say how it ended, its output as `shell!`'s: for a
+	## script whose exit status is an answer. ssh's own failure is 255.
+	attempt! : Where, Str => Try({ status : Cmd.ExitStatus, out : Str }, [Failed(Str), Interrupted])
+	attempt! = |machine, script| {
+		ended = finish!(Machine.start!(machine, script)?)?
+		Ok({ status: ended.status, out: ended.out })
+	}
 
 	## Put a local file at `remote` on the machine, executable.
 	put! : Where, Str, Str => Try({}, [Failed(Str), Interrupted])
@@ -144,6 +146,23 @@ options = |ssh| {
 	]
 	if ssh.control == "" base else base.concat(["-o", "ControlMaster=auto", "-o", "ControlPath=${ssh.control}", "-o", "ControlPersist=600"])
 }
+
+## A started script's end: its status, its output (line breaks trimmed),
+## and what it said on standard error, shown here as well.
+finish! : Machine.Running => Try({ status : Cmd.ExitStatus, out : Str, said : Str }, [Failed(Str), Interrupted])
+finish! = |running|
+	match running.child.wait!() {
+		Ok(output) => {
+			said = output.stderr_utf8_lossy()
+			if said != "" {
+				_ = Stderr.write!(said)
+			}
+			Ok({ status: output.status, out: trim_line_breaks(output.stdout_utf8_lossy()), said })
+		}
+		Err(Interrupted) => Err(Interrupted)
+		Err(Closed) => Err(Failed("${running.what}: closed"))
+		Err(CmdErr(err)) => Err(Failed("${running.what}: ${err.to_str()}"))
+	}
 
 trim_line_breaks : Str -> Str
 trim_line_breaks = |text| {

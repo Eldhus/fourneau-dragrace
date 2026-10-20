@@ -1,6 +1,6 @@
 {
   "site": "https://fourneau.y2kbugger.com",
-  "guard": "/run/dragrace-guard/guard.sock",
+  "guard_lines": "/run/dragrace-guard/lines.sock",
   "repository": "Eldhus/fourneau-dragrace",
   "state": "/var/lib/dragrace-racer"
 }

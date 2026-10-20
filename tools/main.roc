@@ -22,7 +22,9 @@ import Flags
 import GitHub
 import Guard
 import GuardService
+import Hosts
 import JsonValue
+import Keyring
 import Ledger
 import Local
 import Machine
@@ -32,6 +34,7 @@ import Target
 import Number
 import Oha
 import Racer
+import RacerHost
 import Results
 import Retry
 import Run
@@ -54,7 +57,7 @@ main! = |raw_args| {
 				_ = Stdout.line!(Racer.own_commit!())
 				Ok({})
 			}
-			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] =>
+			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] =>
 				match args {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
@@ -94,7 +97,7 @@ main! = |raw_args| {
 ## time): run by `dragrace-go`, built beside this binary, in this
 ## process's place.
 go_commands : List(Str)
-go_commands = ["adhoc", "diff", "site", "racer", "host-agent", "notify", "hosts"]
+go_commands = ["adhoc", "diff", "site", "host-agent", "notify", "hosts"]
 
 go_tool! : List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
 go_tool! = |args| {
@@ -128,6 +131,11 @@ in_checkout! = |command, args| {
 		"build" => build!(root, args)
 		"worker" => Worker.command!(root, args)
 		"bundle" => Bundle.command!(root, args)
+		"racer" =>
+			match args {
+				["install", .. as rest] => RacerHost.install!(root, rest)
+				_ => Err(Usage)
+			}
 		"site" => site!(root, args)
 		"race" =>
 			match args {
