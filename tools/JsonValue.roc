@@ -28,6 +28,14 @@ JsonValue := [Null, Boolean(Bool), Number(F64), Text(Str), Array(List(JsonValue)
 			_ => Null
 		}
 
+	## An array's items; none for anything else.
+	items : JsonValue -> List(JsonValue)
+	items = |value|
+		match value {
+			Array(list) => list
+			_ => []
+		}
+
 	## A string's text; "" for anything else.
 	text : JsonValue -> Str
 	text = |value|
@@ -44,7 +52,7 @@ JsonValue := [Null, Boolean(Bool), Number(F64), Text(Str), Array(List(JsonValue)
 			Boolean(b) => if b "true" else "false"
 			Number(n) => n.to_str()
 			Text(s) => Str.inspect(s)
-			Array(items) => "[${Str.join_with(items.map(JsonValue.to_str), ",")}]"
+			Array(list) => "[${Str.join_with(list.map(JsonValue.to_str), ",")}]"
 			Object(members) => "{${Str.join_with(members.map(|(k, v)| "${Str.inspect(k)}:${v.to_str()}"), ",")}}"
 		}
 

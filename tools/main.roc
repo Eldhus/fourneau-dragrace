@@ -8,28 +8,65 @@ app [main!] {
 ## the hosts' units', with Go's flag syntax (`-quick`, `-since F`).
 import pf.OsStr
 import pf.Stderr
-import Flags
-import Run
+import Build
 import Checkout
-import Config
-import Hash
+import Flags
 import JsonValue
-import Keys
-import Text
+import Run
+import Toolchain
 
 main! : List(OsStr) => Try({}, [Exit(I32), Interrupted])
 main! = |raw_args| {
 	args = raw_args.map(OsStr.display)
-	match args {
-		["version", ..] => {
-			Run.log!("version: not built by build.yml")
-			Ok({})
+	result =
+		match args {
+			["version", ..] => Ok({})
+			[command, .. as rest] => in_checkout!(command, rest)
+			[] => Err(Usage)
 		}
-		_ => {
+	match result {
+		Ok({}) => Ok({})
+		Err(Usage) => {
 			_ = Stderr.line!(usage)
 			Err(Exit(2))
 		}
+		Err(BadFlag(why)) => {
+			_ = Stderr.line!(why)
+			Err(Exit(2))
+		}
+		Err(Failed(why)) => {
+			Run.log!(why)
+			Err(Exit(1))
+		}
+		Err(Interrupted) => Err(Interrupted)
 	}
+}
+
+## The commands that run from anywhere inside the repository.
+in_checkout! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
+in_checkout! = |command, args| {
+	root = Checkout.root!()?
+	match command {
+		"toolchain" => {
+			_ = Toolchain.load!(root)?
+			Ok({})
+		}
+		"build" => build!(root, args)
+		_ => Err(Usage)
+	}
+}
+
+## `dragrace build [-competitors a,b]`: every competitor into out/bin.
+build! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
+build! = |root, args| {
+	flags = Flags.parse(args, [{ name: "competitors", kind: Value(""), usage: "comma-separated names (default: race.json's)" }])?
+	race = Checkout.race!(root)?
+	only = Flags.value(flags, "competitors")
+	names = if only == "" race.competitors else only.split_on(",")
+	ready = Toolchain.load!(root)?
+	competitors = Checkout.competitors!(root, names)?
+	_ = Build.all!(root, ready, competitors)?
+	Ok({})
 }
 
 usage =
@@ -39,3 +76,5 @@ usage =
 	\\  guard | racer serve|check|install | host-agent | notify |
 	\\  hosts check | version
 	\\See README.md.
+
+expect JsonValue.parse("[]").is_ok()
