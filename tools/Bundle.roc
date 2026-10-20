@@ -31,7 +31,10 @@ Bundle :: [].{
 	command! : Str, List(Str) => Try({}, [BadFlag(Str), Failed(Str), Interrupted])
 	command! = |root, args| {
 		flags = Flags.parse(args, [{ name: "out", kind: Value("${Checkout.out(root)}/bundle"), usage: "where the files go" }])?
-		out = Flags.value(flags, "out")
+		asked = Flags.value(flags, "out")
+		Path.utf8(asked).create_all!() ? |PathErr(err, _)| Failed("${asked}: ${err.to_str()}")
+		# Absolute: tar runs where the links are.
+		out = (Path.utf8(asked).absolute!() ? |PathErr(err, _)| Failed("${asked}: ${err.to_str()}")).display()
 		# The toolchain's record, out/toolchain.json, made afresh: what the
 		# race posts as its versions.
 		_ = Toolchain.load!(root)?
@@ -42,7 +45,6 @@ Bundle :: [].{
 		}
 		exe = Env.exe_path!() ? |_| Failed("this binary's path is not known")
 		oha = Local.oha!(race.oha)?
-		Path.utf8(out).create_all!() ? |PathErr(err, _)| Failed("${out}: ${err.to_str()}")
 		# Each competitor's key as `dragrace build` took it, and the race key.
 		built = Build.read_keys!(root)?
 		competitors = race.competitors.map_try(
