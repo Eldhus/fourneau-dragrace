@@ -67,12 +67,18 @@ Run :: [].{
 	## line.
 	with_input! : Str, List(Str), List(U8) => Try(Str, [Failed(Str), Interrupted])
 	with_input! = |dir, argv, input|
+		Run.with_input_bytes!(dir, argv, input).map_ok(|bytes| Str.from_utf8_lossy(bytes).trim())
+
+	## Run `argv` with `input` on its standard input and return its standard
+	## output as it is, byte for byte.
+	with_input_bytes! : Str, List(Str), List(U8) => Try(List(U8), [Failed(Str), Interrupted])
+	with_input_bytes! = |dir, argv, input|
 		match command(dir, [], argv) {
 			Ok(cmd) =>
 				match cmd.stdin(Bytes(input)).stdout(Capture).stderr(Inherit).output_limit(NoLimit).run!() {
 					Ok(output) =>
 						match output.status {
-							Exited(0) => Ok(Str.from_utf8_lossy(output.stdout_bytes).trim())
+							Exited(0) => Ok(output.stdout_bytes)
 							other => Err(Failed("${program(argv)}: ${status(other)}"))
 						}
 					Err(Interrupted) => Err(Interrupted)

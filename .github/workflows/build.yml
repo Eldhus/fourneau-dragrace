@@ -8,7 +8,7 @@
 # a daily one came after the morning's race; the racer waits for the build
 # of masters it has seen. A pull request is built and raced the
 # same, never released. roux's platform and tools, and each competitor,
-# are compiled only when their key is new (keys.go), from a store GitHub's
+# are compiled only when their key is new (tools/Keys.roc), from a store GitHub's
 # cache keeps. The newest 20 builds are kept. No secrets: the release is
 # made with this run's own token, and a fork's pull request gets a
 # read-only one.
@@ -71,7 +71,7 @@ jobs:
           go-version-file: fourneau-dragrace/tools/go.mod
           cache: false
       # The toolchain's downloads and the store of roux's and the
-      # competitors' builds (keys.go: an entry is taken only under its
+      # competitors' builds (tools/Keys.roc: an entry is taken only under its
       # exact key, so restoring the newest copy is safe). Started afresh
       # when roux's pins move, which rebuilds most of it anyway, so old
       # toolchains never pile up; saved only when something was added.
@@ -89,15 +89,39 @@ jobs:
       - if: steps.key.outputs.built != 'true'
         name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
+      # The tool is moving from Go to Roc, command by command. The Go one is
+      # the binary the bundle packs (the racer's and the workers'), and
+      # runs every command the Roc one has not taken over.
       - if: steps.key.outputs.built != 'true'
-        name: The tool
+        name: The tool in Go
         working-directory: fourneau-dragrace
         env:
           CGO_ENABLED: "0"
         run: |
           test -z "$(gofmt -l tools)"
           (cd tools && go vet ./... && go test ./...)
-          go build -C tools -ldflags "-X main.buildCommit=$(git rev-parse HEAD)" -o ../out/dragrace ./cmd/dragrace
+          go build -C tools -ldflags "-X main.buildCommit=$(git rev-parse HEAD)" -o ../out/dragrace-go ./cmd/dragrace
+      # Built with roux's roc, which the toolchain step would fetch anyway:
+      # fetched here into the same place in the cache, the same way, so the
+      # tool finds it verified.
+      - if: steps.key.outputs.built != 'true'
+        name: The tool in Roc
+        working-directory: fourneau-dragrace
+        run: |
+          pins=../roux/toolchain.json
+          version=$(jq -r .roc.version $pins)
+          sha=$(jq -r .roc.sha256 $pins)
+          dir=~/.cache/fourneau-dragrace/roc-$version
+          if [ ! -e "$dir/.verified" ]; then
+            curl -fsSL --retry 5 -o "$RUNNER_TEMP/roc.tar.gz" "$(jq -r .roc.url $pins)"
+            echo "$sha  $RUNNER_TEMP/roc.tar.gz" | sha256sum -c -
+            rm -rf "$dir" && mkdir -p "$dir"
+            tar -xzf "$RUNNER_TEMP/roc.tar.gz" -C "$dir" --strip-components=1
+            echo "$sha" > "$dir/.verified"
+          fi
+          mkdir -p out
+          "$dir/roc" test tools/main.roc
+          "$dir/roc" build tools/main.roc --output=out/dragrace
       # roux readied first (from the store, or built and stored), then the site.
       - if: steps.key.outputs.built != 'true'
         name: The site
@@ -105,12 +129,12 @@ jobs:
         run: out/dragrace site build
       # Every competitor (from the store, or built and stored); those that
       # moved since the latest release checked and raced briefly, all of
-      # them when the harness moved (keys.go, smokeSet), none for the site
+      # them when the harness moved (tools/Keys.roc, smoke_set), none for the site
       # alone. Nothing is released that did not pass. No build.json (no
       # release, or GitHub failing) races them all. fourneau-zig and roux
       # serve HTTPS through the kernel's TLS, a module the runner has but
       # has not loaded; without it their TLS cells cannot start, and the
-      # race refuses at once (local.go, checkKernelTLS).
+      # race refuses at once (tools/Local.roc, kernel_tls!).
       - if: steps.key.outputs.built != 'true'
         name: The smoke race
         working-directory: fourneau-dragrace
@@ -124,7 +148,7 @@ jobs:
         working-directory: fourneau-dragrace
         run: |
           tag=${{ steps.key.outputs.tag }}
-          out/dragrace bundle -out out/bundle
+          out/dragrace-go bundle -out out/bundle
           gh release create "$tag" --target "$(git rev-parse HEAD)" --title "$tag" \
             --notes-file out/bundle/build.json --latest \
             out/bundle/race.tar.gz out/bundle/site.tar.gz out/bundle/build.json

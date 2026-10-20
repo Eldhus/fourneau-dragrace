@@ -409,12 +409,11 @@ validate_stream! = |race, target, mode|
 					Err(Interrupted) => return "/sse: interrupted"
 				}
 			raw =
-				match Run.with_input!("", ["base64", "-d"], encoded.to_utf8()) {
-					Ok(text) => text
+				match Run.with_input_bytes!("", ["base64", "-d"], encoded.to_utf8()) {
+					Ok(bytes) => Str.from_utf8_lossy(bytes)
 					Err(_) => return "/sse: not base64"
 				}
-			# with_input trims: the stream's own end is its last chunk's CRLF.
-			why = Checks.stream("${raw}\r\n", race.stream)
+			why = Checks.stream(raw, race.stream)
 			if why != "" {
 				return "/sse: ${why}"
 			}
