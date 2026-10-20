@@ -13,6 +13,7 @@ import pf.Path
 import pf.Stderr
 import pf.System
 import pf.Stdout
+import Adhoc
 import Build
 import Bundle
 import Checkout
@@ -62,7 +63,7 @@ main! = |raw_args| {
 				_ = Stdout.line!(Racer.own_commit!())
 				Ok({})
 			}
-			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["site", "install-server", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] | ["hosts", ..] | ["diff", ..] =>
+			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["site", "install-server", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] | ["hosts", ..] | ["diff", ..] | ["adhoc", ..] =>
 				match args {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
@@ -99,6 +100,8 @@ main! = |raw_args| {
 			Err(Exit(1))
 		}
 		Err(Interrupted) => Err(Interrupted)
+		# A command run again under a lock, which said why itself.
+		Err(Exited(code)) => Err(Exit(code))
 	}
 }
 
@@ -129,7 +132,7 @@ go_tool! = |args| {
 }
 
 ## The commands that run from anywhere inside the repository.
-in_checkout! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
+in_checkout! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted, Exited(I32)])
 in_checkout! = |command, args| {
 	root = Checkout.root!()?
 	match command {
@@ -141,6 +144,7 @@ in_checkout! = |command, args| {
 		"worker" => Worker.command!(root, args)
 		"bundle" => Bundle.command!(root, args)
 		"diff" => Diff.command!(root, args)
+		"adhoc" => Adhoc.command!(root, args)
 		"racer" =>
 			match args {
 				["install", .. as rest] => RacerHost.install!(root, rest)

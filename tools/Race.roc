@@ -113,6 +113,24 @@ Race :: [].{
 		Ok($state.results)
 	}
 
+	## One more round of a competitor, after the race (an ad-hoc race's
+	## rerun): its results with that round's measures added. What the race
+	## found invalid stays so, unmeasured.
+	rerun! : Config.Race, Config.Competitor, Target.Where, U64, U64, List(Results.Result) => Try(List(Results.Result), [Failed(Str), Interrupted])
+	rerun! = |race, competitor, target, round, seed, results| {
+		bodies = put_bodies!(race, target, seed)?
+		valid = results.keep_if(|r| !r.valid).fold(
+			Dict.empty(),
+			|found, r|
+				match race.workloads.find_first(|w| w.name == r.workload) {
+					Ok(w) => found.insert(Target.valid_key(r.competitor, Target.mode_of(w)), r.note)
+					Err(_) => found
+				},
+		)
+		done = race_competitor!(race, competitor, target, bodies, round, seed, { results, valid })
+		if done.interrupted Err(Interrupted) else Ok(done.state.results)
+	}
+
 	## What a machine is: its CPU and its generation, its CPUs, kernel and
 	## memory.
 	machine_info! : Machine.Where, Str, Str, Str => { role : Str, class : Str, size : Str, cpu : Str, cpus : I64, kernel : Str, cpu_id : Str, memory_mib : I64 }

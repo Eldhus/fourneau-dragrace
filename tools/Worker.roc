@@ -3,7 +3,6 @@ import pf.Monotonic
 import pf.OsStr
 import pf.Path
 import pf.Signal
-import pf.Sleep
 import pf.System
 import Checkout
 import Conduit
@@ -126,7 +125,11 @@ race! = |root, config, site| {
 	# The racer reached the server, but its sshd can still reset a new
 	# connection: wait, as the racer does. The connection that gets through
 	# is kept for every call after (control).
-	wait_ssh!(server)?
+	Machine.wait_ssh!(server) ? |err|
+		match err {
+			Failed(why) => Failed("the server: ${why}")
+			Interrupted => Interrupted
+		}
 	raced = race_on!(root, config, site, race, competitors, server, results_path, post_steps!)
 	Machine.close!(server)
 	raced
@@ -209,25 +212,6 @@ follow! = |server, path| {
 		Err(CmdErr(err)) => Err(err.to_str())
 		Err(Interrupted) => Err("interrupted")
 	}
-}
-
-## The server's SSH, waited for: up to 5 minutes.
-wait_ssh! : Machine.Where => Try({}, [Failed(Str), Interrupted])
-wait_ssh! = |server| {
-	var $tries = 0.U64
-	var $last = ""
-	while $tries < 60 {
-		match Machine.shell!(server, "cloud-init status --wait > /dev/null; true") {
-			Ok(_) => return Ok({})
-			Err(Interrupted) => return Err(Interrupted)
-			Err(Failed(why)) => {
-				$last = why
-				Sleep.millis!(5_000)?
-				$tries = $tries + 1
-			}
-		}
-	}
-	Err(Failed("the server: no SSH after 5 minutes: ${$last}"))
 }
 
 ## The results file with this result in it, replacing the one of its key:

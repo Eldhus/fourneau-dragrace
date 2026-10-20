@@ -1,6 +1,7 @@
 import pf.Cmd
 import pf.OsStr
 import pf.Path
+import pf.Sleep
 import pf.Stderr
 import Checkout
 import Keys
@@ -115,6 +116,26 @@ Machine :: [].{
 			}
 			_ => {}
 		}
+
+	## A new droplet's SSH, waited for (with its first boot's cloud-init): up
+	## to 5 minutes. Its sshd can reset connections a while after it answers.
+	wait_ssh! : Where => Try({}, [Failed(Str), Interrupted])
+	wait_ssh! = |machine| {
+		var $tries = 0.U64
+		var $last = ""
+		while $tries < 60 {
+			match Machine.shell!(machine, "cloud-init status --wait > /dev/null; true") {
+				Ok(_) => return Ok({})
+				Err(Interrupted) => return Err(Interrupted)
+				Err(Failed(why)) => {
+					$last = why
+					Sleep.millis!(5_000)?
+					$tries = $tries + 1
+				}
+			}
+		}
+		Err(Failed("no SSH after 5 minutes: ${$last}"))
+	}
 
 	## Whether the address is this machine's loopback (a local race's).
 	is_loopback : Str -> Bool
