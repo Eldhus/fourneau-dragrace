@@ -16,8 +16,10 @@ import pf.Stdout
 import Build
 import Checkout
 import Checks
+import Cloud
 import Flags
 import GitHub
+import Guard
 import JsonValue
 import Local
 import Machine
