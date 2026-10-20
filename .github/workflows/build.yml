@@ -89,9 +89,9 @@ jobs:
       - if: steps.key.outputs.built != 'true'
         name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
-      # The tool is moving from Go to Roc, command by command. The Go one is
-      # the binary the bundle packs (the racer's and the workers'), and
-      # runs every command the Roc one has not taken over.
+      # The tool is moving from Go to Roc, command by command. The Go one
+      # still has the guard, the host agent and the installs, which the
+      # owner builds and installs by hand: tested here, not built.
       - if: steps.key.outputs.built != 'true'
         name: The tool in Go
         working-directory: fourneau-dragrace
@@ -100,7 +100,6 @@ jobs:
         run: |
           test -z "$(gofmt -l tools)"
           (cd tools && go vet ./... && go test ./...)
-          go build -C tools -ldflags "-X main.buildCommit=$(git rev-parse HEAD)" -o ../out/dragrace-go ./cmd/dragrace
       # Built with roux's roc, which the toolchain step would fetch anyway:
       # fetched here into the same place in the cache, the same way, so the
       # tool finds it verified.
@@ -148,7 +147,7 @@ jobs:
         working-directory: fourneau-dragrace
         run: |
           tag=${{ steps.key.outputs.tag }}
-          out/dragrace-go bundle -out out/bundle
+          out/dragrace bundle -out out/bundle
           gh release create "$tag" --target "$(git rev-parse HEAD)" --title "$tag" \
             --notes-file out/bundle/build.json --latest \
             out/bundle/race.tar.gz out/bundle/site.tar.gz out/bundle/build.json

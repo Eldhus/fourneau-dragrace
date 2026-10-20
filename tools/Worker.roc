@@ -2,6 +2,9 @@ import pf.Cmd
 import pf.Monotonic
 import pf.OsStr
 import pf.Path
+import pf.Signal
+import pf.Sleep
+import pf.System
 import Checkout
 import Conduit
 import Config
@@ -51,6 +54,12 @@ Worker :: [].{
 		if config.run_id == "" or config.site == "" or config.token == "" or config.server_host == "" or config.results == "" {
 			return Err(Failed("${path}: run_id, site, token, server_host and results are required"))
 		}
+		# The racer stops a worker past its time (systemctl stop): what is
+		# waiting returns Interrupted, and the worker says how its class ended.
+		match System.target!().os() {
+			Linux(os) => Signal.catch!([Interrupt, Terminate(os.unix())]) ? |_| Failed("signals: not caught")
+			_ => return Err(Failed("a worker runs on Linux"))
+		}
 		Worker.run!(root, config)
 	}
 
@@ -67,6 +76,8 @@ Worker :: [].{
 				Err(Failed(why)) => { status: "failed", reason: why }
 				Err(Interrupted) => { status: "failed", reason: "the worker was stopped" }
 			}
+		# Acknowledged, so the posts below are not interrupted too.
+		_ = Signal.poll!()
 		if status == "failed" {
 			# The racer's reason when no results came.
 			_ = Path.utf8(Worker.failed_path(config.results)).write_utf8!(reason)
@@ -96,6 +107,9 @@ race! = |root, config, site| {
 	seed = config.seed.to_u64_wrap()
 	steps_path = "/api/runs/${config.run_id}/classes/${config.class.name}/steps"
 	results_path = "/api/runs/${config.run_id}/results"
+	# Annotated: a bare 0 given it would be a Dec, posted as 0.0, which the
+	# site refuses for a step.
+	post_steps! : List(Race.Step), U64 => {}
 	post_steps! = |plan, index| {
 		# Only the banner's: a failed post fails nothing.
 		# Planned seconds are whole numbers: never NaN, so `{}` never goes.
@@ -208,7 +222,7 @@ wait_ssh! = |server| {
 			Err(Interrupted) => return Err(Interrupted)
 			Err(Failed(why)) => {
 				$last = why
-				Run.run!("", [], ["sleep", "5"])?
+				Sleep.millis!(5_000)?
 				$tries = $tries + 1
 			}
 		}
