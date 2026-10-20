@@ -215,7 +215,7 @@ Store :: [].{
 	}
 
 	## The racer judges from its newest build and fourneau's and roux's
-	## masters, every ten minutes (racer.go, tonight): a push to either is
+	## masters, every ten minutes (tools/Racer.roc, tonight): a push to either is
 	## "Racing tonight" within ten minutes, and the check waits for its build
 	## (hourly, build.yml). So the countdown ends at the check itself, 05:00
 	## New York time (dragrace-racer-check.timer).

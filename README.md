@@ -24,9 +24,6 @@ out/dragrace toolchain          # Zig, roc and musl at their pins
 out/dragrace race local -quick  # a smoke race; without -quick, hours
 ```
 
-The tool is moving from Go to Roc, and two commands are still Go's: `adhoc` and `diff`. They run
-the Go tool built beside this one (`go build -C tools -o ../out/dragrace-go ./cmd/dragrace`).
-
 The TLS workloads need Linux's kernel TLS: fourneau hands each connection's keys to the kernel
 after the handshake, and fourneau-zig and roux do not start over HTTPS without it. Load its module
 if `/proc/sys/net/ipv4/tcp_available_ulp` does not list `tls`:
@@ -39,9 +36,6 @@ echo tls | sudo tee /etc/modules-load.d/tls.conf  # and at every boot
 
 ## The road ahead
 
-- The tool in Roc on basic-cli instead of Go: building and racing here first (done), then the
-  racer, its workers and the bundle (done), then what the hosts run (the guard, the host agent,
-  the installs, done), then the ad-hoc race and the diff.
 - Static files with compression; idle-connection capacity; SSE with a wait between events.
 - A fan-out workload, once roux has pub/sub.
 - Each competitor tuned as its community would ([CONTRIBUTING.md](CONTRIBUTING.md)).

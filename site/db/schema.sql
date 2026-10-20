@@ -77,8 +77,8 @@ CREATE TABLE run_settings (
 ) STRICT;
 
 -- The versions raced, a row each (zig, roc, oha, go, rust, axum, tokio,
--- droplet_image): the build's record and race.json's (racer.go,
--- versionRows).
+-- droplet_image): the build's record and race.json's (tools/Local.roc,
+-- versions!).
 CREATE TABLE run_versions (
   run_id TEXT NOT NULL REFERENCES runs (id),
   name TEXT NOT NULL,
@@ -151,7 +151,7 @@ CREATE TABLE class_status (
 ) STRICT, WITHOUT ROWID;
 
 -- Each class's plan, a row a step, as its worker posts it when each step
--- begins (race.go, Step): a competitor's round of the closed workloads
+-- begins (tools/Race.roc, Step): a competitor's round of the closed workloads
 -- (round 1 and up, workload ''), or its climb of a mixed workload's ladder
 -- (round 0). started_at: when the site heard the step begin; NULL before.
 -- The live banner's, and the next run's estimate of each step.
@@ -210,7 +210,7 @@ CREATE TABLE results (
   PRIMARY KEY (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;
 
--- A measured round, a column per measure (results.go, Round).
+-- A measured round, a column per measure (tools/Results.roc, Round).
 CREATE TABLE rounds (
   run_id TEXT NOT NULL,
   class TEXT NOT NULL,
@@ -257,7 +257,7 @@ CREATE TABLE rounds (
     REFERENCES results (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;
 
--- One rate of a mixed workload's open-loop climb (mixed.go, OpenStep), its
+-- One rate of a mixed workload's open-loop climb (tools/Results.roc, Step), its
 -- parts in open_step_parts. Runs before 2026-10-10 also hold templates'
 -- share ladder here; `share` and `p90_ms` were the ladder's, 0 since
 -- 2026-10-13.
@@ -287,7 +287,7 @@ CREATE TABLE open_steps (
     REFERENCES results (run_id, class, workload, competitor)
 ) STRICT, WITHOUT ROWID;
 
--- One part of a mixed step (mixed.go, OpenPart): a kind of request, its
+-- One part of a mixed step (tools/Results.roc, Part): a kind of request, its
 -- own rate and latency.
 CREATE TABLE open_step_parts (
   run_id TEXT NOT NULL,

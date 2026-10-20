@@ -271,7 +271,7 @@ View :: [].{
 		else 0
 
 	## A class's lane. A class whose worker tells no steps (one older than
-	## the plan, race.go's Step) says only its time.
+	## the plan, tools/Race.roc's Step) says only its time.
 	lane : Live.Classes -> Lane
 	lane = |c| {
 		over = c.status != "racing"

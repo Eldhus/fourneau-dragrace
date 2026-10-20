@@ -68,7 +68,7 @@ jobs:
       - if: steps.key.outputs.built != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: fourneau-dragrace/tools/go.mod
+          go-version-file: fourneau-dragrace/competitors/go/go.mod
           cache: false
       # The toolchain's downloads and the store of roux's and the
       # competitors' builds (tools/Keys.roc: an entry is taken only under its
@@ -89,17 +89,6 @@ jobs:
       - if: steps.key.outputs.built != 'true'
         name: The sqlite3 shell
         run: command -v sqlite3 || (sudo apt-get update -q && sudo apt-get install -y -q sqlite3)
-      # The tool is moving from Go to Roc, command by command. The Go one
-      # still has the guard, the host agent and the installs, which the
-      # owner builds and installs by hand: tested here, not built.
-      - if: steps.key.outputs.built != 'true'
-        name: The tool in Go
-        working-directory: fourneau-dragrace
-        env:
-          CGO_ENABLED: "0"
-        run: |
-          test -z "$(gofmt -l tools)"
-          (cd tools && go vet ./... && go test ./...)
       # Built with roux's roc, which the toolchain step would fetch anyway:
       # fetched here into the same place in the cache, the same way, so the
       # tool finds it verified.

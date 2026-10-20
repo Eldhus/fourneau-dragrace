@@ -75,7 +75,7 @@ Api :: [].{
 		protocol : Str,
 	}
 
-	## A run's end: its status, and its timing and droplets (timing.go).
+	## A run's end: its status, and its timing and droplets (tools/Racer.roc, Timing).
 	EndPost : {
 		status : Str,
 		reason : Str,
@@ -90,7 +90,7 @@ Api :: [].{
 		},
 	}
 
-	## A machine, as results.go's MachineInfo.
+	## A machine, as tools/Race.roc's machine_info! says it.
 	MachinePost : {
 		role : Str,
 		class : Str,
@@ -102,7 +102,7 @@ Api :: [].{
 		memory_mib : I64,
 	}
 
-	## A result, as results.go's Result: the rounds and open-loop steps whole.
+	## A result, as tools/Results.roc's Result: the rounds and open-loop steps whole.
 	## The racer's own summary of the rounds (`best_rps`, `median_*_ms`) is
 	## not read: the pages take theirs from the rounds.
 	ResultPost : {
@@ -153,7 +153,7 @@ Api :: [].{
 		seconds : F64,
 	}
 
-	## A step of a mixed workload's climb (mixed.go, OpenStep).
+	## A step of a mixed workload's climb (tools/Results.roc, Step).
 	StepPost : {
 		offered_rps : F64,
 		achieved_rps : F64,
@@ -170,7 +170,7 @@ Api :: [].{
 		parts : List(PartPost),
 	}
 
-	## One part of a mixed step (mixed.go, OpenPart).
+	## One part of a mixed step (tools/Results.roc, Part).
 	PartPost : {
 		name : Str,
 		offered_rps : F64,
@@ -186,7 +186,7 @@ Api :: [].{
 	ClassPost : { status : Str, reason : Str, seconds : F64 }
 
 	## A class's plan and the step begun, 1 for the first, 0 for none yet
-	## (the worker's StepsPost, race.go's Step).
+	## (the worker's post, tools/Race.roc's Step).
 	StepsPost : {
 		step : I64,
 		steps : List({ competitor : Str, round : I64, workload : Str, planned_seconds : F64 }),
