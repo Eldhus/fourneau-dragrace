@@ -14,6 +14,7 @@ import pf.Stderr
 import pf.System
 import pf.Stdout
 import Build
+import Bundle
 import Checkout
 import Checks
 import Cloud
@@ -28,6 +29,7 @@ import Race
 import Target
 import Number
 import Oha
+import Racer
 import Results
 import Retry
 import Run
@@ -44,14 +46,24 @@ main! = |raw_args| {
 	result =
 		match args {
 			["version", ..] => {
-				# Built by hand: no commit (build.yml's builds are the Go tool's yet).
-				_ = Stdout.line!("")
+				# The commit beside the binary (a bundle's, or a racer's
+				# update's); "" for one built by hand.
+				_ = Stdout.line!(Racer.own_commit!())
 				Ok({})
 			}
-			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["race", "local", ..] =>
+			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] =>
 				match args {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
+				}
+			["racer", "serve", ..] | ["racer", "check", ..] =>
+				match Racer.command!(args.drop_first(1)) {
+					Ok({}) => Ok({})
+					# A new binary in place: systemd starts it (Restart=always).
+					Err(Restart) => Ok({})
+					Err(BadFlag(why)) => Err(BadFlag(why))
+					Err(Failed(why)) => Err(Failed(why))
+					Err(Interrupted) => Ok({})
 				}
 			[command, ..] if go_commands.contains(command) => go_tool!(args)
 			_ => Err(Usage)
@@ -78,7 +90,7 @@ main! = |raw_args| {
 ## time): run by `dragrace-go`, built beside this binary, in this
 ## process's place.
 go_commands : List(Str)
-go_commands = ["adhoc", "diff", "bundle", "worker", "site", "guard", "racer", "host-agent", "notify", "hosts"]
+go_commands = ["adhoc", "diff", "site", "guard", "racer", "host-agent", "notify", "hosts"]
 
 go_tool! : List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
 go_tool! = |args| {
@@ -110,6 +122,8 @@ in_checkout! = |command, args| {
 			Ok({})
 		}
 		"build" => build!(root, args)
+		"worker" => Worker.command!(root, args)
+		"bundle" => Bundle.command!(root, args)
 		"site" => site!(root, args)
 		"race" =>
 			match args {

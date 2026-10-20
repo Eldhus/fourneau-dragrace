@@ -137,7 +137,7 @@ Local :: [].{
 		id = run_id("local", started)
 		race_json = Checkout.read!("${root}/race.json")?
 		versions = Local.versions!(root, race)?
-		fingerprint = fingerprint!(root)?
+		fingerprint = Checkout.fingerprint!(root)?
 		run = {
 			id,
 			where_raced: "local",
@@ -217,29 +217,13 @@ Local :: [].{
 		started_at : Str,
 		finished_at : Str,
 		seed : I64,
-		fingerprint : Fingerprint,
+		fingerprint : Checkout.Fingerprint,
 		versions : List({ name : Str, version : Str }),
 		race_json : Str,
 		machines : List({ role : Str, class : Str, size : Str, cpu : Str, cpus : I64, kernel : Str, cpu_id : Str, memory_mib : I64 }),
 		results : List(Results.Result),
 		timing : { seconds : F64, build_seconds : F64, launch_seconds : F64, racing_seconds : F64, classes : List({ class : Str, seconds : F64 }), droplets : List({ role : Str, class : Str, size : Str, price_hourly : F64, seconds : F64, cost_usd : F64 }), cost_usd : F64 },
 	}
-
-	## The three checkouts' commits, and whether each has changes.
-	Fingerprint : { dragrace : Str, dragrace_dirty : Bool, fourneau : Str, fourneau_dirty : Bool, roux : Str, roux_dirty : Bool }
-}
-
-fingerprint! : Str => Try(Local.Fingerprint, [Failed(Str), Interrupted])
-fingerprint! = |root| {
-	commit! = |dir| {
-		head = Run.output!(dir, ["git", "rev-parse", "HEAD"])?
-		status = Run.output!(dir, ["git", "status", "--porcelain"])?
-		Ok({ head, dirty: status != "" })
-	}
-	dragrace = commit!(root)?
-	fourneau = commit!(Checkout.beside(root, "fourneau"))?
-	roux = commit!(Checkout.beside(root, "roux"))?
-	Ok({ dragrace: dragrace.head, dragrace_dirty: dragrace.dirty, fourneau: fourneau.head, fourneau_dirty: fourneau.dirty, roux: roux.head, roux_dirty: roux.dirty })
 }
 
 ## `2026-10-20T041332Z-local`.

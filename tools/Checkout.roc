@@ -1,6 +1,7 @@
 import pf.Env
 import pf.Path
 import Config
+import Run
 
 ## This repository's checkout as the commands find it: its root (the
 ## directory with race.json, found from anywhere inside), its race and its
@@ -75,6 +76,22 @@ Checkout :: [].{
 	## A file's text; a missing or unreadable file names itself.
 	read! : Str => Try(Str, [Failed(Str)])
 	read! = |path| Path.utf8(path).read_utf8!().map_err(|PathErr(err, _)| Failed("${path}: ${err.to_str()}"))
+
+	## The three checkouts' commits, and whether each has changes.
+	Fingerprint : { dragrace : Str, dragrace_dirty : Bool, fourneau : Str, fourneau_dirty : Bool, roux : Str, roux_dirty : Bool }
+
+	fingerprint! : Str => Try(Fingerprint, [Failed(Str), Interrupted])
+	fingerprint! = |root| {
+		commit! = |dir| {
+			head = Run.output!(dir, ["git", "rev-parse", "HEAD"])?
+			status = Run.output!(dir, ["git", "status", "--porcelain"])?
+			Ok({ head, dirty: status != "" })
+		}
+		dragrace = commit!(root)?
+		fourneau = commit!(Checkout.beside(root, "fourneau"))?
+		roux = commit!(Checkout.beside(root, "roux"))?
+		Ok({ dragrace: dragrace.head, dragrace_dirty: dragrace.dirty, fourneau: fourneau.head, fourneau_dirty: fourneau.dirty, roux: roux.head, roux_dirty: roux.dirty })
+	}
 }
 
 expect Checkout.parent("/a/b") == "/a"
