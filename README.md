@@ -41,7 +41,8 @@ echo tls | sudo tee /etc/modules-load.d/tls.conf  # and at every boot
 ## The road ahead
 
 - The tool in Roc on basic-cli instead of Go: building and racing here first (done), then the
-  racer and its workers, then what the hosts run.
+  racer, its workers and the bundle (done), then what the hosts run (the guard, the host agent,
+  the installs) and the ad-hoc race.
 - Static files with compression; idle-connection capacity; SSE with a wait between events.
 - A fan-out workload, once roux has pub/sub.
 - Each competitor tuned as its community would ([CONTRIBUTING.md](CONTRIBUTING.md)).
