@@ -56,31 +56,45 @@ Fetch :: [].{
 	## 429) apart from one for good, so a caller can try again (Retry).
 	download_once! : Str, Str => Try({}, [Moment(Str), Refused(Str), Interrupted])
 	download_once! = |url, path| {
-		Path.utf8(Checkout.parent(path)).create_all!() ? |PathErr(err, _)| Refused("${path}: ${err.to_str()}")
 		Run.log!("fetch ${url}")
-		request = Request.from_method(GET).with_uri(url).add_header("User-Agent", Fetch.user_agent)
-		response =
-			match Http.send_streaming!(request, { max_redirects: 5 }) {
-				Ok(answer) => answer
-				Err(Interrupted) => return Err(Interrupted)
-				Err(InvalidUrl(_)) => return Err(Refused("${url}: not a URL"))
-				Err(HttpErr(err)) => return Err(Moment("${url}: ${transport(err)}"))
-			}
-		status = response.status()
-		if status >= 500 or status == 429 {
-			return Err(Moment("${url}: ${status.to_str()}"))
-		}
-		if status != 200 {
-			return Err(Refused("${url}: ${status.to_str()}"))
-		}
-		written = File.with_writer!(Path.utf8(path), Truncate, {}, |writer| writer.write_stream!(response.chunks()))
-		match written {
+		get!(url, path)
+	}
+
+	## `url` to `path`, unlogged: the host agent's, which asks every minute.
+	quietly! : Str, Str => Try({}, [Failed(Str), Interrupted])
+	quietly! = |url, path|
+		match get!(url, path) {
 			Ok({}) => Ok({})
-			Err(SourceErr(Interrupted)) => Err(Interrupted)
-			Err(SourceErr(HttpErr(err))) => Err(Moment("${url}: ${transport(err)}"))
-			Err(FileErr(err)) => Err(Refused("${path}: ${err.to_str()}"))
-			Err(PathErr(err, _)) => Err(Refused("${path}: ${err.to_str()}"))
+			Err(Moment(why)) | Err(Refused(why)) => Err(Failed(why))
+			Err(Interrupted) => Err(Interrupted)
 		}
+}
+
+get! : Str, Str => Try({}, [Moment(Str), Refused(Str), Interrupted])
+get! = |url, path| {
+	Path.utf8(Checkout.parent(path)).create_all!() ? |PathErr(err, _)| Refused("${path}: ${err.to_str()}")
+	request = Request.from_method(GET).with_uri(url).add_header("User-Agent", Fetch.user_agent)
+	response =
+		match Http.send_streaming!(request, { max_redirects: 5 }) {
+			Ok(answer) => answer
+			Err(Interrupted) => return Err(Interrupted)
+			Err(InvalidUrl(_)) => return Err(Refused("${url}: not a URL"))
+			Err(HttpErr(err)) => return Err(Moment("${url}: ${transport(err)}"))
+		}
+	status = response.status()
+	if status >= 500 or status == 429 {
+		return Err(Moment("${url}: ${status.to_str()}"))
+	}
+	if status != 200 {
+		return Err(Refused("${url}: ${status.to_str()}"))
+	}
+	written = File.with_writer!(Path.utf8(path), Truncate, {}, |writer| writer.write_stream!(response.chunks()))
+	match written {
+		Ok({}) => Ok({})
+		Err(SourceErr(Interrupted)) => Err(Interrupted)
+		Err(SourceErr(HttpErr(err))) => Err(Moment("${url}: ${transport(err)}"))
+		Err(FileErr(err)) => Err(Refused("${path}: ${err.to_str()}"))
+		Err(PathErr(err, _)) => Err(Refused("${path}: ${err.to_str()}"))
 	}
 }
 

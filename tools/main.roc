@@ -22,7 +22,9 @@ import Flags
 import GitHub
 import Guard
 import GuardService
+import HostAgent
 import Hosts
+import HostsCheck
 import JsonValue
 import Keyring
 import Ledger
@@ -31,6 +33,7 @@ import Machine
 import Mixed
 import Race
 import Target
+import Notify
 import Number
 import Oha
 import Racer
@@ -41,6 +44,7 @@ import Run
 import SiteApi
 import Seeded
 import Site
+import SiteHost
 import Snapshot
 import Time
 import Toolchain
@@ -57,12 +61,16 @@ main! = |raw_args| {
 				_ = Stdout.line!(Racer.own_commit!())
 				Ok({})
 			}
-			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] =>
+			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["site", "install-server", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] | ["hosts", ..] =>
 				match args {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
 				}
+			# The hosts' services, and the owner's request: anywhere.
 			["guard", .. as rest] => GuardService.command!(rest)
+			["host-agent", .. as rest] => HostAgent.command!(rest)
+			["notify", .. as rest] => Notify.command!(rest)
+			["site", "race-now", .. as rest] => SiteHost.race_now!(rest)
 			["racer", "serve", ..] | ["racer", "check", ..] =>
 				match Racer.command!(args.drop_first(1)) {
 					Ok({}) => Ok({})
@@ -97,7 +105,7 @@ main! = |raw_args| {
 ## time): run by `dragrace-go`, built beside this binary, in this
 ## process's place.
 go_commands : List(Str)
-go_commands = ["adhoc", "diff", "site", "host-agent", "notify", "hosts"]
+go_commands = ["adhoc", "diff"]
 
 go_tool! : List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
 go_tool! = |args| {
@@ -136,6 +144,11 @@ in_checkout! = |command, args| {
 				["install", .. as rest] => RacerHost.install!(root, rest)
 				_ => Err(Usage)
 			}
+		"hosts" =>
+			match args {
+				["check", .. as rest] => HostsCheck.command!(root, rest)
+				_ => Err(Usage)
+			}
 		"site" => site!(root, args)
 		"race" =>
 			match args {
@@ -163,6 +176,7 @@ site! = |root, args|
 			ready = Toolchain.load!(root)?
 			Site.dev!(root, ready, port)
 		}
+		["install-server", .. as rest] => SiteHost.install!(root, rest)
 		_ => Err(Usage)
 	}
 
