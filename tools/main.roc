@@ -18,6 +18,7 @@ import Bundle
 import Checkout
 import Checks
 import Cloud
+import Diff
 import Flags
 import GitHub
 import Guard
@@ -61,7 +62,7 @@ main! = |raw_args| {
 				_ = Stdout.line!(Racer.own_commit!())
 				Ok({})
 			}
-			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["site", "install-server", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] | ["hosts", ..] =>
+			["toolchain", ..] | ["build", ..] | ["site", "build", ..] | ["site", "dev", ..] | ["site", "install-server", ..] | ["race", "local", ..] | ["worker", ..] | ["bundle", ..] | ["racer", "install", ..] | ["hosts", ..] | ["diff", ..] =>
 				match args {
 					[command, .. as rest] => in_checkout!(command, rest)
 					[] => Err(Usage)
@@ -105,7 +106,7 @@ main! = |raw_args| {
 ## time): run by `dragrace-go`, built beside this binary, in this
 ## process's place.
 go_commands : List(Str)
-go_commands = ["adhoc", "diff"]
+go_commands = ["adhoc"]
 
 go_tool! : List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
 go_tool! = |args| {
@@ -139,6 +140,7 @@ in_checkout! = |command, args| {
 		"build" => build!(root, args)
 		"worker" => Worker.command!(root, args)
 		"bundle" => Bundle.command!(root, args)
+		"diff" => Diff.command!(root, args)
 		"racer" =>
 			match args {
 				["install", .. as rest] => RacerHost.install!(root, rest)
