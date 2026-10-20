@@ -826,6 +826,14 @@ build_of = |commit, race_key| {
 	assets: [],
 }
 
+# Go's guard's config, on a racer not installed again since: the HTTP guard.
+expect {
+	old = "{\n  \"site\": \"https://fourneau.y2kbugger.com\",\n  \"guard\": \"/run/dragrace-guard/guard.sock\",\n  \"repository\": \"Eldhus/fourneau-dragrace\",\n  \"state\": \"/var/lib/dragrace-racer\"\n}"
+	Racer.parse_config(old).map_ok(|c| c.guard) == Ok(Http("/run/dragrace-guard/guard.sock"))
+}
+
+expect Racer.parse_config("{\"site\":\"s\"}") == Err(NotConfig)
+
 expect {
 	# The last race raced this build's own commits and key: nothing new.
 	t = Racer.tonight([build_of("d1", "k")], "d1", [("fourneau", "f1"), ("roux", "r1")], [("fourneau-dragrace", "d1"), ("fourneau", "f1"), ("roux", "r1")])
