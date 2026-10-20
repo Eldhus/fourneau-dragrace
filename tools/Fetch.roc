@@ -11,6 +11,11 @@ import Run
 ## pinned hash is not fetched again; one with another hash is an error,
 ## never a silent download over it.
 Fetch :: [].{
+	## What every request says it is: basic-cli sends no User-Agent, and
+	## GitHub's API refuses a request without one.
+	user_agent : Str
+	user_agent = "fourneau-dragrace"
+
 	## `url` to `path`, unless a file with the hash `want` is there.
 	pinned! : Str, Str, Str => Try({}, [Failed(Str), Interrupted])
 	pinned! = |url, want, path| {
@@ -39,27 +44,42 @@ Fetch :: [].{
 
 	## `url` to `path`, following GitHub's redirects to its storage.
 	download! : Str, Str => Try({}, [Failed(Str), Interrupted])
-	download! = |url, path| {
-		Path.utf8(Checkout.parent(path)).create_all!() ? |PathErr(err, _)| Failed("${path}: ${err.to_str()}")
+	download! = |url, path|
+		match Fetch.download_once!(url, path) {
+			Ok({}) => Ok({})
+			Err(Moment(why)) => Err(Failed(why))
+			Err(Refused(why)) => Err(Failed(why))
+			Err(Interrupted) => Err(Interrupted)
+		}
+
+	## One try of a download: a failure for a moment (the network, a 5xx, a
+	## 429) apart from one for good, so a caller can try again (Retry).
+	download_once! : Str, Str => Try({}, [Moment(Str), Refused(Str), Interrupted])
+	download_once! = |url, path| {
+		Path.utf8(Checkout.parent(path)).create_all!() ? |PathErr(err, _)| Refused("${path}: ${err.to_str()}")
 		Run.log!("fetch ${url}")
-		request = Request.from_method(GET).with_uri(url)
+		request = Request.from_method(GET).with_uri(url).add_header("User-Agent", Fetch.user_agent)
 		response =
 			match Http.send_streaming!(request, { max_redirects: 5 }) {
 				Ok(answer) => answer
 				Err(Interrupted) => return Err(Interrupted)
-				Err(InvalidUrl(_)) => return Err(Failed("${url}: not a URL"))
-				Err(HttpErr(err)) => return Err(Failed("${url}: ${transport(err)}"))
+				Err(InvalidUrl(_)) => return Err(Refused("${url}: not a URL"))
+				Err(HttpErr(err)) => return Err(Moment("${url}: ${transport(err)}"))
 			}
-		if response.status() != 200 {
-			return Err(Failed("${url}: ${response.status().to_str()}"))
+		status = response.status()
+		if status >= 500 or status == 429 {
+			return Err(Moment("${url}: ${status.to_str()}"))
+		}
+		if status != 200 {
+			return Err(Refused("${url}: ${status.to_str()}"))
 		}
 		written = File.with_writer!(Path.utf8(path), Truncate, {}, |writer| writer.write_stream!(response.chunks()))
 		match written {
 			Ok({}) => Ok({})
 			Err(SourceErr(Interrupted)) => Err(Interrupted)
-			Err(SourceErr(HttpErr(err))) => Err(Failed("${url}: ${transport(err)}"))
-			Err(FileErr(err)) => Err(Failed("${path}: ${err.to_str()}"))
-			Err(PathErr(err, _)) => Err(Failed("${path}: ${err.to_str()}"))
+			Err(SourceErr(HttpErr(err))) => Err(Moment("${url}: ${transport(err)}"))
+			Err(FileErr(err)) => Err(Refused("${path}: ${err.to_str()}"))
+			Err(PathErr(err, _)) => Err(Refused("${path}: ${err.to_str()}"))
 		}
 	}
 }
