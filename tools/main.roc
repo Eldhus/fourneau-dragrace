@@ -8,11 +8,19 @@ app [main!] {
 ## the hosts' units', with Go's flag syntax (`-quick`, `-since F`).
 import pf.OsStr
 import pf.Stderr
+import pf.Stdout
 import Build
 import Checkout
+import Checks
 import Flags
 import JsonValue
+import Number
+import Oha
+import Results
 import Run
+import Seeded
+import Site
+import Snapshot
 import Toolchain
 
 main! : List(OsStr) => Try({}, [Exit(I32), Interrupted])
@@ -52,9 +60,30 @@ in_checkout! = |command, args| {
 			Ok({})
 		}
 		"build" => build!(root, args)
+		"site" => site!(root, args)
 		_ => Err(Usage)
 	}
 }
+
+## `dragrace site build|dev`.
+site! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
+site! = |root, args|
+	match args {
+		["build", .. as rest] => {
+			_ = Flags.parse(rest, [])?
+			ready = Toolchain.load!(root)?
+			Site.build!(root, ready)?
+			_ = Stdout.line!("built ${Site.binary(root)}; run it from site/ (ROUX_PORT=8090 for a local look; it makes site.db there)")
+			Ok({})
+		}
+		["dev", .. as rest] => {
+			flags = Flags.parse(rest, [{ name: "port", kind: Value("8090"), usage: "the site's port: open http://127.0.0.1:PORT/" }])?
+			port = U64.from_str(Flags.value(flags, "port")) ? |_| BadFlag("-port: a number")
+			ready = Toolchain.load!(root)?
+			Site.dev!(root, ready, port)
+		}
+		_ => Err(Usage)
+	}
 
 ## `dragrace build [-competitors a,b]`: every competitor into out/bin.
 build! : Str, List(Str) => Try({}, [Usage, BadFlag(Str), Failed(Str), Interrupted])
