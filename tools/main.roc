@@ -14,6 +14,11 @@ import Checkout
 import Checks
 import Flags
 import JsonValue
+import Local
+import Machine
+import Mixed
+import Race
+import Target
 import Number
 import Oha
 import Results
@@ -61,6 +66,11 @@ in_checkout! = |command, args| {
 		}
 		"build" => build!(root, args)
 		"site" => site!(root, args)
+		"race" =>
+			match args {
+				["local", .. as rest] => Local.race!(root, rest)
+				_ => Err(Usage)
+			}
 		_ => Err(Usage)
 	}
 }
