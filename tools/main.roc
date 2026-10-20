@@ -36,6 +36,7 @@ import Seeded
 import Site
 import Snapshot
 import Toolchain
+import Worker
 
 main! : List(OsStr) => Try({}, [Exit(I32), Interrupted])
 main! = |raw_args| {
