@@ -11,7 +11,7 @@ one else.
 
 1. Clone this repository beside fourneau and roux (README, Use it).
 2. Change `competitors/NAME/`: its code, its build.
-3. `go build -C tools -o ../out/dragrace ./cmd/dragrace && out/dragrace race local -competitors NAME`
+3. Build the tool (README, Use it), then `out/dragrace race local -competitors NAME`.
 4. Open a pull request: what changed, why it is fair, and before/after numbers from your machine.
 
 

@@ -14,13 +14,19 @@ starts the nightly itself.
 
 The results: <https://fourneau.y2kbugger.com/>.
 
-To race here, with Go, rustup and a C compiler, beside checkouts of fourneau and roux:
+To race here, with Go, rustup and a C compiler, beside checkouts of fourneau and roux, and the Roc
+nightly roux's `.roc-version` names as `roc`:
 
 ```sh
-go build -C tools -o ../out/dragrace ./cmd/dragrace
+mkdir -p out
+roc build tools/main.roc --output=out/dragrace      # the tool, on basic-cli
+go build -C tools -o ../out/dragrace-go ./cmd/dragrace  # the commands still in Go
 out/dragrace toolchain          # Zig, roc and musl at their pins
 out/dragrace race local -quick  # a smoke race; without -quick, hours
 ```
+
+The tool is moving from Go to Roc. Until it is done, a command the Roc tool does not have yet runs
+the Go one built beside it.
 
 The TLS workloads need Linux's kernel TLS: fourneau hands each connection's keys to the kernel
 after the handshake, and fourneau-zig and roux do not start over HTTPS without it. Load its module
@@ -34,7 +40,8 @@ echo tls | sudo tee /etc/modules-load.d/tls.conf  # and at every boot
 
 ## The road ahead
 
-- Scripting in Roc basic-cli instead of Go.
+- The tool in Roc on basic-cli instead of Go: building and racing here first (done), then the
+  racer and its workers, then what the hosts run.
 - Static files with compression; idle-connection capacity; SSE with a wait between events.
 - A fan-out workload, once roux has pub/sub.
 - Each competitor tuned as its community would ([CONTRIBUTING.md](CONTRIBUTING.md)).
