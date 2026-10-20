@@ -198,6 +198,7 @@ index! = |db, request, wanted| {
 }
 
 ## The race page's tabs, its section tabs and the class they show.
+race_tabs : View.Latest, Wanted -> { tabs : List(View.Tab), sections : List(View.Tab), classes : List(_) }
 race_tabs = |latest, wanted| {
 	current = View.chosen(latest.classes.map(|class| class.name), wanted.class, View.default_class)
 	{
