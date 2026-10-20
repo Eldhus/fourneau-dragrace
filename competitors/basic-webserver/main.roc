@@ -1,7 +1,7 @@
 app [Context, program] {
 	pf: platform "https://github.com/roc-lang/basic-webserver/releases/download/0.18.0/9VgbC77zLmYYgxLpiNGCq3eySyRCbE2RriAM4sjr2y81.tar.zst",
 	http: "https://github.com/roc-lang/http/releases/download/1.0.0/6ZUwqYhCS8PU9Mo6MF7oV82ET2o7KYb57CLKDq4cq4sS.tar.zst",
-	roc: "nightly-2026-10-19-601b54c",
+	roc: "nightly-2026-10-17-5f126ac",
 }
 
 # The basic-webserver competitor: Roc's own platform, as released (a Rust
