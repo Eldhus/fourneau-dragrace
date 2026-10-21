@@ -6,7 +6,6 @@ import pf.Utc
 import http.Request
 import http.Response
 import Checkout
-import Fetch
 import Flags
 import Run
 import Text
@@ -132,7 +131,6 @@ send! = |topic, state, failure| {
 			.add_header("Title", title)
 			.add_header("Priority", "5")
 			.add_header("Tags", "rotating_light")
-			.add_header("User-Agent", Fetch.user_agent)
 			.with_body(body.to_utf8())
 			.with_timeout(TimeoutMilliseconds(30_000))
 	response =

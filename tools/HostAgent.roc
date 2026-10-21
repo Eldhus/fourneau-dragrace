@@ -312,7 +312,7 @@ healthy! : Str => Bool
 healthy! = |url| {
 	started = Monotonic.now!()
 	while started.elapsed!().to_millis() < 30_000 {
-		request = Request.from_method(GET).with_uri(url).add_header("User-Agent", Fetch.user_agent).with_timeout(TimeoutMilliseconds(5_000))
+		request = Request.from_method(GET).with_uri(url).with_timeout(TimeoutMilliseconds(5_000))
 		match Http.send!(request, {}) {
 			Ok(response) if Response.status(response) == 200 => {
 				answer : Try({ ok : Bool }, _)

@@ -2,7 +2,6 @@ import pf.Http
 import http.Method
 import http.Request
 import http.Response
-import Fetch
 import Retry
 
 ## The site's API (site/Api.roc) with a bearer token. A request the site
@@ -42,7 +41,6 @@ once! = |site, method, path, body| {
 		Request.from_method(method)
 			.with_uri("${site.base}${path}")
 			.add_header("Authorization", "Bearer ${site.token}")
-			.add_header("User-Agent", Fetch.user_agent)
 			.with_timeout(TimeoutMilliseconds(60_000))
 	request =
 		match body {

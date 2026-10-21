@@ -143,7 +143,6 @@ get_once! = |path| {
 			.with_uri("https://api.github.com${path}")
 			.add_header("Accept", "application/vnd.github+json")
 			.add_header("X-GitHub-Api-Version", "2022-11-28")
-			.add_header("User-Agent", Fetch.user_agent)
 			.with_timeout(TimeoutMilliseconds(120_000))
 	response =
 		match Http.send!(request, {}) {

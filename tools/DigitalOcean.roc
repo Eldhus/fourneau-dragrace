@@ -2,7 +2,6 @@ import pf.Http
 import http.Method
 import http.Request
 import http.Response
-import Fetch
 
 ## The few calls of DigitalOcean's API a race makes, with a token that needs
 ## only droplet (create, read, delete), ssh_key (read) and tag (create,
@@ -100,7 +99,6 @@ call! = |token, method, path, body| {
 		Request.from_method(method)
 			.with_uri("https://api.digitalocean.com${path}")
 			.add_header("Authorization", "Bearer ${token}")
-			.add_header("User-Agent", Fetch.user_agent)
 			.with_timeout(TimeoutMilliseconds(60_000))
 	request =
 		match body {

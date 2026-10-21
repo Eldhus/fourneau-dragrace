@@ -201,16 +201,20 @@ race_on! = |root, config, site, race, competitors, server, results_path, post_st
 ## load and largest process, over one SSH session into a file here. A server
 ## that dies takes its own logs with it; this is what led up to it. Ends
 ## with its session (SIGPIPE ignored, the sampler's write fails once the
-## session is gone). A child's output goes to a file only through a shell.
+## session is gone).
 follow! : Machine.Where, Str => Try(Cmd.Child, Str)
 follow! = |server, path| {
 	script = "trap '' PIPE; journalctl -k -f -n 0 -o short-iso & trap 'kill $! 2>/dev/null' EXIT; while echo \"$(date -u +%FT%TZ) sample: $(awk '/^MemAvailable|^SwapFree/ {printf \" %s %d MiB\", $1, $2 / 1024}' /proc/meminfo) load $(cut -d' ' -f1 /proc/loadavg) largest $(ps -eo rss=,comm= --sort=-rss | awk 'NR == 1 {printf \"%s %d MiB\", $2, $1 / 1024}')\"; do sleep 10; done"
-	argv = Machine.argv(server, script)
-	command = "${Str.join_with(argv.map(Run.quote), " ")} > ${Run.quote(path)} 2>&1"
-	match Cmd.new("bash").args(["-c", command].map(OsStr.from_str)).stdin(Null).spawn!() {
-		Ok(child) => Ok(child)
-		Err(CmdErr(err)) => Err(err.to_str())
-		Err(Interrupted) => Err("interrupted")
+	match Machine.argv(server, script) {
+		[first, .. as rest] => {
+			command = Cmd.new(OsStr.from_str(first)).args(rest.map(OsStr.from_str)).stdin(Null)
+			match command.stdout(File(Path.utf8(path), Truncate, {})).stderr(MergeWithStdout).spawn!() {
+				Ok(child) => Ok(child)
+				Err(CmdErr(err)) => Err(err.to_str())
+				Err(Interrupted) => Err("interrupted")
+			}
+		}
+		[] => Err("no command")
 	}
 }
 

@@ -11,11 +11,6 @@ import Run
 ## pinned hash is not fetched again; one with another hash is an error,
 ## never a silent download over it.
 Fetch :: [].{
-	## What every request says it is: basic-cli sends no User-Agent, and
-	## GitHub's API refuses a request without one.
-	user_agent : Str
-	user_agent = "fourneau-dragrace"
-
 	## `url` to `path`, unless a file with the hash `want` is there.
 	pinned! : Str, Str, Str => Try({}, [Failed(Str), Interrupted])
 	pinned! = |url, want, path| {
@@ -73,7 +68,7 @@ Fetch :: [].{
 get! : Str, Str => Try({}, [Moment(Str), Refused(Str), Interrupted])
 get! = |url, path| {
 	Path.utf8(Checkout.parent(path)).create_all!() ? |PathErr(err, _)| Refused("${path}: ${err.to_str()}")
-	request = Request.from_method(GET).with_uri(url).add_header("User-Agent", Fetch.user_agent)
+	request = Request.from_method(GET).with_uri(url)
 	response =
 		match Http.send_streaming!(request, { max_redirects: 5 }) {
 			Ok(answer) => answer
