@@ -17,7 +17,7 @@ use sqlx::sqlite::{
     SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteRow,
     SqliteSynchronous,
 };
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -105,11 +105,12 @@ fn article_from(row: &SqliteRow, with_body: bool) -> (i64, Article) {
     (row.get("id"), article)
 }
 
-fn single_article_sql() -> String {
-    format!(
+// Built from constants alone, so safe as sqlx 0.9 asks a String to be said.
+fn single_article_sql() -> AssertSqlSafe<String> {
+    AssertSqlSafe(format!(
         "SELECT {ARTICLE_COLUMNS}, a.body FROM articles a JOIN users u ON u.id = a.author_id
          WHERE a.slug = ?"
-    )
+    ))
 }
 
 #[derive(Deserialize)]
@@ -121,11 +122,11 @@ struct Page {
 async fn list(State(conduit): State<Conduit>, Query(page): Query<Page>) -> Response {
     let limit = page.limit.unwrap_or(20).clamp(0, 100);
     let offset = page.offset.unwrap_or(0).max(0);
-    let sql = format!(
+    let sql = AssertSqlSafe(format!(
         "SELECT {ARTICLE_COLUMNS} FROM articles a JOIN users u ON u.id = a.author_id
          ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?"
-    );
-    let rows = match sqlx::query(&sql).bind(limit).bind(offset).fetch_all(&conduit.readers).await {
+    ));
+    let rows = match sqlx::query(sql).bind(limit).bind(offset).fetch_all(&conduit.readers).await {
         Ok(rows) => rows,
         Err(err) => return server_error(err),
     };
@@ -141,7 +142,7 @@ async fn list(State(conduit): State<Conduit>, Query(page): Query<Page>) -> Respo
 }
 
 async fn article(State(conduit): State<Conduit>, Path(slug): Path<String>) -> Response {
-    match sqlx::query(&single_article_sql()).bind(&slug).fetch_optional(&conduit.readers).await {
+    match sqlx::query(single_article_sql()).bind(&slug).fetch_optional(&conduit.readers).await {
         Ok(Some(row)) => Json(json!({ "article": article_from(&row, true).1 })).into_response(),
         Ok(None) => error(StatusCode::NOT_FOUND, "article not found"),
         Err(err) => server_error(err),
@@ -226,7 +227,7 @@ async fn favorite(
         Ok(tx) => tx,
         Err(err) => return server_error(err),
     };
-    let row = match sqlx::query(&single_article_sql()).bind(&slug).fetch_optional(&mut *tx).await {
+    let row = match sqlx::query(single_article_sql()).bind(&slug).fetch_optional(&mut *tx).await {
         Ok(Some(row)) => row,
         Ok(None) => return error(StatusCode::NOT_FOUND, "article not found"),
         Err(err) => return server_error(err),

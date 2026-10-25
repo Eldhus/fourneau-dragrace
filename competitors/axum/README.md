@@ -8,11 +8,11 @@ axum's own docs and examples write it.
 
 | | |
 |---|---|
-| Language | Rust 1.94.1 (`rust-toolchain.toml`) |
+| Language | Rust 1.99.1 (`rust-toolchain.toml`) |
 | Server | axum 0.8 on hyper; `axum::serve` |
 | I/O | tokio's multi-threaded runtime: a worker per core, work stealing, epoll |
 | Templates | askama 0.16, `templates/menu.html` compiled into the binary |
-| Database | sqlx 0.8's SQLite (SQLite bundled) |
+| Database | sqlx 0.9's SQLite (SQLite 3.51 bundled: the newest its `libsqlite3-sys` range allows) |
 | HTTPS | tokio-rustls (rustls on aws-lc-rs); HTTP/2 by ALPN |
 | Build | `cargo build --release --locked`: LTO, one codegen unit, x86-64-v3 (`.cargo/config.toml`) |
 | Binary | dynamically linked against glibc |
