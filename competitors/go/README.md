@@ -8,7 +8,7 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 
 | | |
 |---|---|
-| Language | Go 1.27.1 (`toolchain` in `go.mod`) |
+| Language | Go 1.27.3 (`toolchain` in `go.mod`) |
 | Server | `net/http`, the standard library |
 | I/O | a goroutine per connection on the runtime's epoll netpoller; `GOMAXPROCS` left at all cores |
 | Templates | `html/template`, parsed once at startup |
