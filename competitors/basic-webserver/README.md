@@ -1,7 +1,7 @@
 # basic-webserver
 
 Roc's reference web platform, as released: Roc on Rust.
-[roc-lang/basic-webserver](https://github.com/roc-lang/basic-webserver) 0.18.0, written as its own
+[roc-lang/basic-webserver](https://github.com/roc-lang/basic-webserver) 0.19.0, written as its own
 examples are, its limits raised only to fit the race's load.
 
 
@@ -10,7 +10,7 @@ examples are, its limits raised only to fit the race's load.
 | | |
 |---|---|
 | Language | Roc (the nightly roux pins, which the race builds every Roc app with; the header's `roc:` names it) |
-| Server | basic-webserver 0.18.0, named by its bundle's URL (the name is its hash, so it is pinned) |
+| Server | basic-webserver 0.19.0, named by its bundle's URL (the name is its hash, so it is pinned) |
 | I/O | a Rust host on hyper and tokio (epoll); each `respond!` runs on the host's handler pool |
 | Templates | the platform's `Html` module |
 | Database | the platform's `Sqlite`, its pool raised to 32 |

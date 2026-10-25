@@ -1,7 +1,7 @@
 {
   "title": "basic-webserver",
   "language": "Roc",
-  "framework": "basic-webserver 0.18.0: Roc's own platform, a Rust host on hyper and tokio",
+  "framework": "basic-webserver 0.19.0: Roc's own platform, a Rust host on hyper and tokio",
   "build": {
     "argv": ["roc", "build", "main.roc"],
     "binary": "main"
