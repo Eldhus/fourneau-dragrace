@@ -91,7 +91,7 @@ Keys :: [].{
 	}
 
 	## One file of a tree, written to the hash.
-	tree_entry! : Hash.Stream, Str, Str => Try({}, [Failed(Str), Interrupted])
+	tree_entry! : Hash.Digest, Str, Str => Try({}, [Failed(Str), Interrupted])
 	tree_entry! = |hash, dir, path| {
 		full = Path.utf8("${dir}/${path}")
 		match full.type!() {

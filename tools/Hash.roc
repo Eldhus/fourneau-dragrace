@@ -9,7 +9,7 @@ import Text
 ## a key hashes exactly the bytes keys.go hashed.
 Hash :: [].{
 	## A running hash: parts written in order, then `finish!`.
-	Stream :: { child : Cmd.Child }
+	Digest :: { child : Cmd.Child }
 
 	## The SHA-256 of bytes, hex.
 	bytes! : List(U8) => Try(Str, [Failed(Str), Interrupted])
@@ -26,18 +26,18 @@ Hash :: [].{
 	}
 
 	## A stream to write parts to.
-	start! : () => Try(Stream, [Failed(Str), Interrupted])
+	start! : () => Try(Digest, [Failed(Str), Interrupted])
 	start! = || {
 		spawned = Cmd.new("sha256sum").stdin(Pipe).stdout(Capture).stderr(Capture).spawn!()
 		match spawned {
-			Ok(child) => Ok(Stream.{ child })
+			Ok(child) => Ok(Digest.{ child })
 			Err(Interrupted) => Err(Interrupted)
 			Err(CmdErr(err)) => Err(Failed("sha256sum: ${err.to_str()}"))
 		}
 	}
 
 	## Write bytes to the stream.
-	write! : Stream, List(U8) => Try({}, [Failed(Str), Interrupted])
+	write! : Digest, List(U8) => Try({}, [Failed(Str), Interrupted])
 	write! = |stream, part|
 		match stream.child.write_bytes!(part, Duration.minutes(1)) {
 			Ok({}) => Ok({})
@@ -47,18 +47,18 @@ Hash :: [].{
 		}
 
 	## Write a string to the stream.
-	write_str! : Stream, Str => Try({}, [Failed(Str), Interrupted])
+	write_str! : Digest, Str => Try({}, [Failed(Str), Interrupted])
 	write_str! = |stream, text| Hash.write!(stream, text.to_utf8())
 
 	## Write a file's bytes to the stream.
-	write_file! : Stream, Str => Try({}, [Failed(Str), Interrupted])
+	write_file! : Digest, Str => Try({}, [Failed(Str), Interrupted])
 	write_file! = |stream, path| {
 		contents = Path.utf8(path).read_bytes!() ? |PathErr(err, _)| Failed("${path}: ${err.to_str()}")
 		Hash.write!(stream, contents)
 	}
 
 	## The stream's SHA-256, hex.
-	finish! : Stream => Try(Str, [Failed(Str), Interrupted])
+	finish! : Digest =>Try(Str, [Failed(Str), Interrupted])
 	finish! = |stream| {
 		_ = stream.child.close_stdin!()
 		match stream.child.wait!() {
