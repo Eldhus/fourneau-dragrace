@@ -41,6 +41,8 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 
 - `ReadHeaderTimeout` 10 s and `IdleTimeout` 30 s, as a server facing clients sets them.
 - The echo buffer pool, above.
+- A 5 s deadline on each Conduit request's database work, as the contract asks.
+    - `database/sql` alone waits for a pooled connection as long as the client stays.
 
 
 ## Worth knowing

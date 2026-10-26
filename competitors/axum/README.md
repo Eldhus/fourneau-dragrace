@@ -43,6 +43,7 @@ axum's own docs and examples write it.
     - Without it, pipelined responses wait on delayed ACKs.
 - The release profile: LTO and one codegen unit.
 - x86-64-v3 with AES and PCLMUL, for Rust and for the C in SQLite and aws-lc (`.cargo/config.toml`).
+- The pools' `acquire_timeout` 5 s (sqlx's default 30 s), as the contract asks.
 
 
 ## Tuning

@@ -41,7 +41,8 @@ fourneau-zig is what Roc and roux cost.
 
 ## Changed from the defaults
 
-- None.
+- The database's waits, as the contract asks: 5 s for a reader and for the writer, 256 writers
+  waiting (defaults 100 ms, 1 s and 64, which answer 503 sooner).
 
 
 ## Tuning
