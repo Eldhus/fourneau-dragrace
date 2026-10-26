@@ -35,6 +35,10 @@ Data :: [].{
 		p999_ms : F64,
 		cpu_busy_pct : F64,
 		loader_cpu_busy_pct : F64,
+		## Requests that failed: with no answer, and answered not 2xx (a
+		## refusal among them). Either ends the climb (since 2026-10-26).
+		errors : I64,
+		non_2xx : I64,
 	}
 
 	## A test in one variant. `kind`: "closed" (rounds, bars) or "mixed" (an
@@ -42,8 +46,9 @@ Data :: [].{
 	## the variant's, "http1", "h2c" (HTTP/2 without TLS) or "tls" (the
 	## realistic deployment), each a section of the race page; and how the
 	## loader sent it: connections, HTTP/2's streams on each (0 for
-	## HTTP/1.1), kept alive or not.
-	Workload : { name : Str, test : Str, kind : Str, title : Str, summary : Str, protocol : Str, connections : I64, streams : I64, keepalive : Bool, http2 : Bool, tls : Bool }
+	## HTTP/1.1), kept alive or not. `saturated`: a mixed one's share of
+	## the offered rate a step answers to hold (0 for a closed one).
+	Workload : { name : Str, test : Str, kind : Str, title : Str, summary : Str, protocol : Str, connections : I64, streams : I64, keepalive : Bool, http2 : Bool, tls : Bool, saturated : F64 }
 	ServerClass : { name : Str, label : Str, title : Str }
 	Machine : { role : Str, class : Str, size : Str, cpu : Str, cpus : U32, kernel : Str, memory_mib : U32 }
 	Fingerprint : { dragrace : Str, fourneau : Str, roux : Str }

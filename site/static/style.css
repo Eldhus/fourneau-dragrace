@@ -321,8 +321,14 @@ nav.tabs a + a { border-left: 0; }
   .chart-legend { font-size: 11px; gap: 3px 10px; }
 }
 
-/* The open-loop chart: a step where the loader was the limit is hollow. */
+/* The open-loop chart: a step where the loader was the limit is hollow; one
+   where a request failed (an error, or an answer not 2xx) is a cross, on a
+   halo of the surface so the line does not run through it. */
 .point.hollow { fill: var(--surface); stroke: var(--series, #8a8a8a); stroke-width: 2; }
+.failed .halo { fill: var(--surface); }
+.failed .cross { fill: none; stroke: var(--series, #8a8a8a); stroke-width: 2.5; stroke-linecap: round; }
+.swatch.cross-dot { background: transparent; }
+.swatch.cross-dot path { fill: none; stroke: var(--text-2); stroke-width: 2.5; stroke-linecap: round; }
 .open { margin-top: 22px; }
 .axis-note { margin: 2px 0 0; font-size: 11px; color: var(--text-3); text-align: right; }
 /* What the y axis is, above it on the left, as the x axis's is below it on

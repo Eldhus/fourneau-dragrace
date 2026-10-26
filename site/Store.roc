@@ -64,7 +64,7 @@ Store :: [].{
 			},
 			race: {
 				competitors: competitors.map(|c| c.name),
-				workloads: workloads.map(|w| { name: w.name, test: w.test, kind: w.kind, title: w.title, summary: w.summary, protocol: w.protocol, connections: w.connections, streams: w.streams, keepalive: w.keepalive, http2: w.http2, tls: w.tls }),
+				workloads: workloads.map(|w| { name: w.name, test: w.test, kind: w.kind, title: w.title, summary: w.summary, protocol: w.protocol, connections: w.connections, streams: w.streams, keepalive: w.keepalive, http2: w.http2, tls: w.tls, saturated: w.saturated }),
 				cloud: { servers: classes.map(|c| { name: c.name, label: c.label, title: c.title }) },
 			},
 			machines: machines.map(|m| {
@@ -110,6 +110,8 @@ Store :: [].{
 						p999_ms: x.p999_ms,
 						cpu_busy_pct: x.cpu_busy_pct,
 						loader_cpu_busy_pct: x.loader_cpu_busy_pct,
+						errors: x.errors,
+						non_2xx: x.non_2xx,
 					}),
 				}
 			}),

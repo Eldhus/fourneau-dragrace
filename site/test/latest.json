@@ -95,7 +95,8 @@
         "protocol": "http1",
         "streams": 0,
         "http2": false,
-        "tls": false
+        "tls": false,
+        "saturated": 0
       },
       {
         "name": "echo-4k",
@@ -112,7 +113,8 @@
         "protocol": "http1",
         "streams": 0,
         "http2": false,
-        "tls": false
+        "tls": false,
+        "saturated": 0
       },
       {
         "name": "templates",
@@ -129,7 +131,8 @@
         "protocol": "http1",
         "streams": 0,
         "http2": false,
-        "tls": false
+        "tls": false,
+        "saturated": 0
       },
       {
         "name": "churn",
@@ -146,7 +149,8 @@
         "protocol": "http1",
         "streams": 0,
         "http2": false,
-        "tls": false
+        "tls": false,
+        "saturated": 0
       }
     ],
     "cloud": {

@@ -22,14 +22,21 @@ SELECT name, version FROM run_versions WHERE run_id = :run_id ORDER BY name;
 -- @param run_id : Str
 SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;
 
+-- `saturated`: a mixed workload's share of the offered rate a step must
+-- answer to hold, from its race.json (0 for a closed one).
 -- name: workloads :many(64)
 -- @param run_id : Str
 -- @column keepalive : Bool
 -- @column http2 : Bool
 -- @column tls : Bool
-SELECT name, test, kind, title, summary, protocol, connections, streams, keepalive, http2, tls
-FROM run_workloads WHERE run_id = :run_id
-ORDER BY position;
+-- @column saturated : F64
+SELECT w.name, w.test, w.kind, w.title, w.summary, w.protocol, w.connections, w.streams,
+  w.keepalive, w.http2, w.tls,
+  coalesce((SELECT json_extract(d.value, '$.mixed.saturated')
+    FROM run_settings s, json_each(s.race_json, '$.workloads') AS d
+    WHERE s.run_id = w.run_id AND json_extract(d.value, '$.name') = w.test), 0.0) AS saturated
+FROM run_workloads w WHERE w.run_id = :run_id
+ORDER BY w.position;
 
 -- name: classes :many(32)
 -- @param run_id : Str
@@ -59,7 +66,7 @@ FROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;
 -- name: steps :many(5000)
 -- @param run_id : Str
 SELECT class, workload, competitor, offered_rps, achieved_rps, p99_ms, p999_ms,
-  cpu_busy_pct, loader_cpu_busy_pct
+  cpu_busy_pct, loader_cpu_busy_pct, errors, non_2xx
 FROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;
 
 -- Every finished run's best rounds (as `results`), oldest first: the

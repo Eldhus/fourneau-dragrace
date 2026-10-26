@@ -78,6 +78,7 @@ RaceClasses :: [].{
 				open : List(
 					{
 						caption : Str,
+						failures : Bool,
 						key : Str,
 						legend : List({ competitor : Str, drawn : Bool }),
 						lines : List(
@@ -85,8 +86,10 @@ RaceClasses :: [].{
 								competitor : Str,
 								dots : List(
 									{
+										cross : Str,
 										cx : Str,
 										cy : Str,
+										failed : Bool,
 										hollow : Bool,
 										title : Str,
 									},
@@ -99,6 +102,18 @@ RaceClasses :: [].{
 						loader_bound : Bool,
 						measure : Str,
 						run : Str,
+						table : List(
+							{
+								climbed : Bool,
+								competitor : Str,
+								ended : Str,
+								failed : Str,
+								good : Str,
+								held : Str,
+								note : Str,
+								p99 : Str,
+							},
+						),
 						ticks_x : List({ label : Str, x : Str }),
 						ticks_y : List(
 							{ label : Str, line_y : Str, text_y : Str },

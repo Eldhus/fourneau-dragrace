@@ -61,17 +61,23 @@ View :: [].{
 	## A section of the race page, toggled beside the class tabs.
 	Section : { name : Str, label : Str }
 	## The open-loop ladder: p99 against the offered rate, a line per
-	## competitor; a hollow point is a step where the loader was the limit.
-	OpenDot : { cx : Str, cy : Str, hollow : Bool, title : Str }
+	## competitor; a hollow point is a step where the loader was the limit,
+	## a cross (`failed`, drawn by `cross`) one where a request failed.
+	OpenDot : { cx : Str, cy : Str, hollow : Bool, failed : Bool, cross : Str, title : Str }
 	OpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str }
 	## An open line before its label is placed: `end_x`, `end_y` are where
 	## it ends, for spreading the labels apart (`spread_open`).
 	DraftOpenLine : { competitor : Str, path : Str, dots : List(OpenDot), label_x : Str, label_y : Str, end_x : F64, end_y : F64 }
 	## `caption`: one sentence on the load; `measure`: the y axis's note;
-	## `loader_bound`: a point is hollow, so the legend explains it.
-	## `legend`: every competitor of the race, in its order, "n/a" where it
-	## has no line, so both sections' legends are alike.
-	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), legend : List(Legend), ticks_x : List(Mark), ticks_y : List(Tick), loader_bound : Bool }
+	## `loader_bound`: a point is hollow, `failures`: one is a cross, so the
+	## legend explains it. `legend`: every competitor of the race, in its
+	## order, "n/a" where it has no line, so both sections' legends are
+	## alike. `table`: each competitor's climb in figures.
+	OpenChart : { key : Str, title : Str, caption : Str, variant : List(Str), run : Str, measure : Str, lines : List(OpenLine), legend : List(Legend), ticks_x : List(Mark), ticks_y : List(Tick), loader_bound : Bool, failures : Bool, table : List(OpenRow) }
+	## A climb in figures: the highest rate it held, its good answers and
+	## p99 there; the step that ended it and why (`ended`); `note` for a
+	## competitor with no climb.
+	OpenRow : { competitor : Str, climbed : Bool, held : Str, good : Str, p99 : Str, ended : Str, failed : Str, note : Str }
 	## A chart's legend entry; `drawn`, else "n/a": not raced, or no result.
 	Legend : { competitor : Str, drawn : Bool }
 	Latest : { id : Str, started : Str, took : Str, timed : Bool, commits : List(Commit), competitors : List(Str), sections : List(Section), section : Str, classes : List(Class) }
@@ -597,7 +603,7 @@ as_test = |workloads, workload|
 	}
 
 expect {
-	w = |name, test, protocol, title| { name, test, kind: "closed", title, summary: title, protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False }
+	w = |name, test, protocol, title| { name, test, kind: "closed", title, summary: title, protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False, saturated: 0.0 }
 	all = [w("echo-4k", "echo-4k", "http1", "Echo 4 KiB"), w("echo-4k-tls", "echo-4k", "tls", "Echo 4 KiB, HTTP/2 + TLS"), w("plaintext-h2", "plaintext", "h2c", "Plaintext, HTTP/2 (h2c)")]
 	shown = |name| all.find_first(|x| x.name == name).map_ok(|x| as_test(all, x).title) ?? ""
 	shown("echo-4k-tls") == "Echo 4 KiB" and shown("echo-4k") == "Echo 4 KiB" and shown("plaintext-h2") == "Plaintext, HTTP/2 (h2c)"
@@ -611,7 +617,7 @@ chart_key : Data.Workload -> Str
 chart_key = |workload| if workload.protocol == "h2c" workload.name else workload.test
 
 expect {
-	w = |name, test, protocol| { name, test, kind: "closed", title: "", summary: "", protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False }
+	w = |name, test, protocol| { name, test, kind: "closed", title: "", summary: "", protocol, connections: 256, streams: 0, keepalive: Bool.True, http2: Bool.False, tls: Bool.False, saturated: 0.0 }
 	chart_key(w("echo-4k-tls", "echo-4k", "tls")) == "echo-4k" and chart_key(w("echo-4k", "echo-4k", "http1")) == "echo-4k"
 	and chart_key(w("plaintext-h2", "plaintext", "h2c")) == "plaintext-h2"
 }
@@ -1138,15 +1144,17 @@ open_charts = |run, class|
 			Err(NoClimb)
 		} else {
 			shown = as_test(run.race.workloads, workload)
-			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: shown.title, summary: shown.summary, variant: workload_variant(workload), run: run.id, results, competitors: run.race.competitors }) })
+			# The table has a row for every result, valid or not, as a strip's.
+			all = run.results.keep_if(|r| r.class == class and r.workload == workload.name)
+			Ok({ section: workload.protocol, chart: open_chart({ key: "open-${chart_key(workload)}", title: shown.title, summary: shown.summary, variant: workload_variant(workload), run: run.id, results, all, held_share: workload.saturated, competitors: run.race.competitors }) })
 		}
 	})
 
 ## p99 against the offered rate, on a log axis: the slowest part's. (A
 ## switch to p50, p90, p99.9 and the mean was built and taken out; the
 ## charts all looked alike.)
-open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), competitors : List(Str) } -> View.OpenChart
-open_chart = |{ key, title, summary, variant, run, results, competitors }| {
+open_chart : { key : Str, title : Str, summary : Str, variant : List(Str), run : Str, results : List(Data.Result), all : List(Data.Result), held_share : F64, competitors : List(Str) } -> View.OpenChart
+open_chart = |{ key, title, summary, variant, run, results, all, held_share, competitors }| {
 	steps = results.map(|r| r.open_loop).join()
 	most_rate = steps.fold(0.0, |top_rate, s| if s.offered_rps > top_rate s.offered_rps else top_rate)
 	x_ceiling = nice_ceiling(most_rate)
@@ -1168,8 +1176,62 @@ open_chart = |{ key, title, summary, variant, run, results, competitors }| {
 	# the axis's note.
 	measure = "p99 latency, the slowest request type's"
 	loader_bound = lines.any(|l| l.dots.any(|dot| dot.hollow))
+	failures = lines.any(|l| l.dots.any(|dot| dot.failed))
 	legend = competitors.map(|c| { competitor: c, drawn: lines.any(|l| l.competitor == c) })
-	{ key, title, caption: summary, variant, run, measure, lines, legend, ticks_x, ticks_y, loader_bound }
+	table = competitors.map(|c| open_row(c, all.find_first(|r| r.competitor == c), held_share))
+	{ key, title, caption: summary, variant, run, measure, lines, legend, ticks_x, ticks_y, loader_bound, failures, table }
+}
+
+## A step where a request failed: no answer, or an answer not 2xx.
+step_failed : Data.OpenStep -> Bool
+step_failed = |s| s.errors > 0 or s.non_2xx > 0
+
+## A step held, as the racer judges it (tools/Mixed.roc, `held`): no request
+## failed, and at least `held_share` of the offered rate answered (the
+## workload's `saturated`).
+step_held : Data.OpenStep, F64 -> Bool
+step_held = |s, held_share| !step_failed(s) and s.achieved_rps >= held_share * s.offered_rps
+
+## What failed in a step, each kind apart; "" for none.
+failed_text : Data.OpenStep -> Str
+failed_text = |s| {
+	refused = if s.non_2xx > 0 ["${Format.thousands(s.non_2xx.to_f64())} answered not 2xx"] else []
+	lost = if s.errors > 0 ["${Format.thousands(s.errors.to_f64())} with no answer"] else []
+	Str.join_with(refused.concat(lost), ", ")
+}
+
+## A competitor's climb in figures: the steps it held before the first it
+## did not, and that step. Runs before 2026-10-26 climbed on past a step
+## with refusals; their table ends the climb where the rule now would.
+open_row : Str, Try(Data.Result, _), F64 -> View.OpenRow
+open_row = |competitor, found, held_share| {
+	none = { competitor, climbed: Bool.False, held: "", good: "", p99: "", ended: "", failed: "", note: "" }
+	match found {
+		Err(_) => { ..none, note: "n/a" }
+		Ok(result) if !result.valid or result.open_loop.is_empty() => { ..none, note: if result.note == "" "no climb" else result.note }
+		Ok(result) => {
+			steps = result.open_loop
+			first_not_held = steps.find_first_index(|s| !step_held(s, held_share))
+			held_count = first_not_held ?? steps.len()
+			best = steps.take_first(held_count).last()
+			at_best =
+				match best {
+					Ok(s) => { held: Format.thousands(s.offered_rps), good: Format.thousands(s.achieved_rps), p99: Format.latency(s.p99_ms) }
+					Err(_) => { held: "none", good: "", p99: "" }
+				}
+			ending =
+				match first_not_held {
+					Ok(index) =>
+						match steps.get(index) {
+							Ok(s) if step_failed(s) => { ended: Format.thousands(s.offered_rps), failed: failed_text(s) }
+							Ok(s) => { ended: Format.thousands(s.offered_rps), failed: "fell behind: ${Format.thousands(s.achieved_rps)}/s answered" }
+							Err(_) => { ended: "", failed: "" }
+						}
+					Err(_) => { ended: "", failed: "held every rate" }
+				}
+			{ ..none, climbed: Bool.True, held: at_best.held, good: at_best.good, p99: at_best.p99, ended: ending.ended, failed: ending.failed }
+		}
+	}
 }
 
 open_line : Data.Result, (F64 -> F64), (F64 -> F64) -> View.DraftOpenLine
@@ -1180,6 +1242,8 @@ open_line = |result, x, y| {
 		cx: Format.one_decimal(p.px),
 		cy: Format.one_decimal(p.py),
 		hollow: p.s.loader_cpu_busy_pct >= loader_limit_pct,
+		failed: step_failed(p.s),
+		cross: cross_at(p.px, p.py),
 		title: step_title(result.competitor, p.s),
 	})
 	{ last_x, last_y } =
@@ -1193,9 +1257,17 @@ open_line = |result, x, y| {
 step_title : Str, Data.OpenStep -> Str
 step_title = |competitor, s| {
 	limit = if s.loader_cpu_busy_pct >= loader_limit_pct " (the loader was the limit)" else ""
-	rates = "${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered"
+	rates = "${Format.thousands(s.offered_rps)}/s offered, ${Format.thousands(s.achieved_rps)}/s answered 2xx"
+	failed = if step_failed(s) "; failed: ${failed_text(s)}" else ""
 	cpu = "server CPU ${Format.thousands(s.cpu_busy_pct)}%, loader ${Format.thousands(s.loader_cpu_busy_pct)}%${limit}"
-	"${competitor}: ${rates}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
+	"${competitor}: ${rates}${failed}; the slowest part's p99 ${Format.latency(s.p99_ms)} ms, p99.9 ${Format.latency(s.p999_ms)} ms; ${cpu}"
+}
+
+## An × centred on a point, the size of a point (r 4).
+cross_at : F64, F64 -> Str
+cross_at = |x, y| {
+	n = |v| Format.one_decimal(v)
+	"M${n(x - 3.5)} ${n(y - 3.5)}L${n(x + 3.5)} ${n(y + 3.5)}M${n(x - 3.5)} ${n(y + 3.5)}L${n(x + 3.5)} ${n(y - 3.5)}"
 }
 
 ## The open chart's labels, spread as the history charts' are.
@@ -1409,3 +1481,39 @@ expect {
 }
 
 expect View.in_minutes(59.0) == "in under a minute" and View.in_minutes(61.0) == "in about 2 min" and View.whole_minutes(120.0) == "2 min"
+
+# A climb's table row ends it at the first step not held: one with a
+# refusal or an error (each said apart), or one answering under the share;
+# a climb that held every step says so. A run before 2026-10-26 climbed on
+# past refusals; its row ends where the rule now would.
+open_step = |offered, answered| { offered_rps: offered, achieved_rps: answered, p99_ms: 2.0, p999_ms: 4.0, cpu_busy_pct: 90.0, loader_cpu_busy_pct: 20.0, errors: 0, non_2xx: 0 }
+climb_of = |steps| Ok({ class: "c", workload: "conduit", competitor: "x", valid: Bool.True, note: "", rounds: [], best_rps: 0.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: steps })
+
+expect {
+	refused = open_row("roux", climb_of([open_step(1000.0, 1000.0), open_step(2000.0, 2000.0), { ..open_step(2800.0, 2100.0), non_2xx: 26810 }, { ..open_step(4000.0, 2100.0), non_2xx: 90000 }]), 0.9)
+	refused.held == "2,000" and refused.good == "2,000" and refused.ended == "2,800" and refused.failed == "26,810 answered not 2xx"
+}
+
+expect {
+	behind = open_row("go", climb_of([open_step(1000.0, 1000.0), open_step(2000.0, 1990.0), open_step(2800.0, 2000.0)]), 0.9)
+	behind.held == "2,000" and behind.good == "1,990" and behind.ended == "2,800" and behind.failed == "fell behind: 2,000/s answered"
+}
+
+expect {
+	topped = open_row("axum", climb_of([open_step(1000.0, 1000.0), open_step(2000.0, 2000.0)]), 0.9)
+	topped.held == "2,000" and topped.ended == "" and topped.failed == "held every rate"
+}
+
+expect {
+	at_once = open_row("zig", climb_of([{ ..open_step(1000.0, 990.0), errors: 5, non_2xx: 2 }]), 0.9)
+	at_once.climbed and at_once.held == "none" and at_once.ended == "1,000" and at_once.failed == "2 answered not 2xx, 5 with no answer"
+}
+
+expect open_row("bw", Err(NotFound), 0.9).note == "n/a" and !open_row("bw", Err(NotFound), 0.9).climbed
+
+expect {
+	failed_dot = { ..open_step(2800.0, 2100.0), non_2xx: 3 }
+	drawn = open_line({ class: "c", workload: "conduit", competitor: "roux", valid: Bool.True, note: "", rounds: [], best_rps: 0.0, median_p95_ms: 0.0, median_p99_ms: 0.0, median_p999_ms: 0.0, open_loop: [open_step(1000.0, 1000.0), failed_dot] }, |r| r, |ms| ms)
+	drawn.dots.map(|d| d.failed) == [Bool.False, Bool.True]
+	and drawn.dots.map(|d| Str.contains(d.title, "failed: 3 answered not 2xx")) == [Bool.False, Bool.True]
+}

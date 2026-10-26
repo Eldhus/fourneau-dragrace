@@ -34,25 +34,25 @@ statements = [
 	{ name: "Pages.versions", sql: "SELECT name, version FROM run_versions WHERE run_id = :run_id ORDER BY name;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3] },
 	# 9: Pages.sql:21
 	{ name: "Pages.competitors", sql: "SELECT name FROM run_competitors WHERE run_id = :run_id ORDER BY position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3] },
-	# 10: Pages.sql:25
-	{ name: "Pages.workloads", sql: "SELECT name, test, kind, title, summary, protocol, connections, streams, keepalive, http2, tls\nFROM run_workloads WHERE run_id = :run_id\nORDER BY position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 3, 3, 1, 1, 5, 5, 5] },
-	# 11: Pages.sql:34
+	# 10: Pages.sql:27
+	{ name: "Pages.workloads", sql: "SELECT w.name, w.test, w.kind, w.title, w.summary, w.protocol, w.connections, w.streams,\n  w.keepalive, w.http2, w.tls,\n  coalesce((SELECT json_extract(d.value, '\$.mixed.saturated')\n    FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), 0.0) AS saturated\nFROM run_workloads w WHERE w.run_id = :run_id\nORDER BY w.position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 3, 3, 1, 1, 5, 5, 5, 2] },
+	# 11: Pages.sql:41
 	{ name: "Pages.classes", sql: "SELECT name, label, title FROM run_classes WHERE run_id = :run_id ORDER BY position;", writes: Bool.False, rows_max: 32, params: [3], columns: [3, 3, 3] },
-	# 12: Pages.sql:38
+	# 12: Pages.sql:45
 	{ name: "Pages.machines", sql: "SELECT role, class, size, cpu, cpus, kernel, memory_mib\nFROM machines WHERE run_id = :run_id ORDER BY class, role;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 1, 3, 1] },
-	# 13: Pages.sql:43
+	# 13: Pages.sql:50
 	{ name: "Pages.results", sql: "SELECT class, workload, competitor, valid, note\nFROM results WHERE run_id = :run_id ORDER BY class, workload, competitor;", writes: Bool.False, rows_max: 2000, params: [3], columns: [3, 3, 3, 5, 3] },
-	# 14: Pages.sql:50
+	# 14: Pages.sql:57
 	{ name: "Pages.rounds", sql: "SELECT class, workload, competitor, rps, p95_ms, p99_ms, p999_ms, cpu_busy_pct, steal_pct,\n  CAST(rss_kib AS REAL) AS rss_kib, loader_cpu_busy_pct, net_rx_mbps, net_tx_mbps,\n  CAST(tcp_retransmits AS REAL) AS tcp_retransmits, load_seconds\nFROM rounds WHERE run_id = :run_id ORDER BY class, workload, competitor, round;", writes: Bool.False, rows_max: 10000, params: [3], columns: [3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] },
-	# 15: Pages.sql:59
-	{ name: "Pages.steps", sql: "SELECT class, workload, competitor, offered_rps, achieved_rps, p99_ms, p999_ms,\n  cpu_busy_pct, loader_cpu_busy_pct\nFROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;", writes: Bool.False, rows_max: 5000, params: [3], columns: [3, 3, 3, 2, 2, 2, 2, 2, 2] },
-	# 16: Pages.sql:67
+	# 15: Pages.sql:66
+	{ name: "Pages.steps", sql: "SELECT class, workload, competitor, offered_rps, achieved_rps, p99_ms, p999_ms,\n  cpu_busy_pct, loader_cpu_busy_pct, errors, non_2xx\nFROM open_steps WHERE run_id = :run_id ORDER BY class, workload, competitor, step;", writes: Bool.False, rows_max: 5000, params: [3], columns: [3, 3, 3, 2, 2, 2, 2, 2, 2, 1, 1] },
+	# 16: Pages.sql:74
 	{ name: "Pages.history", sql: "SELECT r.id, r.started_at, s.class, s.workload, s.competitor, s.valid,\n  coalesce((SELECT max(x.rps) FROM rounds x WHERE x.run_id = s.run_id AND x.class = s.class\n    AND x.workload = s.workload AND x.competitor = s.competitor), 0.0) AS best_rps\nFROM (SELECT id, started_at FROM runs WHERE status = 'finished'\n      ORDER BY started_at DESC LIMIT 400) AS r\nJOIN results s ON s.run_id = r.id\nORDER BY r.started_at, s.class, s.workload, s.competitor;", writes: Bool.False, rows_max: 40000, params: [], columns: [3, 3, 3, 3, 3, 5, 2] },
-	# 17: Pages.sql:79
+	# 17: Pages.sql:86
 	{ name: "Pages.recent", sql: "SELECT id, trigger, status, reason, started_at, finished_at FROM runs\nORDER BY started_at DESC LIMIT 10;", writes: Bool.False, rows_max: 10, params: [], columns: [3, 3, 3, 3, 3, 19] },
-	# 18: Pages.sql:91
+	# 18: Pages.sql:98
 	{ name: "Pages.workload_specs", sql: "SELECT w.name, w.test, w.kind, w.title, w.summary, w.method, w.path, w.body_bytes,\n  w.connections, w.keepalive, w.http2, w.streams, w.tls, w.protocol,\n  coalesce((SELECT json_extract(d.value, '\$.detail')\n    FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), '') AS detail,\n  coalesce((SELECT group_concat(json_extract(p.value, '\$.name') || ' '\n      || CAST(round(json_extract(p.value, '\$.share') * 100) AS INTEGER) || '%', ', ')\n    FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.parts') AS p\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), '') AS mix,\n  coalesce((SELECT min(r.value) FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.rates') AS r\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), 0) AS lowest,\n  coalesce((SELECT max(r.value) FROM run_settings s, json_each(s.race_json, '\$.workloads') AS d,\n      json_each(d.value, '\$.mixed.rates') AS r\n    WHERE s.run_id = w.run_id AND json_extract(d.value, '\$.name') = w.test), 0) AS highest\nFROM run_workloads w WHERE w.run_id = :run_id ORDER BY w.position;", writes: Bool.False, rows_max: 64, params: [3], columns: [3, 3, 3, 3, 3, 3, 3, 1, 1, 5, 5, 1, 5, 3, 3, 3, 1, 1] },
-	# 19: Pages.sql:119
+	# 19: Pages.sql:126
 	{ name: "Pages.race_settings", sql: "SELECT s.rounds, s.warmup_seconds, s.measure_seconds\nFROM run_settings s WHERE s.run_id = :run_id;", writes: Bool.False, rows_max: 1, params: [3], columns: [1, 1, 1] },
 	# 20: Requests.sql:3
 	{ name: "Requests.add", sql: "INSERT INTO requests (kind, asked_by) VALUES (:kind, :asked_by)\nRETURNING id, asked_at;", writes: Bool.True, rows_max: 1, params: [3, 3], columns: [1, 3] },
