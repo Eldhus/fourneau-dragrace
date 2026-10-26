@@ -20,13 +20,16 @@ import templates/Menu
 ## contract and `Menu.template`) renders them per request.
 ## The conduit workload's database: ROUX_DATABASE says where, as the race
 ## starts every server, in WAL mode with synchronous=NORMAL (the contract).
+## A request waits for it up to 5 s, as the contract asks of every server,
+## where roux's defaults answer 503 sooner; 256 may wait for the writer,
+## every request Conduit's 256 connections hold.
 Context : { menu : Menu.Ctx, db : Sqlite.Db }
 
 program = { init!, respond! }
 
 init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64), DbErr(Sqlite.Err)])
 init! = || {
-	db = Sqlite.open!(Database.at("conduit.db"), { synchronous: Normal })?
+	db = Sqlite.open!(Database.at("conduit.db"), { synchronous: Normal, read_wait_ms: 5_000, write_wait_ms: 5_000, writers_waiting: 256 })?
 	Ok({
 	config: { port: 8080, static_dir: "" },
 	context: {
