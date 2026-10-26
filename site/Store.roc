@@ -59,6 +59,7 @@ Store :: [].{
 				rust: pinned("rust"),
 				axum: pinned("axum"),
 				tokio: pinned("tokio"),
+				basic_webserver: pinned("basic_webserver"),
 				droplet_image: version_of("droplet_image"),
 			},
 			race: {

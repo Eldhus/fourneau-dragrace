@@ -59,6 +59,8 @@ Data :: [].{
 		rust : Pinned,
 		axum : Pinned,
 		tokio : Pinned,
+		## "" before 2026-10-26, when no race recorded it.
+		basic_webserver : Pinned,
 		droplet_image : Str,
 	}
 

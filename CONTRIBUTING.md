@@ -41,6 +41,8 @@ A competitor is a directory under `competitors/` with its source, a README, its 
 - **Built** by that one command in its directory, for x86-64-v3 with AES and PCLMUL.
     - A command starting `zig`, `roc` or `roux` gets the pinned one.
     - Whatever else the build reads is listed in `inputs`.
+    - A Roc competitor on a released platform gives its `version`, the release its `main.roc`
+      pins by URL; the build refuses the two disagreeing.
 - **Started** with no arguments and `ROUX_ADDRESS`, `ROUX_PORT` (8080) and `ROUX_DATABASE` set.
     - With `"tls": true`, also `ROUX_TLS_CERT` and `ROUX_TLS_KEY` (PEM).
     - TLS is 1.3, X25519, AES-128-GCM, no session resumption, HTTP/2 by ALPN.

@@ -77,8 +77,8 @@ CREATE TABLE run_settings (
 ) STRICT;
 
 -- The versions raced, a row each (zig, roc, oha, go, rust, axum, tokio,
--- droplet_image): the build's record and race.json's (tools/Local.roc,
--- versions!).
+-- basic_webserver since 2026-10-26, droplet_image): the build's record and
+-- race.json's (tools/Toolchain.roc, versions!).
 CREATE TABLE run_versions (
   run_id TEXT NOT NULL REFERENCES runs (id),
   name TEXT NOT NULL,

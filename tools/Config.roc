@@ -89,12 +89,15 @@ Config :: [].{
 
 	## competitors/NAME/competitor.json: one command, run in the
 	## competitor's directory, that writes `binary`; `inputs` are what it
-	## reads by path outside its directory (its key takes them).
+	## reads by path outside its directory (its key takes them). `version`:
+	## what it races where no tool reports it (basic-webserver's platform,
+	## which its main.roc pins by URL); "" when a tool does.
 	Competitor : {
 		name : Str,
 		title : Str,
 		language : Str,
 		framework : Str,
+		version : Str,
 		inputs : List(Str),
 		argv : List(Str),
 		env : List((Str, Str)),
@@ -214,6 +217,7 @@ Config :: [].{
 			title: file.title,
 			language: file.language,
 			framework: file.framework,
+			version: file.?version ?? "",
 			inputs: file.?inputs ?? [],
 			argv: file.build.argv,
 			env,
@@ -285,6 +289,7 @@ CompetitorFile : {
 	title : Str,
 	language : Str,
 	framework : Str,
+	version ?: Str,
 	inputs ?: List(Str),
 	build : { argv : List(Str), env ?: Dict(Str, Str), binary : Str },
 	tls : Bool,

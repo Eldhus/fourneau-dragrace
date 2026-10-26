@@ -136,7 +136,7 @@ Local :: [].{
 		}
 		id = run_id("local", started)
 		race_json = Checkout.read!("${root}/race.json")?
-		versions = Local.versions!(root, race)?
+		versions = Toolchain.versions!(root, race)?
 		fingerprint = Checkout.fingerprint!(root)?
 		run = {
 			id,
@@ -170,26 +170,6 @@ Local :: [].{
 		Fetch.pinned!(pin.url, pin.sha256, path)?
 		Run.run!("", [], ["chmod", "755", path])?
 		Ok(path)
-	}
-
-	## A race's versions, a row each as the site keeps them: the build's
-	## record, and oha's and the droplet image from race.json.
-	versions! : Str, Config.Race => Try(List({ name : Str, version : Str }), [Failed(Str)])
-	versions! = |root, race| {
-		text = Checkout.read!(Toolchain.record(root))?
-		parsed : Try(Toolchain.Used, _)
-		parsed = Json.parse(text)
-		used = parsed ? |_| Failed("out/toolchain.json: not the toolchain's record")
-		Ok([
-			{ name: "zig", version: used.zig },
-			{ name: "roc", version: used.roc },
-			{ name: "oha", version: race.oha.version },
-			{ name: "go", version: used.go },
-			{ name: "rust", version: used.rust },
-			{ name: "axum", version: used.axum },
-			{ name: "tokio", version: used.tokio },
-			{ name: "droplet_image", version: race.cloud.image },
-		])
 	}
 
 	## The results file: everything needed to read a race later without this

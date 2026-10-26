@@ -731,7 +731,7 @@ race! = |root, args| {
 			finished_at: Utc.now!().to_iso_8601(),
 			seed: seed.to_i64_wrap(),
 			fingerprint: Checkout.fingerprint!(root)?,
-			versions: Local.versions!(root, race)?,
+			versions: Toolchain.versions!(root, race)?,
 			race_json: Checkout.read!("${root}/race.json")?,
 			machines: session.machines,
 			results,

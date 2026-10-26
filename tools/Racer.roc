@@ -18,6 +18,7 @@ import Retry
 import Run
 import SiteApi
 import Text
+import Toolchain
 import Worker
 
 ## The racer takes what the site was asked (a check or a race), races the
@@ -680,18 +681,7 @@ seconds_since! = |from| Utc.now!().since(from).to_nanos().to_f64() / 1e9
 ## race.json and the versions raced, as the site keeps them (RacePost).
 race_post! = |root, race, competitors, seed| {
 	race_json = Checkout.read!("${root}/race.json")?
-	text = Checkout.read!("${Checkout.out(root)}/toolchain.json")?
-	used = JsonValue.parse(text) ? |_| Failed("out/toolchain.json: not JSON")
-	versions = [
-		("zig", used.get("zig").text()),
-		("roc", used.get("roc").text()),
-		("oha", race.oha.version),
-		("go", used.get("go").text()),
-		("rust", used.get("rust").text()),
-		("axum", used.get("axum").text()),
-		("tokio", used.get("tokio").text()),
-		("droplet_image", race.cloud.image),
-	].map(|(name, version)| { name, version })
+	versions = Toolchain.versions!(root, race)?
 	post = {
 		seed,
 		region: race.cloud.region,

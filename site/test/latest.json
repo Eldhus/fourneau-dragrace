@@ -52,6 +52,9 @@
       "version": "1.53.2",
       "pinned_in": "competitors/axum/Cargo.lock"
     },
+    "basic_webserver": {
+      "version": ""
+    },
     "droplet_image": "ubuntu-24-04-x64",
     "runner_image": "ubuntu-24.04",
     "fourneau": {

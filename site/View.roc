@@ -372,10 +372,14 @@ View :: [].{
 			{ name: "Rust", version: v.rust.version },
 			{ name: "axum", version: v.axum.version },
 			{ name: "tokio", version: v.tokio.version },
-			{ name: "oha (load)", version: v.oha.version },
-			{ name: "droplet image", version: v.droplet_image },
-			{ name: "fourneau", version: Format.short(run.fingerprint.fourneau) },
-		].concat(if run.fingerprint.roux.is_empty() [] else [{ name: "roux", version: Format.short(run.fingerprint.roux) }])
+		]
+			.concat(if v.basic_webserver.version.is_empty() [] else [{ name: "basic-webserver", version: v.basic_webserver.version }])
+			.concat([
+				{ name: "oha (load)", version: v.oha.version },
+				{ name: "droplet image", version: v.droplet_image },
+				{ name: "fourneau", version: Format.short(run.fingerprint.fourneau) },
+			])
+			.concat(if run.fingerprint.roux.is_empty() [] else [{ name: "roux", version: Format.short(run.fingerprint.roux) }])
 	}
 }
 
@@ -911,6 +915,19 @@ expect
 			# A race before HTTP/2 and TLS: one section, no toggle, no h2c.
 			one_section = page.section == "http1" and List.len(page.sections) == 1 and page.classes.all(|c| c.h2c.is_empty())
 			List.len(page.classes) == 2 and List.len(page.commits) == 3 and first_strip_ok and one_section
+		}
+		Err(_) => Bool.False
+	}
+
+# basic-webserver's version follows tokio once a race recorded it; before
+# 2026-10-26 none did, and no row says "".
+expect
+	match Data.run(latest_sample) {
+		Ok(run) => {
+			names = |r| View.pins(r).map(|p| p.name)
+			recorded = { ..run, versions: { ..run.versions, basic_webserver: { version: "0.19.0" } } }
+			after_tokio = names(recorded).drop_first(6).first() == Ok("basic-webserver")
+			!names(run).contains("basic-webserver") and after_tokio and View.pins(recorded).contains({ name: "basic-webserver", version: "0.19.0" })
 		}
 		Err(_) => Bool.False
 	}
