@@ -35,10 +35,22 @@ pub async fn open(path: &str) -> Result<Conduit, sqlx::Error> {
         .busy_timeout(Duration::from_secs(5));
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get()) as u32;
     // The writer first: it makes the WAL's files the readers open.
-    let writer = SqlitePoolOptions::new().max_connections(1).connect_with(options.clone()).await?;
-    let readers = SqlitePoolOptions::new().max_connections(2 * cores).connect_with(options).await?;
+    let writer = SqlitePoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(DATABASE_WAIT)
+        .connect_with(options.clone())
+        .await?;
+    let readers = SqlitePoolOptions::new()
+        .max_connections(2 * cores)
+        .acquire_timeout(DATABASE_WAIT)
+        .connect_with(options)
+        .await?;
     Ok(Conduit { readers, writer })
 }
+
+/// The race's bound (CONTRIBUTING.md): a request waits at most this long for
+/// a connection from a pool, then fails. sqlx's default is 30 s.
+const DATABASE_WAIT: Duration = Duration::from_secs(5);
 
 pub fn routes(conduit: Conduit) -> Router {
     Router::new()

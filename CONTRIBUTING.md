@@ -54,6 +54,10 @@ A competitor is a directory under `competitors/` with its source, a README, its 
         - An event a chunk; 400 without signals.
     - Conduit, a slice of [RealWorld](https://realworld-docs.netlify.app/):
         - On the SQLite at `ROUX_DATABASE`; its schema is `workloads/conduit/schema.sql`, WAL, `synchronous=NORMAL`.
+        - A request waits for the database up to 5 s, then fails, and never gives up sooner.
+            - Every wait counts: a connection from a pool, a reader, the write lock, SQLite's
+              `busy_timeout` (5000).
+            - Load shedding is a server's own choice, but the race compares servers that wait.
         - `GET /api/articles`, `GET /api/articles/SLUG`
         - `POST /api/articles/SLUG/comments`, `POST /api/articles/SLUG/favorite`
         - The writes need `Authorization: Token TOKEN`.

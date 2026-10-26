@@ -8,6 +8,7 @@ package main
 // SQLITE_BUSY), and BEGIN IMMEDIATE for writes.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -47,10 +48,23 @@ func openConduit(path string) (*conduit, error) {
 }
 
 func (c *conduit) routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/articles", c.list)
-	mux.HandleFunc("GET /api/articles/{slug}", c.article)
-	mux.HandleFunc("POST /api/articles/{slug}/comments", c.comment)
-	mux.HandleFunc("POST /api/articles/{slug}/favorite", c.favorite)
+	mux.HandleFunc("GET /api/articles", bounded(c.list))
+	mux.HandleFunc("GET /api/articles/{slug}", bounded(c.article))
+	mux.HandleFunc("POST /api/articles/{slug}/comments", bounded(c.comment))
+	mux.HandleFunc("POST /api/articles/{slug}/favorite", bounded(c.favorite))
+}
+
+// databaseWait is the race's bound (CONTRIBUTING.md): a request waits at most
+// this long for the database, a connection from a pool included, then fails.
+// database/sql alone waits for a connection as long as the client stays.
+const databaseWait = 5 * time.Second
+
+func bounded(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), databaseWait)
+		defer cancel()
+		handler(w, r.WithContext(ctx))
+	}
 }
 
 type profile struct {
