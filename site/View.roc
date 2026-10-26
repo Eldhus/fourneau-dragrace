@@ -1065,7 +1065,7 @@ workload_card = |test, variants| {
 		}
 	mixed = test.kind == "mixed"
 	rates = "${Format.thousands(test.lowest.to_f64())} to ${Format.thousands(test.highest.to_f64())} requests a second"
-	open = if mixed "Open loop only: ${test.mix}; ${rates}, the same for every server, each climbing until it falls behind." else ""
+	open = if mixed "Open loop only: ${test.mix}; ${rates}, the same for every server, each climbing until it falls behind or a request fails." else ""
 	{
 		title: test.title,
 		route: if mixed path else "${test.method} ${path}",
@@ -1119,7 +1119,7 @@ expect {
 	open = workload_card(conduit, [conduit, conduit_tls])
 	card.route == "GET /sse" and card.paragraphs == [] and card.protocols == ["HTTP/1.1", "HTTP/2+TLS"]
 	and open.route == "/sse"
-	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind."]
+	and open.paragraphs == ["Open loop only: list 50%, article 50%; 250 to 32,000 requests a second, the same for every server, each climbing until it falls behind or a request fails."]
 	and variant_groups(specs).map(|g| g.rows) == [
 		[{ line: ["256 connections"], tests: "sse, conduit" }, { line: ["64 one-shot connections"], tests: "churn" }],
 		[{ line: ["128 connections × 2 streams"], tests: "sse, conduit" }, { line: ["HTTP/1.1+TLS", "64 one-shot connections"], tests: "churn" }],

@@ -12,8 +12,9 @@ import Text
 ## A mixed workload (conduit): reads and writes at once against a database,
 ## open loop only. A ladder of fixed total rates, the same for every
 ## competitor, each offered as its parts at their shares, one oha a part,
-## all at once. A competitor climbs until it falls behind (answers under
-## `saturated` of the rate offered, or errors). Latency is counted from
+## all at once. A competitor climbs until a step does not hold (`held`):
+## good answers under `saturated` of the rate offered, or any request that
+## failed, by an error or by an answer not 2xx. Latency is counted from
 ## when each request was due (oha -q, --latency-correction): a server that
 ## stalls is sent no less, so its stall shows. Steps rather than a ramp: a
 ## ramp never holds a rate long enough for its percentiles to mean it.
@@ -118,6 +119,13 @@ Mixed :: [].{
 	## A step from its parts: the rates add, the mean is over every request
 	## (each part's weighted by its answers); a step's percentiles are the
 	## worst part's, as a percentile of the whole cannot be had from parts.
+	## A step the server held: its good answers at least `saturated` of the
+	## rate offered, and no request failed. A refusal (a 503 of a server
+	## shedding load) is a failure as an error is: the client got no answer
+	## it could use, however soon.
+	held : Results.Step, F64 -> Bool
+	held = |step, saturated| step.achieved_rps >= saturated * step.offered_rps and step.errors == 0 and step.non_2xx == 0
+
 	step : U64, List(Results.Part) -> Results.Step
 	step = |rate, parts| {
 		achieved = parts.map(|p| p.achieved_rps).sum()
@@ -193,8 +201,8 @@ climb_rates! = |race, workload, mixed, target, pid| {
 				}
 				Run.log!("    ${Text.pad_left(rate.to_str(), 8)}/s offered  ${Text.pad_left(Text.fixed(step.achieved_rps, 0), 8)}/s good  mean ${Text.fixed(step.mean_ms, 2)} ms  worst p99 ${Text.fixed(step.p99_ms, 2)} ms")
 				$steps = $steps.append(step)
-				# Behind: the next rate would only be further behind.
-				if step.achieved_rps < mixed.saturated * rate.to_f64() or step.errors > 0 {
+				# Not held: the next rate would only be further behind.
+				if !Mixed.held(step, mixed.saturated) {
 					return Ok({ steps: $steps, why: "", failure: "" })
 				}
 			}
@@ -292,3 +300,13 @@ expect {
 	s = Mixed.step(100, parts)
 	s.achieved_rps == 100 and s.mean_ms == 3 and s.p99_ms == 5 and s.p999_ms == 10 and s.errors == 1 and s.non_2xx == 2
 }
+
+# A step holds with every answer good and enough of them; one 503 ends the
+# climb as one error does, however fast it came.
+good_part = { name: "a", offered_rps: 100, achieved_rps: 95, mean_ms: 2, p50_ms: 1, p99_ms: 5, p999_ms: 9, errors: 0, non_2xx: 0 }
+
+expect Mixed.held(Mixed.step(100, [good_part]), 0.95)
+expect !Mixed.held(Mixed.step(100, [{ ..good_part, achieved_rps: 94 }]), 0.95)
+expect !Mixed.held(Mixed.step(100, [{ ..good_part, errors: 1 }]), 0.95)
+expect !Mixed.held(Mixed.step(100, [{ ..good_part, non_2xx: 1 }]), 0.95)
+expect !Mixed.held(Mixed.step(100, [good_part, { ..good_part, name: "b", non_2xx: 1 }]), 0.95)
