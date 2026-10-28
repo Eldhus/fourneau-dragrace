@@ -2,8 +2,10 @@
 -- rows. STRICT, as roux-db requires. Times are
 -- ISO 8601 UTC text ("2026-10-07T07:00:00Z"), which sorts as time; the
 -- site's own times come from SQLite's clock (`now`). A flag is INTEGER 0
--- or 1. A change here ships with a dated migration in site/migrations,
--- which the host agent runs on deploy.
+-- or 1. The site's database follows this file as the site starts (roux's
+-- migrations): a table whose CREATE changed is rebuilt with its rows. A
+-- table or column renamed, dropped or filled by hand is a step of
+-- ledger.sql, beside this file.
 
 -- What was asked: a check (race only if the race key changed since the
 -- last finished run) by the racer's timer, or a race by
@@ -56,8 +58,7 @@ CREATE TABLE run_commits (
 -- the file whole, for what no column holds. versions_json is versions.json
 -- whole, before it went; '' since 2026-10-13 (each version is a row of
 -- run_versions). A comment inside a CREATE statement is stored in
--- sqlite_schema, which roux compares with this file, so it changes only with
--- a migration.
+-- sqlite_schema, so changing one rebuilds its table as the site starts.
 CREATE TABLE run_settings (
   run_id TEXT PRIMARY KEY REFERENCES runs (id),
   seed INTEGER NOT NULL,

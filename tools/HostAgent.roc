@@ -21,11 +21,11 @@ import Text
 ## Installed by the owner (dragrace site install-server), never updated by
 ## a build.
 ##
-## A release carries the site's migrations (site/migrations). The site
-## serving answered its health, so its database holds every migration its
-## release carries: those the new release carries beyond them are run, with
-## the site stopped, after a copy of the database; if the new site then does
-## not answer, the copy is put back with the old site.
+## The site migrates its database as it starts (roux: site/db/schema.sql
+## and ledger.sql), and the previous site may not open what a newer one
+## migrated. So before a new site starts, the database is copied, with the
+## site stopped; if the new site then does not answer, the copy is put back
+## with the previous site.
 HostAgent :: [].{
 	## The owner's, on the site host (/etc/dragrace-host/config.json): the
 	## repository (owner/name), the site's code (releases/ID, and current, a
@@ -51,14 +51,13 @@ HostAgent :: [].{
 	latest : Str, Str -> Str
 	latest = |repository, name| "https://github.com/${repository}/releases/latest/download/${name}"
 
-	## The migrations `release` carries that `current` does not, by name, in
-	## order. None when current carries no migrations directory: what its
-	## database has run is then unknown, so nothing is run.
-	pending : List(Str), List(Str) -> List(Str)
-	pending = |ran, carried| Text.sorted(carried.keep_if(|name| name.ends_with(".sql") and !ran.contains(name)))
+	## The copy of the database made before a build's site first starts,
+	## in backups/ (beside the site's own copies, which it names otherwise).
+	copy_name : Str -> Str
+	copy_name = |id| "pre-deploy-${id}.db"
 }
 
-## A deploy with migrations under way: written beside the database before
+## A deploy under way: written beside the database before
 ## the site stops, removed when the deploy ends either way. An agent killed
 ## or a host rebooted mid-way leaves it, and the next run ends that deploy:
 ## no state but this, the release serving, and the copy.
@@ -106,19 +105,19 @@ deploy! = |config| {
 	Path.utf8("${release}.new").rename!(Path.utf8(release)) ? |PathErr(err, _)| Failed("${release}: ${err.to_str()}")
 	commits = info.get("commits")
 	Run.log!("deploying site ${id} (dragrace ${Text.take(commits.get("fourneau-dragrace").text(), 7)}, roux ${Text.take(commits.get("roux").text(), 7)})")
-	pending = pending_migrations!(current, release)
-	backup = if pending.is_empty() "" else "${Checkout.parent(config.database)}/backups/pre-migration-${id}.db"
-	if !pending.is_empty() {
+	# A first site makes its database from schema.sql: nothing to copy.
+	backups = "${Checkout.parent(config.database)}/backups"
+	backup = if current == "" "" else "${backups}/${HostAgent.copy_name(id)}"
+	if backup != "" {
 		write_journal!(config, { build: id, release, previous: current, backup })?
-		# A request on the site's socket starts the site while it is
-		# stopped: let that be the new one, which waits for the lock.
-		link!(home, release)?
-		match migrate!(config, release, pending, backup) {
+		match copy!(config, backup) {
 			Ok({}) => {}
 			Err(Interrupted) => return Err(Interrupted)
 			Err(Failed(why)) => {
-				Run.log!("site ${id}: ${why}")
-				return roll_back!(config, id, current, backup)
+				# Not the build's doing: the previous site again, and the
+				# build tried again next.
+				undo!(config, id, current, "")?
+				return Err(Failed("site ${id}: ${why}"))
 			}
 		}
 	}
@@ -127,6 +126,7 @@ deploy! = |config| {
 		Run.log!("site ${id} is serving")
 		remove_journal!(config)?
 		prune!("${home}/releases", [id, Checkout.base(current)])
+		prune_copies!(backups, id)
 		Ok({})
 	} else {
 		Run.log!("site ${id} did not answer in 30 s: back to ${Checkout.base(current)}")
@@ -141,21 +141,6 @@ current! = |home|
 		Ok(target) => target.display()
 		Err(_) => ""
 	}
-
-## The migrations the new release runs: its .sql files beyond those the
-## current one carries.
-pending_migrations! : Str, Str => List(Str)
-pending_migrations! = |current, release| {
-	if current == "" {
-		# A first site makes its database from schema.sql.
-		return []
-	}
-	names! = |dir| (Path.utf8(dir).list!() ?? []).map(|p| Checkout.base(p.display()))
-	match Path.utf8("${current}/migrations").list!() {
-		Err(_) => []
-		Ok(_) => HostAgent.pending(names!("${current}/migrations"), names!("${release}/migrations"))
-	}
-}
 
 journal_path : HostAgent.Config -> Str
 journal_path = |config| "${Checkout.parent(config.database)}/deploying.json"
@@ -181,7 +166,7 @@ remove_journal! = |config| {
 }
 
 ## End a deploy the journal says did not finish: the new release, if it is
-## linked and answers once started (every migration had run); otherwise the
+## linked and answers once started (it migrated as it started); otherwise the
 ## copy put back, when there is one, and the previous release. Not marked
 ## failed: the next run tries the build again from the start (a reboot is
 ## the likely cause, not the build). A failure leaves the journal for the
@@ -200,19 +185,19 @@ finish_interrupted! = |config| {
 	Run.log!("site ${journal.build}: a deploy that did not finish (the agent stopped mid-way): ending it")
 	if current!(config.home) == journal.release {
 		if systemctl!("restart", config.service).is_ok() and healthy!(config.health) {
-			Run.log!("site ${journal.build} is serving: its migrations had all run")
+			Run.log!("site ${journal.build} is serving: it migrated as it started")
 			remove_journal!(config)?
 			return Ok(Found)
 		}
 	}
-	# The copy exists only whole: without it, no migration ran.
+	# The copy exists only whole: without it, the new site never started.
 	backup = if Path.utf8(journal.backup).exists!() == Ok(Bool.True) journal.backup else ""
 	undo!(config, journal.build, journal.previous, backup)?
 	Err(Failed("site ${journal.build}: the deploy that did not finish is undone; tried again next"))
 }
 
 ## Mark a build failed and serve the previous site again, on the database
-## as it was before the migrations, when there were any.
+## as it was before the new site started, when there was one.
 roll_back! : HostAgent.Config, Str, Str, Str => Try({}, [BadFlag(Str), Failed(Str), Interrupted])
 roll_back! = |config, id, current, backup| {
 	failed = "${config.home}/failed"
@@ -243,24 +228,34 @@ undo! = |config, id, current, backup| {
 	Ok({})
 }
 
-## Stop the site, copy its database to `backup`, and run the migrations
-## named, in order, each with -bail.
-migrate! : HostAgent.Config, Str, List(Str), Str => Try({}, [Failed(Str), Interrupted])
-migrate! = |config, release, pending, backup| {
+## Stop the site and copy its database to `backup`. current still names
+## the previous site: a request on the site's socket while it is stopped
+## starts that one, which opens the database as it is (the copy then waits
+## for it, or fails and the build is tried again), never the new one, which
+## would migrate before the copy.
+copy! : HostAgent.Config, Str => Try({}, [Failed(Str), Interrupted])
+copy! = |config, backup| {
 	systemctl!("stop", config.service).map_err(narrow)?
 	# The copy exists only whole: an agent stopped while copying leaves a
-	# .partial, and no migration ran.
+	# .partial, and the new site never started.
 	partial = "${backup}.partial"
 	# VACUUM INTO refuses a file that exists.
 	_ = Path.utf8(partial).delete!()
-	sqlite!(config, "VACUUM INTO '${partial}';\n") ? |err| narrow(prefix(err, "the copy before migrating"))
+	sqlite!(config, "VACUUM INTO '${partial}';\n") ? |err| narrow(prefix(err, "the copy before the new site"))
 	Path.utf8(partial).rename!(Path.utf8(backup)) ? |PathErr(err, _)| Failed("${backup}: ${err.to_str()}")
-	for name in pending {
-		script = Checkout.read!("${release}/migrations/${name}")?
-		sqlite!(config, script) ? |err| narrow(prefix(err, "migration ${name}"))
-		Run.log!("migrated: ${name}")
-	}
 	Ok({})
+}
+
+## Keep the copy made before `id`'s site started, and delete the older
+## ones: the agent's only, never the site's own.
+prune_copies! : Str, Str => {}
+prune_copies! = |dir, id| {
+	for entry in Path.utf8(dir).list!() ?? [] {
+		name = Checkout.base(entry.display())
+		if name.starts_with("pre-deploy-") and name != HostAgent.copy_name(id) {
+			_ = entry.delete!()
+		}
+	}
 }
 
 ## Point current at a release, atomically, and restart the site.
@@ -299,8 +294,8 @@ systemctl! = |verb, service| {
 }
 
 ## A script run with sqlite3 as the site's user (the files it makes are the
-## site's), -bail stopping at the first failed statement (without it a
-## migration runs on to its DROP and COMMIT), waiting up to 10 s for a lock.
+## site's), -bail stopping at the first failed statement, waiting up to 10 s
+## for a lock.
 sqlite! : HostAgent.Config, Str => Try({}, [BadFlag(Str), Failed(Str), Interrupted])
 sqlite! = |config, script| {
 	_ = Run.with_input!("", ["runuser", "-u", config.user, "--", "sqlite3", "-bail", config.database], ".timeout 10000\n${script}".to_utf8()) ? |err| prefix(err, "sqlite3")
@@ -346,6 +341,5 @@ narrow = |err|
 		Interrupted => Interrupted
 	}
 
-expect HostAgent.pending(["2026-10-01-a.sql"], ["2026-10-02-b.sql", "2026-10-01-a.sql", "README"]) == ["2026-10-02-b.sql"]
-expect HostAgent.pending([], []) == []
+expect HostAgent.copy_name("0123456789abcdef") == "pre-deploy-0123456789abcdef.db"
 expect HostAgent.latest("Eldhus/fourneau-dragrace", "build.json") == "https://github.com/Eldhus/fourneau-dragrace/releases/latest/download/build.json"

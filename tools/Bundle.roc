@@ -20,9 +20,9 @@ import Toolchain
 ##   out/toolchain.json, and out/bin with the competitors, oha, and this
 ##   dragrace binary with the commit it was built from beside it
 ##   (dragrace.commit);
-## - site.tar.gz: the site, for the site host: dragrace-site, static/ with
-##   site.json (the commit, which the racer reads), and migrations/ (which
-##   the host agent runs);
+## - site.tar.gz: the site, for the site host: dragrace-site (which
+##   migrates its database as it starts) and static/ with site.json (the
+##   commit, which the racer reads);
 ## - build.json: the commits built, each competitor's key and the race key,
 ##   and each file's SHA-256 (the release's body too).
 ##
@@ -80,7 +80,6 @@ Bundle :: [].{
 				("dragrace-site", Site.binary(root)),
 				("static", "${root}/site/static"),
 				("static/site.json", site_json),
-				("migrations", "${root}/site/migrations"),
 			],
 		)?
 		info = {
