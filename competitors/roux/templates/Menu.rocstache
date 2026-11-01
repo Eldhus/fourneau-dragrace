@@ -9,7 +9,7 @@ Ctx : { dishes : List({ name : Str, price : U32 }) }
 <h1>Menu</h1>
 <table>
 <tr><th>Dish</th><th>Price</th></tr>
-{{#dishes}}<tr><td>{{ name }}</td><td>{{ price }}</td></tr>
+{{#dishes |dish|}}<tr><td>{{ dish.name }}</td><td>{{ dish.price }}</td></tr>
 {{/dishes}}</table>
 </body>
 </html>

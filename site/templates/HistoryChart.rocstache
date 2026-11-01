@@ -1,9 +1,9 @@
-<figure class="strip" data-chart="history-{{ key }}"><figcaption><b>{{ title }}</b>{{ scale }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
-{{?empty}}<p class="pending">no results yet</p>{{/empty}}{{^empty}}<ul class="legend chart-legend" aria-label="Competitors">{{#lines}}<li{{^drawn}} class="na" title="n/a: no line in this section"{{/drawn}}><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/lines}}</ul>
-<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 280" role="img" aria-label="{{ title }}: {{ scale }}">
-{{#ticks}}<line class="grid" x1="72" x2="680" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
-{{/ticks}}{{?based}}<line class="base" x1="72" x2="680" y1="{{ base_y }}" y2="{{ base_y }}"></line>
-{{/based}}{{#dates}}<text class="date" x="{{ x }}" y="248">{{ day }}<tspan x="{{ x }}" dy="1.15em">{{ time }}</tspan></text>
-{{/dates}}{{#lines}}{{?drawn}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
-{{#dots}}<circle class="point s-{{ ../competitor }}" cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}"><title>{{ title }}</title></circle>
-{{/dots}}{{/drawn}}{{/lines}}</svg></div>{{/empty}}</figure>
+<figure class="strip" data-chart="history-{{ chart.key }}"><figcaption><b>{{ chart.title }}</b>{{ chart.scale }}<span class="variant">{{#chart.variant |part|}}<span>{{ part }}</span>{{/chart.variant}}</span></figcaption>
+{{?chart.empty}}<p class="pending">no results yet</p>{{/chart.empty}}{{^chart.empty}}<ul class="legend chart-legend" aria-label="Competitors">{{#chart.lines |line|}}<li{{^line.drawn}} class="na" title="n/a: no line in this section"{{/line.drawn}}><span class="swatch s-{{ line.competitor }}"></span>{{ line.competitor }}</li>{{/chart.lines}}</ul>
+<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 280" role="img" aria-label="{{ chart.title }}: {{ chart.scale }}">
+{{#chart.ticks |tick|}}<line class="grid" x1="72" x2="680" y1="{{ tick.line_y }}" y2="{{ tick.line_y }}"></line><text class="tick" x="64" y="{{ tick.text_y }}">{{ tick.label }}</text>
+{{/chart.ticks}}{{?chart.based}}<line class="base" x1="72" x2="680" y1="{{ chart.base_y }}" y2="{{ chart.base_y }}"></line>
+{{/chart.based}}{{#chart.dates |date|}}<text class="date" x="{{ date.x }}" y="248">{{ date.day }}<tspan x="{{ date.x }}" dy="1.15em">{{ date.time }}</tspan></text>
+{{/chart.dates}}{{#chart.lines |line|}}{{?line.drawn}}<path class="line s-{{ line.competitor }}" d="{{ line.path }}"></path>
+{{#line.dots |dot|}}<circle class="point s-{{ line.competitor }}" cx="{{ dot.cx }}" cy="{{ dot.cy }}" r="{{ dot.r }}"><title>{{ dot.title }}</title></circle>
+{{/line.dots}}{{/line.drawn}}{{/chart.lines}}</svg></div>{{/chart.empty}}</figure>

@@ -2,17 +2,17 @@
 <h1>Competitors</h1>
 <p>Five servers. Make any of them faster or fairer: <a href="/contribute">Contribute</a>.</p>
 <div class="cards competitors">
-{{#competitors}}<section class="card competitor"><h3><span class="swatch s-{{ name }}"></span>{{ name }}<span class="lang">{{ language }}</span></h3>
-<dl class="facts"><dt>io</dt><dd>{{ io }}</dd><dt>templates</dt><dd>{{ templates }}</dd><dt>db</dt><dd>{{ db }}</dd><dt>build</dt><dd class="build">{{ build }}</dd></dl>
-<p class="links">{{#links}}<a href="{{ href }}">{{ label }}</a>{{/links}}</p>
-<p class="about">{{ about }}</p></section>
+{{#competitors |competitor|}}<section class="card competitor"><h3><span class="swatch s-{{ competitor.name }}"></span>{{ competitor.name }}<span class="lang">{{ competitor.language }}</span></h3>
+<dl class="facts"><dt>io</dt><dd>{{ competitor.io }}</dd><dt>templates</dt><dd>{{ competitor.templates }}</dd><dt>db</dt><dd>{{ competitor.db }}</dd><dt>build</dt><dd class="build">{{ competitor.build }}</dd></dl>
+<p class="links">{{#competitor.links |link|}}<a href="{{ link.href }}">{{ link.label }}</a>{{/competitor.links}}</p>
+<p class="about">{{ competitor.about }}</p></section>
 {{/competitors}}</div>
 <section class="pins">
 <h2>Versions</h2>
 <p>As the last race recorded them.</p>
 <table>
 <tbody>
-{{#pins}}<tr><td>{{ name }}</td><td>{{ version }}</td></tr>
+{{#pins |pin|}}<tr><td>{{ pin.name }}</td><td>{{ pin.version }}</td></tr>
 {{/pins}}</tbody>
 </table>
 </section>

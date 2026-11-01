@@ -225,7 +225,7 @@ View :: [].{
 		{ waiting: List.len(entries) < 2, sections, section, base, bases, classes }
 	}
 
-	## The race page's live banner while a run races (LiveRace.rocstache):
+	## The race page's live banner while a run races (IndexPage's LiveRace):
 	## "Racing now", then a lane per server class. `flare`: a result has
 	## just landed; `done` (the steps raced of all the classes') names the
 	## flare's canvas, so each result's is a new element and its animation

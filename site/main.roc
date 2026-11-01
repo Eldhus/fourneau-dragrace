@@ -23,7 +23,6 @@ import Data
 import View
 import Competitors
 import templates/IndexPage
-import templates/LiveRace
 import templates/RaceClasses
 import templates/HistoryPanel
 import templates/WorkloadsPage
@@ -478,7 +477,7 @@ race_live! = |db, request| {
 				if said != $said or calm.done != $done {
 					# The first read draws what the page has; no flare.
 					landed = $done != "" and calm.done != $done
-					Sse.send!(stream, Rocstache.patch!(LiveRace.template({ ..calm, flare: landed })))?
+					Sse.send!(stream, Rocstache.patch!(IndexPage.LiveRace.template({ ..calm, flare: landed })))?
 					$said = said
 					$done = calm.done
 					$quiet = 0

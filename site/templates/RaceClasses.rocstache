@@ -1,28 +1,28 @@
 <div id="race-classes">
-<div class="tabbar"><nav class="tabs" aria-label="Server class">{{#tabs}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/tabs}}</nav><nav class="tabs protocol" aria-label="Protocol">{{#sections}}<a href="{{ href }}" data-on:click__prevent="{{ action }}"{{?current}} aria-current="page"{{/current}}>{{ label }}</a>{{/sections}}</nav>{{#classes}}<a class="raw" href="/data/classes/{{ ../id }}/{{ name }}.json" title="this class's data, as the page draws it">json</a>{{/classes}}</div>
-{{#classes}}<h2 class="class">{{ title }}</h2>
-<dl class="machines">{{#machines}}<dt>{{ role }}</dt><dd>{{#items}}<span>{{ . }}</span> {{/items}}</dd>{{/machines}}</dl>
+<div class="tabbar"><nav class="tabs" aria-label="Server class">{{#tabs |tab|}}<a href="{{ tab.href }}" data-on:click__prevent="{{ tab.action }}"{{?tab.current}} aria-current="page"{{/tab.current}}>{{ tab.label }}</a>{{/tabs}}</nav><nav class="tabs protocol" aria-label="Protocol">{{#sections |section|}}<a href="{{ section.href }}" data-on:click__prevent="{{ section.action }}"{{?section.current}} aria-current="page"{{/section.current}}>{{ section.label }}</a>{{/sections}}</nav>{{#classes |class|}}<a class="raw" href="/data/classes/{{ id }}/{{ class.name }}.json" title="this class's data, as the page draws it">json</a>{{/classes}}</div>
+{{#classes |class|}}<h2 class="class">{{ class.title }}</h2>
+<dl class="machines">{{#class.machines |machine|}}<dt>{{ machine.role }}</dt><dd>{{#machine.items |item|}}<span>{{ item }}</span> {{/machine.items}}</dd>{{/class.machines}}</dl>
 <div class="strips">
-{{#strips}}{{> Strip}}{{/strips}}</div>
-{{#open}}<figure class="strip open" data-chart="{{ key }}"><span class="run-id">{{ run }}</span><figcaption><b>{{ title }}</b>{{ caption }}<span class="variant">{{#variant}}<span>{{ . }}</span>{{/variant}}</span></figcaption>
-<p class="axis-note y">&uarr; {{ measure }}</p>
-<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ title }}: {{ measure }} by offered requests per second">
-{{#ticks_y}}<line class="grid" x1="72" x2="600" y1="{{ line_y }}" y2="{{ line_y }}"></line><text class="tick" x="64" y="{{ text_y }}">{{ label }}</text>
-{{/ticks_y}}{{#ticks_x}}<text class="date" x="{{ x }}" y="250">{{ label }}</text>
-{{/ticks_x}}{{#lines}}<path class="line s-{{ competitor }}" d="{{ path }}"></path>
-{{#dots}}{{?failed}}<g class="failed s-{{ ../competitor }}"><title>{{ title }}</title><circle class="halo" cx="{{ cx }}" cy="{{ cy }}" r="5"></circle><path class="cross" d="{{ cross }}"></path></g>{{/failed}}{{^failed}}<circle class="point s-{{ ../competitor }}{{?hollow}} hollow{{/hollow}}" cx="{{ cx }}" cy="{{ cy }}" r="4"><title>{{ title }}</title></circle>{{/failed}}
-{{/dots}}<text class="end" x="{{ label_x }}" y="{{ label_y }}">{{ competitor }}</text>
-{{/lines}}</svg></div><p class="axis-note">offered requests per second &rarr;</p>
-<ul class="legend" aria-label="Lines">{{#legend}}<li{{^drawn}} class="na" title="n/a: no line in this section"{{/drawn}}><span class="swatch s-{{ competitor }}"></span>{{ competitor }}</li>{{/legend}}{{?loader_bound}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li>{{/loader_bound}}{{?failures}}<li><svg class="swatch cross-dot" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5L9.5 9.5M2.5 9.5L9.5 2.5"></path></svg>a request failed: an error, or an answer not 2xx</li>{{/failures}}</ul>
+{{#class.strips |strip|}}{{> Strip}}{{/class.strips}}</div>
+{{#class.open |chart|}}<figure class="strip open" data-chart="{{ chart.key }}"><span class="run-id">{{ chart.run }}</span><figcaption><b>{{ chart.title }}</b>{{ chart.caption }}<span class="variant">{{#chart.variant |part|}}<span>{{ part }}</span>{{/chart.variant}}</span></figcaption>
+<p class="axis-note y">&uarr; {{ chart.measure }}</p>
+<div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ chart.title }}: {{ chart.measure }} by offered requests per second">
+{{#chart.ticks_y |tick|}}<line class="grid" x1="72" x2="600" y1="{{ tick.line_y }}" y2="{{ tick.line_y }}"></line><text class="tick" x="64" y="{{ tick.text_y }}">{{ tick.label }}</text>
+{{/chart.ticks_y}}{{#chart.ticks_x |tick|}}<text class="date" x="{{ tick.x }}" y="250">{{ tick.label }}</text>
+{{/chart.ticks_x}}{{#chart.lines |line|}}<path class="line s-{{ line.competitor }}" d="{{ line.path }}"></path>
+{{#line.dots |dot|}}{{?dot.failed}}<g class="failed s-{{ line.competitor }}"><title>{{ dot.title }}</title><circle class="halo" cx="{{ dot.cx }}" cy="{{ dot.cy }}" r="5"></circle><path class="cross" d="{{ dot.cross }}"></path></g>{{/dot.failed}}{{^dot.failed}}<circle class="point s-{{ line.competitor }}{{?dot.hollow}} hollow{{/dot.hollow}}" cx="{{ dot.cx }}" cy="{{ dot.cy }}" r="4"><title>{{ dot.title }}</title></circle>{{/dot.failed}}
+{{/line.dots}}<text class="end" x="{{ line.label_x }}" y="{{ line.label_y }}">{{ line.competitor }}</text>
+{{/chart.lines}}</svg></div><p class="axis-note">offered requests per second &rarr;</p>
+<ul class="legend" aria-label="Lines">{{#chart.legend |entry|}}<li{{^entry.drawn}} class="na" title="n/a: no line in this section"{{/entry.drawn}}><span class="swatch s-{{ entry.competitor }}"></span>{{ entry.competitor }}</li>{{/chart.legend}}{{?chart.loader_bound}}<li><span class="swatch hollow-dot"></span>the loader was the limit</li>{{/chart.loader_bound}}{{?chart.failures}}<li><svg class="swatch cross-dot" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5L9.5 9.5M2.5 9.5L9.5 2.5"></path></svg>a request failed: an error, or an answer not 2xx</li>{{/chart.failures}}</ul>
 <details class="table"><summary>table</summary><table><thead><tr><th>competitor</th><th>held up to (req/s offered)</th><th>req/s answered there</th><th>p99 ms there</th><th>ended at (req/s offered)</th><th>why</th></tr></thead><tbody>
-{{#table}}<tr><td>{{ competitor }}</td>{{?climbed}}<td>{{ held }}</td><td>{{ good }}</td><td>{{ p99 }}</td><td>{{ ended }}</td><td>{{ failed }}</td>{{/climbed}}{{^climbed}}<td colspan="5">{{ note }}</td>{{/climbed}}</tr>
-{{/table}}</tbody></table></details></figure>
-{{/open}}{{#h2c}}<section class="h2c"><h3 class="class">HTTP/2 without TLS</h3>
+{{#chart.table |climb|}}<tr><td>{{ climb.competitor }}</td>{{?climb.climbed}}<td>{{ climb.held }}</td><td>{{ climb.good }}</td><td>{{ climb.p99 }}</td><td>{{ climb.ended }}</td><td>{{ climb.failed }}</td>{{/climb.climbed}}{{^climb.climbed}}<td colspan="5">{{ climb.note }}</td>{{/climb.climbed}}</tr>
+{{/chart.table}}</tbody></table></details></figure>
+{{/class.open}}{{#class.h2c |three|}}<section class="h2c"><h3 class="class">HTTP/2 without TLS</h3>
 <p class="intro">Plaintext three ways: HTTP/2 by prior knowledge (h2c) against HTTP/1.1 is what HTTP/2 costs or gives; HTTP/2 + TLS against h2c is what TLS costs. No browser speaks h2c: it takes the protocol apart from TLS.</p>
 <div class="strips">
-{{#strips}}{{> Strip}}{{/strips}}<div class="table three-ways"><table><thead><tr><th>competitor</th><th>HTTP/1.1</th><th>h2c</th><th><span class="wide">HTTP/2 + TLS</span><span class="narrow">+TLS</span></th><th class="change">HTTP/2</th><th class="change">TLS</th></tr></thead><tbody>
-{{#rows}}<tr><td>{{ competitor }}</td><td><span class="wide">{{ plain }}</span><span class="narrow">{{ plain_short }}</span></td><td><span class="wide">{{ h2c }}</span><span class="narrow">{{ h2c_short }}<small>{{ http2_note }}</small></span></td><td><span class="wide">{{ tls }}</span><span class="narrow">{{ tls_short }}<small>{{ tls_note }}</small></span></td><td class="change">{{ http2_change }}</td><td class="change">{{ tls_change }}</td></tr>
-{{/rows}}</tbody></table></div></div></section>
-{{/h2c}}<details class="history" data-on:toggle="el.open &amp;&amp; !el.querySelector('[data-chart]') &amp;&amp; @get('{{ history }}')"><summary>History, race by race</summary><div id="history-panel"><p class="pending">loading</p></div></details>
+{{#three.strips |strip|}}{{> Strip}}{{/three.strips}}<div class="table three-ways"><table><thead><tr><th>competitor</th><th>HTTP/1.1</th><th>h2c</th><th><span class="wide">HTTP/2 + TLS</span><span class="narrow">+TLS</span></th><th class="change">HTTP/2</th><th class="change">TLS</th></tr></thead><tbody>
+{{#three.rows |row|}}<tr><td>{{ row.competitor }}</td><td><span class="wide">{{ row.plain }}</span><span class="narrow">{{ row.plain_short }}</span></td><td><span class="wide">{{ row.h2c }}</span><span class="narrow">{{ row.h2c_short }}<small>{{ row.http2_note }}</small></span></td><td><span class="wide">{{ row.tls }}</span><span class="narrow">{{ row.tls_short }}<small>{{ row.tls_note }}</small></span></td><td class="change">{{ row.http2_change }}</td><td class="change">{{ row.tls_change }}</td></tr>
+{{/three.rows}}</tbody></table></div></div></section>
+{{/class.h2c}}<details class="history" data-on:toggle="el.open &amp;&amp; !el.querySelector('[data-chart]') &amp;&amp; @get('{{ class.history }}')"><summary>History, race by race</summary><div id="history-panel"><p class="pending">loading</p></div></details>
 {{/classes}}
 </div>
