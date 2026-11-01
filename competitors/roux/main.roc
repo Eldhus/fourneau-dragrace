@@ -1,4 +1,4 @@
-app [Context, program] { pf: platform "../../../roux/platform/main.roc" }
+app [Context, Hole, program] { pf: platform "../../../roux/platform/main.roc" }
 
 # The roux competitor: a Roc app on roux, the Roc platform
 # built on fourneau. Each request runs `respond!` on its connection's
@@ -13,6 +13,7 @@ import pf.Url
 import db/Database
 import Conduit
 import templates/Menu
+import templates/Holes
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
 ## (compiled to bytecode linked into the app by roux build, which the
@@ -25,7 +26,10 @@ import templates/Menu
 ## every request Conduit's 256 connections hold.
 Context : { menu : Menu.Ctx, db : Sqlite.Db }
 
-program = { init!, respond! }
+## The holes of Roc in the templates, which `roux build` writes.
+Hole : Holes.Hole
+
+program = { init!, respond!, hole: Holes.hole }
 
 init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64), DbErr(Sqlite.Err)])
 init! = || {
