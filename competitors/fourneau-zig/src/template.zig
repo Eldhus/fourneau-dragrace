@@ -54,23 +54,86 @@ fn write_value(writer: *std.Io.Writer, value: anytype) std.Io.Writer.Error!void 
     }
 }
 
-/// HTML escaping: `& < > " '`, runs of other bytes written whole.
+const V = @Vector(16, u8);
+
+/// HTML escaping: `& < > " '`, sixteen bytes looked at a time (the last
+/// chunk too, short or not), runs of other bytes written whole. A value
+/// with nothing to escape is one look and one write.
 fn write_escaped(writer: *std.Io.Writer, text: []const u8) std.Io.Writer.Error!void {
     var start: usize = 0;
-    for (text, 0..) |byte, index| {
-        const entity: []const u8 = switch (byte) {
-            '&' => "&amp;",
-            '<' => "&lt;",
-            '>' => "&gt;",
-            '"' => "&quot;",
-            '\'' => "&#39;",
-            else => continue,
-        };
-        try writer.writeAll(text[start..index]);
-        try writer.writeAll(entity);
-        start = index + 1;
+    var at: usize = 0;
+    while (at < text.len) : (at += 16) {
+        const len = @min(16, text.len - at);
+        var mask = specials(load16(text[at..][0..len])) & live(len);
+        while (mask != 0) : (mask &= mask - 1) {
+            const index = at + @ctz(mask);
+            try writer.writeAll(text[start..index]);
+            try writer.writeAll(entity(text[index]));
+            start = index + 1;
+        }
     }
     try writer.writeAll(text[start..]);
+}
+
+/// Up to 16 bytes as one vector: a single load when it cannot cross a page
+/// (the bytes past the end are never used), else a copy.
+inline fn load16(value: []const u8) [16]u8 {
+    assert(value.len <= 16);
+    if ((@intFromPtr(value.ptr) & 4095) <= 4096 - 16) return value.ptr[0..16].*;
+    var copy: [16]u8 = @splat(0);
+    @memcpy(copy[0..value.len], value);
+    return copy;
+}
+
+/// A bit for each byte of the chunk that HTML escaping replaces.
+inline fn specials(chunk: [16]u8) u16 {
+    const v: V = chunk;
+    const hits = (v == @as(V, @splat('&'))) | (v == @as(V, @splat('<'))) |
+        (v == @as(V, @splat('>'))) | (v == @as(V, @splat('"'))) | (v == @as(V, @splat('\'')));
+    return @bitCast(hits);
+}
+
+/// A bit for each of the chunk's first `len` bytes.
+inline fn live(len: usize) u16 {
+    assert(len <= 16);
+    return if (len == 16) 0xffff else (@as(u16, 1) << @intCast(len)) - 1;
+}
+
+fn entity(byte: u8) []const u8 {
+    return switch (byte) {
+        '&' => "&amp;",
+        '<' => "&lt;",
+        '>' => "&gt;",
+        '"' => "&quot;",
+        '\'' => "&#39;",
+        else => unreachable,
+    };
+}
+
+test "template: escaping, every byte at every position, short and long" {
+    var buffer: [64 * 6]u8 = undefined;
+    for (0..256) |byte| {
+        for ([_]usize{ 1, 5, 15, 16, 17, 40 }) |len| {
+            for (0..len) |at| {
+                var value: [40]u8 = @splat('x');
+                value[at] = @intCast(byte);
+                var writer: std.Io.Writer = .fixed(&buffer);
+                try write_escaped(&writer, value[0..len]);
+                // The plain loop it replaces, as the oracle.
+                var expected: [64 * 6]u8 = undefined;
+                var expected_len: usize = 0;
+                for (value[0..len]) |c| {
+                    const out: []const u8 = switch (c) {
+                        '&', '<', '>', '"', '\'' => entity(c),
+                        else => &.{c},
+                    };
+                    @memcpy(expected[expected_len..][0..out.len], out);
+                    expected_len += out.len;
+                }
+                try std.testing.expectEqualStrings(expected[0..expected_len], writer.buffered());
+            }
+        }
+    }
 }
 
 test "template: holes filled and escaped" {
