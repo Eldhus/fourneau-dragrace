@@ -1,0 +1,2 @@
+{{% import Fmt %}}
+{{ Fmt.kr(row.price) }} {{ currency }}

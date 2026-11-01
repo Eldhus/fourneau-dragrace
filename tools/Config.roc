@@ -85,6 +85,12 @@ Config :: [].{
 		## The workloads measured, when not all (a smoke race's); the checks
 		## still ask every workload's path.
 		loaded : Try(List(Str), [All]),
+		## race.json's `adhoc_workloads`: raced only when named (`adhoc race
+		## -workloads`, `local -workloads`), never by a nightly, and not on the
+		## site. Each test's page is checked against workloads/NAME.html.
+		adhoc_workloads : List(Workload),
+		## Each ad-hoc test's path and its reference page (Checkout reads them).
+		pages : List((Str, Str)),
 	}
 
 	## competitors/NAME/competitor.json: one command, run in the
@@ -115,6 +121,12 @@ Config :: [].{
 		}
 		tests = file.workloads.map(to_test)
 		workloads = tests.map_try(Config.expand)?.join()
+		adhoc_workloads = (file.?adhoc_workloads ?? []).map(to_test).map_try(Config.expand)?.join()
+		for w in adhoc_workloads {
+			if workloads.any(|n| n.name == w.name) {
+				return Err(Failed("race.json: ${w.name} is both a workload and an ad-hoc one"))
+			}
+		}
 		Ok({
 			port: file.port,
 			rounds: file.rounds,
@@ -129,6 +141,8 @@ Config :: [].{
 			menu,
 			stream,
 			loaded: Err(All),
+			adhoc_workloads,
+			pages: [],
 		})
 	}
 
@@ -265,6 +279,7 @@ RaceFile : {
 	competitors : List(Str),
 	oha : Config.Download,
 	workloads : List(TestFile),
+	adhoc_workloads ?: List(TestFile),
 	cloud : Config.Cloud,
 	local : { server_cpus : Str, loader_cpus : Str },
 }
@@ -376,8 +391,32 @@ expect Config.expand(test_of("x", [{ protocol: "http1", connections: 1, streams:
 expect Config.expand(test_of("x", [{ protocol: "http1", connections: 1, streams: 0 }, { protocol: "http1", connections: 1, streams: 0 }], Bool.True)).is_err()
 expect Config.expand(test_of("x", [{ protocol: "http1", connections: 0, streams: 0 }], Bool.True)).is_err()
 
+## A race.json with one workload, `p`, and `adhoc` as its ad-hoc ones.
+race_text : Str -> Str
+race_text = |adhoc| {
+	test = |name| "{\"name\":\"${name}\",\"title\":\"T\",\"summary\":\"s\",\"detail\":\"d\",\"method\":\"GET\",\"path\":\"/${name}\",\"keepalive\":true,\"variants\":[{\"protocol\":\"http1\",\"connections\":1}]}"
+	ad_hoc = Str.join_with(adhoc.split_on(",").keep_if(|n| n != "").map(test), ",")
+	"{\"port\":1,\"rounds\":1,\"warmup_seconds\":1,\"measure_seconds\":1,\"competitors\":[\"go\"],\"oha\":{\"version\":\"1\",\"url\":\"u\",\"sha256\":\"h\"},\"workloads\":[${test("p")}],\"adhoc_workloads\":[${ad_hoc}],\"cloud\":{\"region\":\"r\",\"image\":\"i\",\"servers\":[],\"tag\":\"t\",\"max_age_minutes\":1},\"local\":{\"server_cpus\":\"0\",\"loader_cpus\":\"1\"}}"
+}
+
+# An ad-hoc test is read apart from the nightly's workloads; one named as a
+# workload is refused.
 expect {
-	got = Config.competitor("go", "{\"title\":\"go\",\"language\":\"Go\",\"framework\":\"f\",\"build\":{\"argv\":[\"go\",\"build\"],\"env\":{\"GOAMD64\":\"v3\",\"CGO_ENABLED\":\"0\"},\"binary\":\"dragrace-go\"},\"tls\":true}")
+	match Config.race(race_text("catalog"), "", "") {
+		Ok(race) => race.workloads.map(|w| w.name) == ["p"] and race.adhoc_workloads.map(|w| w.path) == ["/catalog"]
+		Err(_) => Bool.False
+	}
+}
+expect Config.race(race_text("p"), "", "").is_err()
+expect {
+	match Config.race(race_text(""), "", "") {
+		Ok(race) => race.adhoc_workloads.is_empty()
+		Err(_) => Bool.False
+	}
+}
+
+expect {
+	got = Config.competitor("go","{\"title\":\"go\",\"language\":\"Go\",\"framework\":\"f\",\"build\":{\"argv\":[\"go\",\"build\"],\"env\":{\"GOAMD64\":\"v3\",\"CGO_ENABLED\":\"0\"},\"binary\":\"dragrace-go\"},\"tls\":true}")
 	match got {
 		Ok(c) => c.env == [("CGO_ENABLED", "0"), ("GOAMD64", "v3")] and c.inputs == [] and !c.kernel_tls
 		Err(_) => Bool.False

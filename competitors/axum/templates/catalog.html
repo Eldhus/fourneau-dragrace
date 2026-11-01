@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ title }}</title></head>
+<body>
+{# A comment: nothing of it is written. -#}
+<h1>{{ title }}</h1>
+<p>{{ note|safe }}</p>
+<p>{{ shop.name }}, {{ shop.city }}{% if shop.open %} (open){% endif %}</p>
+{% if !closed %}<p>Open today.</p>{% endif %}
+{% if specials.is_empty() %}<p>No specials.</p>{% endif %}
+<p>{{ self.plural(groups.len(), "group", "groups") }}, {{ rows.len() }} rows</p>
+{% for group in groups %}<h2>{{ group.name }}</h2><p>{% for member in group.members %}{{ member }};{% endfor %}</p>
+{% endfor -%}
+<table>
+{% for row in rows %}<tr{% if row.hot %} class="hot"{% endif %}><td>{{ row.id }}<td>{{ row.name }}<td>{{ row.stock }}<td>{% for tag in row.tags %}<i>{{ tag }}</i>{% else %}-{% endfor %}<td>{{ self.kr(row.price) }} {{ currency }}
+{% endfor -%}
+</table>
+</body>
+</html>

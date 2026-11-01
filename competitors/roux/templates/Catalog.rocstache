@@ -1,0 +1,39 @@
+{{%
+import Fmt
+## The catalog workload's page: every feature of the language at least once,
+## over 256 rows, its bytes kept small (it measures the rendering, not the
+## network). The reference is workloads/catalog.html.
+Ctx : {
+	title : Str,
+	note : Str,
+	currency : Str,
+	shop : { name : Str, city : Str, open : Bool },
+	closed : Bool,
+	specials : List(Str),
+	groups : List({ name : Str, members : List(Str) }),
+	rows : List({ id : U32, name : Str, price : U32, stock : I32, hot : Bool, tags : List(Str) }),
+}
+%}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ title }}</title></head>
+<body>
+{{! A comment: nothing of it is written. }}
+<h1>{{ title }}</h1>
+<p>{{{ note }}}</p>
+{{#shop |s|}}
+<p>{{ s.name }}, {{ shop.city }}{{?s.open}} (open){{/s.open}}</p>
+{{/shop}}
+{{^closed}}<p>Open today.</p>{{/closed}}
+{{^specials}}<p>No specials.</p>{{/specials}}
+<p>{{ Fmt.plural(groups.len(), "group", "groups") }}, {{ rows.len().to_str() }} rows</p>
+{{#groups |group|}}
+<h2>{{ group.name }}</h2><p>{{#group.members |member|}}{{ member }};{{/group.members}}</p>
+{{/groups}}
+<table>
+{{#rows |row|}}
+{{$Row}}<tr{{?row.hot}} class="hot"{{/row.hot}}><td>{{ row.id.to_str() }}<td>{{ row.name }}<td>{{ row.stock.to_str() }}<td>{{#row.tags |tag|}}<i>{{ tag }}</i>{{/row.tags}}{{^row.tags}}-{{/row.tags}}{{/Row}}<td>{{> Price}}
+{{/rows}}
+</table>
+</body>
+</html>

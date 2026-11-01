@@ -27,6 +27,9 @@ fourneau-zig is what Roc and roux cost.
     - Run by the host's template VM as the response is sent; the Roc handler only returns the record.
     - `templates/Menu.roc` is its contract, generated and committed: the record the template reads.
     - fourneau-zig's template is pure Zig, so it is the floor this one is measured against.
+- **`GET /catalog`** (ad hoc): `templates/Catalog.rocstache`, every feature of rocstache at least
+  once: a record's section, lists in lists, 256 rows, conditions, empty lists, raw HTML, the `Price`
+  partial, the `Row` fragment, and holes of Roc (`templates/Fmt.roc`'s `kr` and `plural`).
 - **`GET /sse`**: roux's `Url.query_value` and Roc's `Json.parse` for the signals.
     - Then roux's `Sse` effects, an event a `send!`, on the request's fiber.
 - **Conduit (`/api/...`)**: roux's SQLite.

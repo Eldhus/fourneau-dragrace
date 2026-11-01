@@ -65,7 +65,9 @@ Local :: [].{
 			}
 		names = Flags.value(flags, "competitors")
 		with_competitors = if names == "" quickened else { ..quickened, competitors: names.split_on(",") }
-		narrowed = if only == "" with_competitors else { ..with_competitors, workloads: with_competitors.workloads.keep_if(|w| only.split_on(",").contains(w.name)) }
+		# An ad-hoc workload races only when named.
+		named = with_competitors.workloads.concat(with_competitors.adhoc_workloads)
+		narrowed = if only == "" with_competitors else { ..with_competitors, workloads: named.keep_if(|w| only.split_on(",").contains(w.name)) }
 		{ ..narrowed, local }
 	}
 

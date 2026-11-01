@@ -13,6 +13,7 @@ import pf.Url
 import db/Database
 import Conduit
 import templates/Menu
+import templates/Catalog
 import templates/Holes
 
 ## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
@@ -24,7 +25,9 @@ import templates/Holes
 ## A request waits for it up to 5 s, as the contract asks of every server,
 ## where roux's defaults answer 503 sooner; 256 may wait for the writer,
 ## every request Conduit's 256 connections hold.
-Context : { menu : Menu.Ctx, db : Sqlite.Db }
+## The catalog workload's page, made once by `init!` (`catalog`), rendered
+## per request by `Catalog.rocstache`.
+Context : { menu : Menu.Ctx, catalog : Catalog.Ctx, db : Sqlite.Db }
 
 program = { init!, respond!, hole: Holes.hole }
 
@@ -35,6 +38,7 @@ init! = || {
 	config: { port: 8080, static_dir: "" },
 	context: {
 		db,
+		catalog: catalog(),
 		menu: {
 			dishes: [
 				{ name: "Roux", price: 120 },
@@ -77,6 +81,7 @@ respond! = |request, context| {
 				Err(BodyErr(err)) => Err(BadRequest(Str.inspect(err)))
 			}
 		("GET", "/menu") => Ok(Rocstache.html(Menu.template(context.menu)))
+		("GET", "/catalog") => Ok(Rocstache.html(Catalog.template(context.catalog)))
 		("GET", "/sse") =>
 			match signals(request.target) {
 				Ok({ count }) => datastar!(request, count.to_u64() + 1)
@@ -90,6 +95,51 @@ respond! = |request, context| {
 			}
 	}
 }
+
+# --- the catalog workload: the page's data ---------------------------------------
+
+## The catalog's names: markup, quotes and accents, each escaped as printed.
+names : List(Str)
+names = ["Roux", "Skyr & ber", "Crème", "<b>Stew</b>", "Hákarl", "Kjöt \"s\"", "O'Brien", "Pylsa"]
+
+## The catalog's data, as race.json's `catalog` defines it: row i (from 0)
+## is id i + 1, names[i % 8], price 500 + (i * 7919) % 20000 hundredths,
+## stock (i * 13) % 50 - 10, hot when i % 7 is 0, tags by i % 3: none,
+## veg, veg and gf. Group k (from 0) is "Group k + 1", names k to k + 2.
+catalog : () -> Catalog.Ctx
+catalog = || {
+	var $rows = []
+	for i in 0..<256.U64 {
+		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
+		$rows = $rows.append(
+			{
+				id: (i + 1).to_u32_wrap(),
+				name: name_at(i),
+				price: (500 + (i * 7919) % 20000).to_u32_wrap(),
+				stock: ((i * 13) % 50).to_i32_wrap() - 10,
+				hot: i % 7 == 0,
+				tags,
+			},
+		)
+	}
+	var $groups = []
+	for k in 0..<6.U64 {
+		$groups = $groups.append({ name: "Group ${(k + 1).to_str()}", members: [name_at(k), name_at(k + 1), name_at(k + 2)] })
+	}
+	{
+		title: "Catalog <&> \"one\" 'two'",
+		note: "<em>Fresh</em> &amp; local",
+		currency: "kr",
+		shop: { name: "Eldhús", city: "Reykjavík", open: Bool.True },
+		closed: Bool.False,
+		specials: [],
+		groups: $groups,
+		rows: $rows,
+	}
+}
+
+name_at : U64 -> Str
+name_at = |i| names.get(i % 8) ?? ""
 
 # --- the SSE workload: a Datastar action ----------------------------------------
 

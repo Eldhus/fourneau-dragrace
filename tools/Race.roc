@@ -393,6 +393,15 @@ validate! = |race, target, bodies, mode| {
 	if Checks.canonical_entities(menu) != trim_breaks(Checks.canonical_entities(race.menu)) {
 		return "/menu did not render the menu (workloads/menu.html)"
 	}
+	# An ad-hoc test's page, when it is raced.
+	for (path, page) in race.pages {
+		if race.workloads.any(|w| w.path == path) {
+			got = ask!("${curl}${url}${path}") ?? ""
+			if Checks.canonical_entities(got) != trim_breaks(Checks.canonical_entities(page)) {
+				return "${path} did not render its reference page (in workloads/)"
+			}
+		}
+	}
 	stream = validate_stream!(race, target, mode)
 	if stream != "" {
 		return stream

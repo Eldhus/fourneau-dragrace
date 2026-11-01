@@ -11,6 +11,7 @@ const fourneau = @import("fourneau");
 const Evented = @import("zig_io_evented");
 const Template = @import("template.zig").Template;
 const datastar = @import("datastar.zig");
+const catalog = @import("catalog.zig");
 const conduit = @import("conduit.zig");
 
 /// The shard's connection to the conduit workload's database (`ROUX_DATABASE`).
@@ -83,6 +84,10 @@ const App = struct {
         if (std.mem.eql(u8, path, "/menu")) {
             if (!get) return not_allowed(allow_get);
             return menu(request);
+        }
+        if (std.mem.eql(u8, path, "/catalog")) {
+            if (!get) return not_allowed(allow_get);
+            return catalog_page(request);
         }
         if (std.mem.eql(u8, path, "/sse")) {
             if (!get) return not_allowed(allow_get);
@@ -192,6 +197,15 @@ const App = struct {
     fn menu(request: *Server.Request) Response {
         var writer: std.Io.Writer = .fixed(request.scratch);
         render_menu(&writer) catch {
+            return .{ .status = 500, .headers = text_plain, .body = "page too large" };
+        };
+        return .{ .status = 200, .headers = text_html, .body = writer.buffered() };
+    }
+
+    /// The catalog workload's page, rendered into this connection's scratch memory.
+    fn catalog_page(request: *Server.Request) Response {
+        var writer: std.Io.Writer = .fixed(request.scratch);
+        catalog.render(&writer) catch {
             return .{ .status = 500, .headers = text_plain, .body = "page too large" };
         };
         return .{ .status = 200, .headers = text_html, .body = writer.buffered() };

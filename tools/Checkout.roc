@@ -59,13 +59,17 @@ Checkout :: [].{
 	bin : Str -> Str
 	bin = |root| "${root}/out/bin"
 
-	## race.json and its reference answers.
+	## race.json and its reference answers, each ad-hoc test's page among them.
 	race! : Str => Try(Config.Race, [Failed(Str)])
 	race! = |root| {
 		text = Checkout.read!("${root}/race.json")?
 		menu = Checkout.read!("${root}/workloads/menu.html")?
 		stream = Checkout.read!("${root}/workloads/sse.txt")?
-		Config.race(text, menu, stream)
+		race = Config.race(text, menu, stream)?
+		# A test's HTTP/1.1 variant is named as the test, and comes first.
+		firsts = race.adhoc_workloads.keep_if(|w| w.name == w.test)
+		pages = firsts.map_try!(|w| Ok((w.path, Checkout.read!("${root}/workloads/${w.test}.html")?)))?
+		Ok({ ..race, pages })
 	}
 
 	## The competitors named, each from its competitor.json.

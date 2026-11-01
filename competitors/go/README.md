@@ -25,6 +25,8 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
     - A body of known length is read straight into a pooled buffer (`sync.Pool`); `io.ReadAll` grew a fresh one each request.
     - +28% requests/s and half the p99, measured locally in three interleaved rounds (30-33k against 39-41k).
 - **`GET /menu`**: `html/template`, executed per request; it escapes every value for its context.
+- **`GET /catalog`** (ad hoc): the same, a bigger page (`catalog.go`), `kr` and `plural` as template functions.
+    - html/template calls its escaper by reflection on every action, about 3,000 on this page: 1.5 ms a render.
 - **`GET /sse`**: the signals with `encoding/json`, then each event written and flushed (`http.ResponseController`).
     - As Datastar's Go SDK does.
 - **Conduit (`/api/...`)**: `database/sql`, as a Go team runs SQLite.

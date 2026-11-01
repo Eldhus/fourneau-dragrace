@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
 
     // The modules with no fourneau in them, tested alone.
     const test_step = b.step("test", "Run the handler's tests");
-    for ([_][]const u8{ "src/datastar.zig", "src/template.zig" }) |path| {
+    for ([_][]const u8{ "src/datastar.zig", "src/template.zig", "src/catalog.zig" }) |path| {
         const tests = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

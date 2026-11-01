@@ -3,6 +3,7 @@
 //! (`ListenerExt::tap_io`); without it, pipelined responses wait 40 ms on
 //! delayed ACKs. See README.md for what you may tune.
 
+mod catalog;
 mod conduit;
 
 use askama::Template;
@@ -159,6 +160,7 @@ async fn main() {
         .route("/plaintext", get(plaintext))
         .route("/echo", post(echo))
         .route("/menu", get(menu))
+        .route("/catalog", get(catalog::catalog))
         .route("/sse", get(datastar))
         .layer(axum::extract::DefaultBodyLimit::max(1 << 20));
     if !database.is_empty() {

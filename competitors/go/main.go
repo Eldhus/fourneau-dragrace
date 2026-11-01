@@ -79,6 +79,7 @@ func main() {
 			log.Print(err)
 		}
 	})
+	mux.HandleFunc("GET /catalog", catalogHandler)
 	mux.HandleFunc("GET /sse", datastar)
 	server := &http.Server{
 		Addr:              net.JoinHostPort(address, port),

@@ -747,8 +747,10 @@ race! = |root, args| {
 ## A workload raced ad hoc: a closed-loop one, by name.
 closed_workload : Config.Race, Str -> Try(Config.Workload, [BadFlag(Str)])
 closed_workload = |race, name| {
-	closed = race.workloads.keep_if(|w| w.mixed.is_err()).map(|w| w.name)
-	match race.workloads.find_first(|w| w.name == name) {
+	# The ad-hoc workloads only when named: the default is the nightly's.
+	all = race.workloads.concat(race.adhoc_workloads)
+	closed = all.keep_if(|w| w.mixed.is_err()).map(|w| w.name)
+	match all.find_first(|w| w.name == name) {
 		Ok(w) if w.mixed.is_ok() => Err(BadFlag("${name} is open loop only, not raced ad hoc: a nightly races it"))
 		Ok(w) => Ok(w)
 		Err(_) => Err(BadFlag("no workload \"${name}\" (${Str.join_with(closed, ",")})"))
