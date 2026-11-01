@@ -1,4 +1,4 @@
-app [Context, Hole, program] { pf: platform "../../../roux/platform/main.roc" }
+app [Context, program] { pf: platform "../../../roux/platform/main.roc" }
 
 # The roux competitor: a Roc app on roux, the Roc platform
 # built on fourneau. Each request runs `respond!` on its connection's
@@ -25,9 +25,6 @@ import templates/Holes
 ## where roux's defaults answer 503 sooner; 256 may wait for the writer,
 ## every request Conduit's 256 connections hold.
 Context : { menu : Menu.Ctx, db : Sqlite.Db }
-
-## The holes of Roc in the templates, which `roux build` writes.
-Hole : Holes.Hole
 
 program = { init!, respond!, hole: Holes.hole }
 

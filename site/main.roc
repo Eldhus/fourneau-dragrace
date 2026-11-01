@@ -1,4 +1,4 @@
-app [Context, Hole, program] { pf: platform "../../roux/platform/main.roc" }
+app [Context, program] { pf: platform "../../roux/platform/main.roc" }
 
 ## The dragrace site, a roux app: every page a rocstache template, the races
 ## read from its SQLite database (site.db, db/), which the racer and the race
@@ -34,9 +34,6 @@ import templates/NotFoundPage
 import templates/Holes
 
 Context : { db : Sqlite.Db, tokens : Api.Tokens }
-
-## The holes of Roc in the templates, which `roux build` writes.
-Hole : Holes.Hole
 
 program = { init!, respond!, hole: Holes.hole }
 
