@@ -28,6 +28,14 @@ JsonValue := [Null, Boolean(Bool), Number(F64), Text(Str), Array(List(JsonValue)
 			_ => Null
 		}
 
+	## With an object's member set (or replaced); anything else as it is.
+	with_member : JsonValue, Str, JsonValue -> JsonValue
+	with_member = |value, key, member|
+		match value {
+			Object(members) => Object(members.keep_if(|(name, _)| name != key).append((key, member)))
+			other => other
+		}
+
 	## An array's items; none for anything else.
 	items : JsonValue -> List(JsonValue)
 	items = |value|

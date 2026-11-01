@@ -204,14 +204,6 @@ Conduit :: [].{
 			Ok(a) => a.id
 			Err(_) => crash "the load user favorited every article"
 		}
-
-	## With a JSON value's object member set (or replaced).
-	with_member : JsonValue, Str, JsonValue -> JsonValue
-	with_member = |value, key, member|
-		match value {
-			Object(members) => Object(members.keep_if(|(name, _)| name != key).append((key, member)))
-			other => other
-		}
 }
 
 users_count : U64
