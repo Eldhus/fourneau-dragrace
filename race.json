@@ -60,6 +60,20 @@
       ]
     },
     {
+      "name": "catalog",
+      "title": "Catalog",
+      "summary": "GET /catalog renders a 16 KB page from a template per request: a record's fields, lists in lists, a 256-row table, conditions, empty lists, raw HTML and formatted prices.",
+      "detail": "Each server renders the page with its usual template engine, anew for every request, from data made once at start: rows i = 0 to 255 with id i + 1, name NAMES[i % 8], price 500 + (i * 7919) % 20000 hundredths written as 12.05 kr, stock (i * 13) % 50 - 10, hot when i % 7 is 0, tags none, veg, or veg and gf by i % 3; six groups, group k named Group k + 1 with NAMES k, k + 1 and k + 2 (mod 8); NAMES are Roux, Skyr & ber, Crème, <b>Stew</b>, Hákarl, Kjöt \"s\", O'Brien and Pylsa. Its bytes are kept small, since it measures template rendering rather than the network. The page is checked against workloads/catalog.html byte for byte before the race, entities as for the menu.",
+      "method": "GET",
+      "path": "/catalog",
+      "keepalive": true,
+      "page": true,
+      "variants": [
+        { "protocol": "http1", "connections": 256 },
+        { "protocol": "tls", "connections": 128, "streams": 2 }
+      ]
+    },
+    {
       "name": "sse",
       "title": "SSE (Datastar)",
       "summary": "GET /sse with Datastar's signals in the query, answered with a stream of ten Datastar events, a chunk each: the work of a Datastar action.",
@@ -150,28 +164,7 @@
       }
     }
   ],
-  "adhoc_workloads": [
-    {
-      "name": "catalog",
-      "title": "Catalog",
-      "summary": "GET /catalog renders a 16 KB page from a template per request: a record's fields, lists in lists, a 256-row table, conditions, empty lists, raw HTML and formatted prices.",
-      "detail": "Ad hoc only, not raced nightly. Each server renders the page with its usual template engine, anew for every request, from data made once at start: rows i = 0 to 255 with id i + 1, name NAMES[i % 8], price 500 + (i * 7919) % 20000 hundredths written as 12.05 kr, stock (i * 13) % 50 - 10, hot when i % 7 is 0, tags none, veg, or veg and gf by i % 3; six groups, group k named Group k + 1 with NAMES k, k + 1 and k + 2 (mod 8); NAMES are Roux, Skyr & ber, Crème, <b>Stew</b>, Hákarl, Kjöt \"s\", O'Brien and Pylsa. Its bytes are kept small, since it measures template rendering rather than the network. The page is checked against workloads/catalog.html byte for byte before the race, entities as for the menu.",
-      "method": "GET",
-      "path": "/catalog",
-      "keepalive": true,
-      "variants": [
-        {
-          "protocol": "http1",
-          "connections": 256
-        },
-        {
-          "protocol": "tls",
-          "connections": 128,
-          "streams": 2
-        }
-      ]
-    }
-  ],
+  "adhoc_workloads": [],
   "cloud": {
     "region": "lon1",
     "image": "ubuntu-26-04-x64",

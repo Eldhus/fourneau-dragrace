@@ -87,9 +87,12 @@ Config :: [].{
 		loaded : Try(List(Str), [All]),
 		## race.json's `adhoc_workloads`: raced only when named (`adhoc race
 		## -workloads`, `local -workloads`), never by a nightly, and not on the
-		## site. Each test's page is checked against workloads/NAME.html.
+		## site.
 		adhoc_workloads : List(Workload),
-		## Each ad-hoc test's path and its reference page (Checkout reads them).
+		## The tests, nightly or ad hoc, with `"page": true`: each one's page
+		## is checked against workloads/NAME.html when it is raced.
+		paged : List({ test : Str, path : Str }),
+		## Each paged test's path and its reference page (Checkout reads them).
 		pages : List((Str, Str)),
 	}
 
@@ -121,12 +124,14 @@ Config :: [].{
 		}
 		tests = file.workloads.map(to_test)
 		workloads = tests.map_try(Config.expand)?.join()
-		adhoc_workloads = (file.?adhoc_workloads ?? []).map(to_test).map_try(Config.expand)?.join()
+		adhoc_files = file.?adhoc_workloads ?? []
+		adhoc_workloads = adhoc_files.map(to_test).map_try(Config.expand)?.join()
 		for w in adhoc_workloads {
 			if workloads.any(|n| n.name == w.name) {
 				return Err(Failed("race.json: ${w.name} is both a workload and an ad-hoc one"))
 			}
 		}
+		paged = file.workloads.concat(adhoc_files).keep_if(|t| t.?page ?? Bool.False).map(|t| { test: t.name, path: t.path })
 		Ok({
 			port: file.port,
 			rounds: file.rounds,
@@ -142,6 +147,7 @@ Config :: [].{
 			stream,
 			loaded: Err(All),
 			adhoc_workloads,
+			paged,
 			pages: [],
 		})
 	}
@@ -294,6 +300,7 @@ TestFile : {
 	body_bytes ?: U64,
 	content_type ?: Str,
 	keepalive : Bool,
+	page ?: Bool,
 	variants : List({ protocol : Str, connections : U64, streams ?: U64 }),
 	mixed ?: { rates : List(U64), warmup_seconds : U64, measure_seconds : U64, saturated : F64, parts : List(PartFile) },
 }
@@ -410,7 +417,17 @@ expect {
 expect Config.race(race_text("p"), "", "").is_err()
 expect {
 	match Config.race(race_text(""), "", "") {
-		Ok(race) => race.adhoc_workloads.is_empty()
+		Ok(race) => race.adhoc_workloads.is_empty() and race.paged.is_empty()
+		Err(_) => Bool.False
+	}
+}
+
+# A test with `"page": true` has its page checked, nightly or ad hoc; one
+# without has none.
+expect {
+	text = race_text("catalog").replace_first("\"keepalive\":true", "\"keepalive\":true,\"page\":true")
+	match Config.race(text, "", "") {
+		Ok(race) => race.paged == [{ test: "p", path: "/p" }]
 		Err(_) => Bool.False
 	}
 }

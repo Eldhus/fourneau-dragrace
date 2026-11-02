@@ -22,10 +22,23 @@ import Conduit
 
 Dish : { name : Str, price : U32 }
 
-## The templates workload's dishes, made once by `init!`; the conduit
-## workload's database (ROUX_DATABASE, as the race starts every server), a pool in
-## WAL mode with synchronous=NORMAL, as the contract says.
-Context : { dishes : List(Dish), db : Sqlite.Db }
+## The catalog workload's page data, as race.json's `catalog` defines it.
+Catalog : {
+	title : Str,
+	note : Str,
+	currency : Str,
+	shop : { name : Str, city : Str, open : Bool },
+	closed : Bool,
+	specials : List(Str),
+	groups : List({ name : Str, members : List(Str) }),
+	rows : List({ id : U32, name : Str, price : U32, stock : I32, hot : Bool, tags : List(Str) }),
+}
+
+## The templates workload's dishes and the catalog's data, made once by
+## `init!`; the conduit workload's database (ROUX_DATABASE, as the race
+## starts every server), a pool in WAL mode with synchronous=NORMAL, as the
+## contract says.
+Context : { dishes : List(Dish), catalog : Catalog, db : Sqlite.Db }
 
 program = { init!, respond!, shutdown! }
 
@@ -51,7 +64,7 @@ init! = || {
 			.with_sse_limits({ max_streams: 1024, max_event_bytes: 64 * 1024 })
 	database = Env.var_str!("ROUX_DATABASE") ? |_| Exit(2)
 	db = Sqlite.open!({ ..Sqlite.default_config(Path.utf8(database)), max_connections: 32, busy_timeout_ms: 5_000, synchronous: Normal }) ? |_| Exit(3)
-	Ok({ config, context: { dishes: menu_dishes, db } })
+	Ok({ config, context: { dishes: menu_dishes, catalog: catalog(), db } })
 }
 
 respond! : Server.Request, Context => Try(Server.Outcome, [ServerErr(Str)])
@@ -82,6 +95,14 @@ respond! = |request, context| {
 					Response.from_status(200)
 						.with_headers([{ name: "Content-Type", value: "text/html; charset=utf-8" }])
 						.with_body(Str.to_utf8(menu(context.dishes))),
+				),
+			)
+		(GET, "/catalog") =>
+			Ok(
+				Server.respond(
+					Response.from_status(200)
+						.with_headers([{ name: "Content-Type", value: "text/html; charset=utf-8" }])
+						.with_body(Str.to_utf8(catalog_page(context.catalog))),
 				),
 			)
 		(GET, "/sse") =>
@@ -169,6 +190,112 @@ menu_dishes = [
 	{ name: "Flatkaka & hangikjöt", price: 210 },
 	{ name: "1 < 2 > 0 pie", price: 160 },
 ]
+
+# --- the catalog workload -----------------------------------------------------
+
+## The page, written out as text, each value escaped by the platform's
+## `Html`: its elements close every tag, and the race's page leaves the
+## table's rows and cells open.
+catalog_page : Catalog -> Str
+catalog_page = |page| {
+	title = escape(page.title)
+	var $out = Str.with_capacity(20_000)
+	$out = $out.concat("<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>${title}</title></head>\n<body>\n<h1>${title}</h1>\n<p>${page.note}</p>\n")
+	open = if page.shop.open " (open)" else ""
+	$out = $out.concat("<p>${escape(page.shop.name)}, ${escape(page.shop.city)}${open}</p>\n")
+	$out = $out.concat(if page.closed "" else "<p>Open today.</p>\n")
+	$out = $out.concat(if page.specials.is_empty() "<p>No specials.</p>\n" else "")
+	$out = $out.concat("<p>${plural(page.groups.len(), "group", "groups")}, ${page.rows.len().to_str()} rows</p>\n")
+	for group in page.groups {
+		$out = $out.concat("<h2>${escape(group.name)}</h2><p>")
+		for member in group.members {
+			$out = $out.concat("${escape(member)};")
+		}
+		$out = $out.concat("</p>\n")
+	}
+	$out = $out.concat("<table>\n")
+	currency = escape(page.currency)
+	for item in page.rows {
+		hot = if item.hot " class=\"hot\"" else ""
+		$out = $out.concat("<tr${hot}><td>${item.id.to_str()}<td>${escape(item.name)}<td>${item.stock.to_str()}<td>")
+		if item.tags.is_empty() {
+			$out = $out.concat("-")
+		} else {
+			for tag in item.tags {
+				$out = $out.concat("<i>${escape(tag)}</i>")
+			}
+		}
+		$out = $out.concat("<td>${kr(item.price)} ${currency}\n")
+	}
+	$out.concat("</table>\n</body>\n</html>\n")
+}
+
+## A text value as HTML: the platform's escaping (`&`, `<`, `>`, what a
+## text node needs), then the quotes, as every other engine in the race
+## escapes them (so a value is safe in an attribute too).
+escape : Str -> Str
+escape = |text|
+	Html.render_without_doc_type(Html.text(text))
+		.replace_each("\"", "&quot;")
+		.replace_each("'", "&#39;")
+
+## The catalog's names: markup, quotes and accents, each escaped as printed.
+catalog_names : List(Str)
+catalog_names = ["Roux", "Skyr & ber", "Crème", "<b>Stew</b>", "Hákarl", "Kjöt \"s\"", "O'Brien", "Pylsa"]
+
+name_at : U64 -> Str
+name_at = |i| catalog_names.get(i % 8) ?? ""
+
+## The catalog's data: row i (from 0) is id i + 1, catalog_names[i % 8],
+## price 500 + (i * 7919) % 20000 hundredths, stock (i * 13) % 50 - 10, hot
+## when i % 7 is 0, tags by i % 3: none, veg, veg and gf. Group k (from 0)
+## is "Group k + 1", names k to k + 2.
+catalog : () -> Catalog
+catalog = || {
+	var $rows = []
+	for i in 0..<256.U64 {
+		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
+		$rows = $rows.append(
+			{
+				id: (i + 1).to_u32_wrap(),
+				name: name_at(i),
+				price: (500 + (i * 7919) % 20000).to_u32_wrap(),
+				stock: ((i * 13) % 50).to_i32_wrap() - 10,
+				hot: i % 7 == 0,
+				tags,
+			},
+		)
+	}
+	var $groups = []
+	for k in 0..<6.U64 {
+		$groups = $groups.append({ name: "Group ${(k + 1).to_str()}", members: [name_at(k), name_at(k + 1), name_at(k + 2)] })
+	}
+	{
+		title: "Catalog <&> \"one\" 'two'",
+		note: "<em>Fresh</em> &amp; local",
+		currency: "kr",
+		shop: { name: "Eldhús", city: "Reykjavík", open: Bool.True },
+		closed: Bool.False,
+		specials: [],
+		groups: $groups,
+		rows: $rows,
+	}
+}
+
+## A price in hundredths: `12.05`.
+kr : U32 -> Str
+kr = |hundredths| {
+	cents = hundredths % 100
+	pad = if cents < 10 "0" else ""
+	"${(hundredths // 100).to_str()}.${pad}${cents.to_str()}"
+}
+
+## A count and the noun that fits it: `1 group`, `6 groups`.
+plural : U64, Str, Str -> Str
+plural = |count, one, many| {
+	noun = if count == 1 one else many
+	"${count.to_str()} ${noun}"
+}
 
 # --- the SSE workload: a Datastar action --------------------------------------
 

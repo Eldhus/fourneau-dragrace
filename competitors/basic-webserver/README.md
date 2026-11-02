@@ -26,6 +26,9 @@ examples are, its limits raised only to fit the race's load.
 - **`GET /menu`**: `Html`, which escapes every text value.
     - `Html.render` spells the doctype `<!DOCTYPE html>` and puts no line breaks between elements.
     - So the doctype is written by hand, and the race page's line breaks are text nodes.
+- **`GET /catalog`**: written out as text, each value escaped by `Html` and then its quotes.
+    - `Html`'s elements close every tag, and the race page leaves the table's rows and cells open.
+    - `Html` escapes what a text node needs (`&`, `<`, `>`); the other engines escape quotes too.
 - **`GET /sse`**: `Sse.unfold!`, one event per step, each `wake: Immediately`.
     - basic-webserver's Datastar example answers a finite action's ready events as one ordinary response.
     - The race's SSE workload is a stream, so this uses the stream.

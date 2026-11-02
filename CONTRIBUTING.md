@@ -51,7 +51,7 @@ A competitor is a directory under `competitors/` with its source, a README, its 
     - `POST /echo`: the body back, up to 64 KiB, as `application/octet-stream`
     - `GET /menu`: `workloads/menu.html`, rendered from a template per request, every value escaped
     - `GET /catalog`: `workloads/catalog.html`, the same way, from the data race.json's `catalog`
-      describes (raced ad hoc only, so basic-webserver has none yet)
+      describes
     - `GET /sse?datastar={"count":N}`: `workloads/sse.txt` for N + 1 as `text/event-stream`
         - An event a chunk; 400 without signals.
     - Conduit, a slice of [RealWorld](https://realworld-docs.netlify.app/):

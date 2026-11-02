@@ -26,7 +26,7 @@ fourneau checkout beside this repository, so each nightly races fourneau's newes
 - **`GET /menu`**: a template split into parts and holes at comptime, rendered into the connection's scratch memory.
     - About 80 lines of Zig, no code shared with rocstache.
     - So it is the floor roux's rocstache is measured against: the least a page can cost on fourneau.
-- **`GET /catalog`** (ad hoc): the same engine with Zig's loops and conditions around it (`src/catalog.zig`), its data built at comptime.
+- **`GET /catalog`**: the same engine with Zig's loops and conditions around it (`src/catalog.zig`), its data built at comptime.
 - **`GET /sse`**: the signals with `std.json` (`src/datastar.zig`, bounded, tested by `zig build test`).
     - Then fourneau's streamed responses: each event made in scratch memory and sent as a chunk.
     - The ten wait in the send buffer and leave in one write.

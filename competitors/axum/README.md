@@ -23,7 +23,7 @@ axum's own docs and examples write it.
 - **`GET /plaintext`** (also churn): a `&'static str`.
 - **`POST /echo`**: up to 1 MiB (`DefaultBodyLimit`), as `Bytes`.
 - **`GET /menu`**: askama, rendered per request; it escapes every value.
-- **`GET /catalog`** (ad hoc): askama again, `templates/catalog.html` (`src/catalog.rs`), its data built once.
+- **`GET /catalog`**: askama again, `templates/catalog.html` (`src/catalog.rs`), its data built once.
 - **`GET /sse`**: `Query` and `serde_json` for the signals, then axum's `Sse` over a stream of the ten events.
     - hyper writes ready events together.
 - **Conduit (`/api/...`)**: sqlx, as an axum team runs SQLite.
