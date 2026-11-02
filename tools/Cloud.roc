@@ -69,7 +69,7 @@ Cloud :: [].{
 	}
 
 	## The sizes race.json names, each checked (made, available, in the
-	## region; a loader bigger than its server), with their prices.
+	## region; a loader at least its server's size), with their prices.
 	check_sizes! : Guard.Way, Config.Cloud => Try(List((Str, F64)), [Refused(Str), Failed(Str), Interrupted])
 	check_sizes! = |guard, cloud| {
 		sizes = Guard.sizes!(guard)?
@@ -86,9 +86,11 @@ Cloud :: [].{
 		of = |slug| sizes.find_first(|s| s.slug == slug)
 		vcpus = |slug| (of(slug) ?? { slug, available: Bool.False, regions: [], vcpus: 0, price_hourly: 0 }).vcpus
 		var $problems = []
+		# A loader as big as its server is enough: no race has saturated one,
+		# and a region may offer no dedicated size bigger than the server.
 		for class in cloud.servers {
-			if vcpus(class.loader_size) <= vcpus(class.size) {
-				$problems = $problems.append("${class.name}: loader ${class.loader_size} (${vcpus(class.loader_size).to_str()} vCPUs) is not bigger than server ${class.size} (${vcpus(class.size).to_str()})")
+			if vcpus(class.loader_size) < vcpus(class.size) {
+				$problems = $problems.append("${class.name}: loader ${class.loader_size} (${vcpus(class.loader_size).to_str()} vCPUs) is smaller than server ${class.size} (${vcpus(class.size).to_str()})")
 			}
 		}
 		for slug in cloud.servers.join_map(|c| [c.size, c.loader_size]) {
@@ -329,6 +331,12 @@ expect {
 	cloud = { region: "lon1", image: "i", servers: [{ name: "a", label: "", title: "", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
 	sizes = [{ slug: "s", available: Bool.True, regions: ["lon1"], vcpus: 1, price_hourly: 0.01 }, { slug: "l", available: Bool.True, regions: ["nyc1"], vcpus: 4, price_hourly: 0.1 }]
 	Cloud.size_problems(sizes, cloud) == ["l: not in lon1 (offered in nyc1)"]
+}
+
+expect {
+	cloud = { region: "r", image: "i", servers: [{ name: "same", label: "", title: "", size: "s", loader_size: "s" }, { name: "small", label: "", title: "", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
+	sizes = [{ slug: "s", available: Bool.True, regions: ["r"], vcpus: 4, price_hourly: 0.1 }, { slug: "l", available: Bool.True, regions: ["r"], vcpus: 2, price_hourly: 0.05 }]
+	Cloud.size_problems(sizes, cloud) == ["small: loader l (2 vCPUs) is smaller than server s (4)"]
 }
 
 expect {
