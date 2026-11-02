@@ -166,7 +166,7 @@
   ],
   "adhoc_workloads": [],
   "cloud": {
-    "region": "sfo2",
+    "region": "lon1",
     "image": "ubuntu-26-04-x64",
     "servers": [
       {
