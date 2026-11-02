@@ -182,6 +182,13 @@
         "title": "Dedicated cores",
         "size": "c-2",
         "loader_size": "c-4"
+      },
+      {
+        "name": "premium-4",
+        "label": "8GB/4vCPU Intel",
+        "title": "Premium Intel cores",
+        "size": "c-4-intel",
+        "loader_size": "c-4-intel"
       }
     ],
     "tag": "fourneau-dragrace-race",
