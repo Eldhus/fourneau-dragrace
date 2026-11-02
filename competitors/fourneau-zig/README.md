@@ -24,8 +24,7 @@ fourneau checkout beside this repository, so each nightly races fourneau's newes
 - **`GET /plaintext`** (also churn): a constant body.
 - **`POST /echo`**: the body read into the connection's scratch memory, 64 KiB; past that, 413.
 - **`GET /menu`**: a template split into parts and holes at comptime, rendered into the connection's scratch memory.
-    - About 120 lines of Zig, no code shared with rocstache.
-    - Escaping looks at 16 bytes at a time (SIMD compares), as rocstache's renderer does, so it is a fair floor.
+    - About 80 lines of Zig, no code shared with rocstache.
     - So it is the floor roux's rocstache is measured against: the least a page can cost on fourneau.
 - **`GET /catalog`** (ad hoc): the same engine with Zig's loops and conditions around it (`src/catalog.zig`), its data built at comptime.
 - **`GET /sse`**: the signals with `std.json` (`src/datastar.zig`, bounded, tested by `zig build test`).
