@@ -230,8 +230,10 @@ Toolchain :: [].{
 			Run.log!("roux: from the store, key ${Text.take(key, 12)}")
 			return Ok({})
 		}
+		# The tools at the host's CPU level, not the builder's: a stored
+		# roux built on one runner's CPU died of SIGILL on another's.
 		for step in ["platform", "tools"] {
-			Run.run!(tools.roux, [], [tools.zig, "build", step])?
+			Run.run!(tools.roux, [], [tools.zig, "build", step, "-Dcpu=x86_64_v3"])?
 		}
 		_ = Path.utf8(stored).delete_all!()
 		for path in roux_built {

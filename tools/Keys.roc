@@ -263,7 +263,7 @@ Keys :: [].{
 }
 
 competitor_key_recipe = "competitor-key 4"
-roux_key_recipe = "roux-key 1"
+roux_key_recipe = "roux-key 2"
 race_key_recipe = "race-key 1"
 harness_key_recipe = "harness-key 1"
 
