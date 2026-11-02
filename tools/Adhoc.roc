@@ -17,6 +17,7 @@ import Flags
 import Guard
 import Hash
 import Keyring
+import Keys
 import Local
 import Machine
 import Race
@@ -222,14 +223,16 @@ dir = |root| "${Checkout.out(root)}/adhoc"
 
 ## The command again, under flock(1) on out/adhoc/lock: waiting for it, or
 ## (`wait` false, the idle reaper) not, looking again in five minutes when a
-## race holds it. Zig's local cache is shared by every variant's tree.
+## race holds it. Zig's local cache is shared by every variant's tree, and
+## kept with the tool's other caches, not in the checkout.
 with_lock! : Str, List(Str), Bool => Try({}, [BadFlag(Str), Failed(Str), Interrupted, Exited(I32)])
 with_lock! = |root, args, wait| {
 	Path.utf8(dir(root)).create_all!() ? |PathErr(err, _)| Failed("${dir(root)}: ${err.to_str()}")
 	self = (Env.exe_path!() ? |_| Failed("this binary's path is not known")).display()
 	how = if wait [] else ["-n", "-E", "75"]
 	argv = how.concat(["${dir(root)}/lock", self, "adhoc"]).concat(args)
-	env = [(lock_variable, "held"), ("ZIG_LOCAL_CACHE_DIR", "${dir(root)}/zig-cache")]
+	cache = Keys.cache!()?
+	env = [(lock_variable, "held"), ("ZIG_LOCAL_CACHE_DIR", "${cache}/zig-cache")]
 	ran = Cmd.new(OsStr.from_str("flock")).args(argv.map(OsStr.from_str)).envs(env.map(|(k, v)| (OsStr.from_str(k), OsStr.from_str(v)))).inherit_stdio().run!()
 	match ran {
 		Ok(output) =>
