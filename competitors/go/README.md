@@ -54,16 +54,18 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
   the library (`require`) and the generator (`tool`), kept equal; to move them,
   `go get github.com/a-h/templ@vX && go get -tool github.com/a-h/templ/cmd/templ@vX`, then
   regenerate and `go mod tidy`. `go tool templ fmt .` formats the templates.
-- The reference pages set two things templ does not do by itself: templ writes no line break
-  between elements, so each of the reference's is a `{ "\n" }` in the template, and it closes
-  every element, so the catalog's `<tr>` and `<td>`, which the reference leaves open, are written
-  by two small components (`tr`, `cell`) from raw tags. Everything else is templ as its guide
-  shows it: elements, `if`, `for`, `{ value }` escaped.
-    - Those components are what the catalog costs: each is a closure, a context for its children
-      and a buffer, about 40 allocations a row. The same page with every tag closed, templ's own
-      idiom, renders in 40% of the time with 3,700 allocations against 12,400 (2026-11-03,
-      `go test -bench` locally). Still half of html/template's instructions a request (7.4M
-      against 14.4M on the catalog, 106k against 240k on the menu).
+- The reference page sets one thing templ does not do by itself: templ writes no line break
+  between elements, so each of the reference's is a `{ "\n" }` in the template. Everything else
+  is templ as its guide shows it: elements, `if`, `for`, `{ value }` escaped, a `class` from an
+  expression and a `templ.KV`.
+    - Until 2026-11-04 the page left its `<tr>` and `<td>` open, which templ cannot write (it
+      closes every element), so each cell was a small component; those components were most of
+      the cost then (12,400 allocations a page against 3,700 with the tags closed). The page
+      closes its tags now.
+    - What it costs now (2026-11-03, locally, `perf stat` on the server): 3.07M instructions a
+      request, against axum's 0.70M and fourneau-zig's 0.51M on the same page; html/template did
+      14.4M on the old one. The profile is spread thin: the allocator and the GC, `fmt.Sprintf`
+      in the formatters, templ's per-value writes and its buffer pool, the escaper.
 
 
 ## Tuning
