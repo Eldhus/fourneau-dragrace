@@ -88,7 +88,7 @@ catalog : () -> Catalog.Ctx
 catalog = || {
 	var $rows = []
 	var $total = 0
-	for i in 0..<128.U64 {
+	for i in 0..<96.U64 {
 		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
 		price = (500 + (i * 7919) % 20000).to_u32_wrap()
 		discount = ((i * 37) % 40).to_u8_wrap()

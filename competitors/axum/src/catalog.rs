@@ -1,6 +1,6 @@
 //! The catalog workload: a bigger page from askama, compiled from
 //! templates/catalog.html and rendered per request: sections over a record,
-//! lists nested in lists, a table of 128 rows, conditions, empty lists, raw
+//! lists nested in lists, a list of 96 rows, conditions, empty lists, raw
 //! HTML and formatting methods. The reference is workloads/templates.html.
 
 use askama::Template;
@@ -117,7 +117,7 @@ const TAGS: [&[&str]; 3] = [&[], &["veg"], &["veg", "gf"]];
 
 /// The catalog's data, as race.json's catalog test defines it.
 static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
-    let rows: Vec<Row> = (0..128)
+    let rows: Vec<Row> = (0..96)
         .map(|i: usize| {
             let discount = ((i * 37) % 40) as u8;
             Row {

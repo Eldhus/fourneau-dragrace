@@ -30,7 +30,7 @@ Catalog :: [].{
 	}
 
 	## The catalog workload's page: every feature of the language at least once,
-	## over 128 rows, its bytes kept small (it measures the rendering, not the
+	## over 96 rows, its bytes kept small (it measures the rendering, not the
 	## network). The reference is workloads/templates.html.
 	Ctx : {
 		closed : Bool,

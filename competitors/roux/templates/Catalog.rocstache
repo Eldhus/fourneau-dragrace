@@ -1,7 +1,7 @@
 {{%
 import Fmt
 ## The catalog workload's page: every feature of the language at least once,
-## over 128 rows, its bytes kept small (it measures the rendering, not the
+## over 96 rows, its bytes kept small (it measures the rendering, not the
 ## network). The reference is workloads/templates.html.
 Ctx : {
 	title : Str,
@@ -40,10 +40,10 @@ Ctx : {
 {{#groups |group|}}
 <h2>{{ group.name }}</h2><p>{{#group.members |member|}}{{ member }};{{/group.members}}</p>
 {{/groups}}
-<table>
+<ul>
 {{#rows |row|}}
-{{$Row}}<tr class="{{ Fmt.level(row.stock) }}{{?row.hot}} hot{{/row.hot}}"><td>{{ row.id.to_str() }} {{ row.name }}</td><td>{{ Fmt.stock(row.stock) }} {{#row.tags |tag|}}<i>{{ tag }}</i>{{/row.tags}}{{^row.tags}}-{{/row.tags}}</td>{{/Row}}<td>{{?row.on_sale}}<s>{{> Price}}</s> {{ Fmt.kr(Fmt.sale(row.price, row.discount)) }}{{/row.on_sale}}{{^row.on_sale}}{{> Price}}{{/row.on_sale}} {{ currency }}</td><td>{{ Fmt.date(row.added) }} {{ Fmt.weight(row.grams) }}</td></tr>
+{{$Row}}<li class="{{ Fmt.level(row.stock) }}{{?row.hot}} hot{{/row.hot}}">{{ row.id.to_str() }} {{ row.name }}, {{ Fmt.stock(row.stock) }}{{#row.tags |tag|}} {{ tag }}{{/row.tags}}{{^row.tags}} -{{/row.tags}}{{/Row}}, {{?row.on_sale}}<s>{{> Price}}</s> {{ Fmt.kr(Fmt.sale(row.price, row.discount)) }}{{/row.on_sale}}{{^row.on_sale}}{{> Price}}{{/row.on_sale}}, {{ Fmt.date(row.added) }}, {{ Fmt.weight(row.grams) }}</li>
 {{/rows}}
-</table>
+</ul>
 </body>
 </html>

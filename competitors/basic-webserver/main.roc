@@ -165,21 +165,21 @@ catalog_page = |page| {
 		}
 		$out = $out.concat("</p>\n")
 	}
-	$out = $out.concat("<table>\n")
+	$out = $out.concat("<ul>\n")
 	for item in page.rows {
 		hot = if item.hot " hot" else ""
-		$out = $out.concat("<tr class=\"${level(item.stock)}${hot}\"><td>${item.id.to_str()} ${escape(item.name)}</td><td>${stock(item.stock)} ")
+		$out = $out.concat("<li class=\"${level(item.stock)}${hot}\">${item.id.to_str()} ${escape(item.name)}, ${stock(item.stock)}")
 		if item.tags.is_empty() {
-			$out = $out.concat("-")
+			$out = $out.concat(" -")
 		} else {
 			for tag in item.tags {
-				$out = $out.concat("<i>${escape(tag)}</i>")
+				$out = $out.concat(" ${escape(tag)}")
 			}
 		}
 		price = if item.on_sale "<s>${kr(item.price)}</s> ${kr(sale(item.price, item.discount))}" else kr(item.price)
-		$out = $out.concat("</td><td>${price} ${currency}</td><td>${date(item.added)} ${weight(item.grams)}</td></tr>\n")
+		$out = $out.concat(", ${price}, ${date(item.added)}, ${weight(item.grams)}</li>\n")
 	}
-	$out.concat("</table>\n</body>\n</html>\n")
+	$out.concat("</ul>\n</body>\n</html>\n")
 }
 
 ## A text value as HTML: the platform's escaping (`&`, `<`, `>`, what a
@@ -208,7 +208,7 @@ catalog : () -> Catalog
 catalog = || {
 	var $rows = []
 	var $total = 0
-	for i in 0..<128.U64 {
+	for i in 0..<96.U64 {
 		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
 		price = (500 + (i * 7919) % 20000).to_u32_wrap()
 		discount = ((i * 37) % 40).to_u8_wrap()

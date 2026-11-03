@@ -1,7 +1,7 @@
 //! The catalog workload's page: the templates workload's engine (holes,
 //! compiled at comptime) and Zig's own loops, conditions and formatting
 //! around it, as main.zig's menu: a record's fields, lists nested in lists,
-//! a table of 128 rows, empty lists, raw HTML, prices, sale prices, dates
+//! a list of 96 rows, empty lists, raw HTML, prices, sale prices, dates
 //! and weights. The reference is workloads/templates.html.
 
 const std = @import("std");
@@ -21,9 +21,8 @@ const OfferLine = Template("<li>{{ what }}: {{ off }}% off</li>\n");
 const InStock = Template(" {{ currency }} in stock</p>\n");
 const GroupHead = Template("<h2>{{ name }}</h2><p>");
 const Member = Template("{{ member }};");
-const RowCells = Template("<td>{{ id }} {{ name }}</td><td>");
-const Tag = Template("<i>{{ tag }}</i>");
-const Currency = Template(" {{ currency }}</td><td>");
+const RowStart = Template("{{ id }} {{ name }}, ");
+const Tag = Template(" {{ tag }}");
 
 const Shop = struct { name: []const u8, city: []const u8, open: bool };
 const Offer = struct { what: []const u8, off: u8 };
@@ -41,7 +40,7 @@ const Row = struct {
     grams: u32,
 };
 
-const rows_count = 128;
+const rows_count = 96;
 const groups_count = 6;
 
 /// The catalog's names: markup, quotes and accents, each escaped as printed.
@@ -114,15 +113,14 @@ pub fn render(writer: *std.Io.Writer) std.Io.Writer.Error!void {
         for (group.members) |member| try Member.render(writer, .{ .member = member });
         try writer.writeAll("</p>\n");
     }
-    try writer.writeAll("<table>\n");
+    try writer.writeAll("<ul>\n");
     for (&rows) |*row| {
-        try writer.print("<tr class=\"{s}{s}\">", .{ level(row.stock), if (row.hot) " hot" else "" });
-        try RowCells.render(writer, .{ .id = row.id, .name = row.name });
+        try writer.print("<li class=\"{s}{s}\">", .{ level(row.stock), if (row.hot) " hot" else "" });
+        try RowStart.render(writer, .{ .id = row.id, .name = row.name });
         try writeStock(writer, row.stock);
-        try writer.writeAll(" ");
-        if (row.tags.len == 0) try writer.writeAll("-");
+        if (row.tags.len == 0) try writer.writeAll(" -");
         for (row.tags) |tag| try Tag.render(writer, .{ .tag = tag });
-        try writer.writeAll("</td><td>");
+        try writer.writeAll(", ");
         if (row.on_sale) {
             try writer.writeAll("<s>");
             try writeKr(writer, row.price);
@@ -131,13 +129,13 @@ pub fn render(writer: *std.Io.Writer) std.Io.Writer.Error!void {
         } else {
             try writeKr(writer, row.price);
         }
-        try Currency.render(writer, .{ .currency = currency });
+        try writer.writeAll(", ");
         try writeDate(writer, row.added);
-        try writer.writeAll(" ");
+        try writer.writeAll(", ");
         try writeWeight(writer, row.grams);
-        try writer.writeAll("</td></tr>\n");
+        try writer.writeAll("</li>\n");
     }
-    try writer.writeAll("</table>\n</body>\n</html>\n");
+    try writer.writeAll("</ul>\n</body>\n</html>\n");
 }
 
 /// The noun that fits a count: group, groups.
@@ -199,7 +197,7 @@ test "catalog: the page starts and ends as the reference does" {
     try render(&writer);
     const page = writer.buffered();
     try std.testing.expect(std.mem.startsWith(u8, page, "<!doctype html>\n"));
-    try std.testing.expect(std.mem.endsWith(u8, page, "</table>\n</body>\n</html>\n"));
+    try std.testing.expect(std.mem.endsWith(u8, page, "</ul>\n</body>\n</html>\n"));
     assert(page.len < buffer.len);
 }
 

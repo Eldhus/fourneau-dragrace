@@ -3,10 +3,12 @@ package main
 import "strconv"
 
 // The catalog workload: a bigger page, compiled to Go by templ: sections
-// over a record, lists nested in lists, a table of 128 rows, conditions,
+// over a record, lists nested in lists, a list of 96 rows, conditions,
 // empty lists, raw HTML and formatting functions. The reference is
 // workloads/templates.html; templ writes no line break of its own between
-// elements, so the reference's are written out, each before its line.
+// elements, so the reference's are written out, each before its line, and
+// a line break between two inline values renders as one space, which the
+// rows' commas rely on.
 templ catalogPage(c Catalog) {
 	<!DOCTYPE html>
 	{ "\n" }
@@ -60,35 +62,22 @@ templ catalogPage(c Catalog) {
 				</p>
 			}
 			{ "\n" }
-			<table>
+			<ul>
 				for _, row := range c.Rows {
 					{ "\n" }
-					<tr class={ level(row.Stock), templ.KV("hot", row.Hot) }>
-						<td>{ strconv.FormatUint(uint64(row.ID), 10) } { row.Name }</td>
-						<td>
-							{ stock(row.Stock) }
-							if len(row.Tags) == 0 {
-								-
-							} else {
-								for _, t := range row.Tags {
-									<i>{ t }</i>
-								}
-							}
-						</td>
-						<td>
-							if row.OnSale {
-								<s>{ kr(row.Price) }</s>
-								{ kr(sale(row.Price, row.Discount)) }
-							} else {
-								{ kr(row.Price) }
-							}
-							{ c.Currency }
-						</td>
-						<td>{ date(row.Added) } { weight(row.Grams) }</td>
-					</tr>
+					<li class={ level(row.Stock), templ.KV("hot", row.Hot) }>
+						{ strconv.FormatUint(uint64(row.ID), 10) } { row.Name }, { stock(row.Stock) }{ tags(row.Tags) },
+						if row.OnSale {
+							<s>{ kr(row.Price) }</s>
+							{ kr(sale(row.Price, row.Discount)) },
+						} else {
+							{ kr(row.Price) },
+						}
+						{ date(row.Added) }, { weight(row.Grams) }
+					</li>
 				}
 				{ "\n" }
-			</table>
+			</ul>
 			{ "\n" }
 		</body>
 		{ "\n" }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -65,7 +66,7 @@ var catalog = func() Catalog {
 		Specials: []string{},
 		Offers:   []Offer{{"Soup of the day", 10}, {"Bread & butter", 25}, {"Coffee <hot>", 5}},
 	}
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 96; i++ {
 		tags := [][]string{{}, {"veg"}, {"veg", "gf"}}[i%3]
 		discount := uint8((i * 37) % 40)
 		price := uint32(500 + (i*7919)%20000)
@@ -130,6 +131,14 @@ func stock(count int32) string {
 		return fmt.Sprintf("%d left", count)
 	}
 	return strconv.FormatInt(int64(count), 10)
+}
+
+// A row's tags after its stock, each after a space; a dash for none.
+func tags(tags []string) string {
+	if len(tags) == 0 {
+		return " -"
+	}
+	return " " + strings.Join(tags, " ")
 }
 
 // A price after a discount in percent, in hundredths, rounded down.
