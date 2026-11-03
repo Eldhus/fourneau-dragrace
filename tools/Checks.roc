@@ -104,8 +104,8 @@ Checks :: [].{
 	}
 
 	## Every way the competitors' engines write the five characters HTML
-	## escaping is about, written one way: html/template writes &#34;,
-	## askama &#38;, rocstache &amp;. A character left raw stays raw.
+	## escaping is about, written one way: Go (templ, html/template) writes
+	## &#34;, askama &#38;, rocstache &amp;. A character left raw stays raw.
 	canonical_entities : Str -> Str
 	canonical_entities = |page|
 		spellings.fold(page, |text, (from, to)| text.replace_each(from, to))

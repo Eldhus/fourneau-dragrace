@@ -2,43 +2,16 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 )
 
-// The catalog workload: a bigger page from html/template, parsed once and
-// executed per request: sections over a record, lists nested in lists, a
-// table of 256 rows, conditions, empty lists, raw HTML and formatting
-// functions. The reference is workloads/catalog.html.
-var catalogPage = template.Must(template.New("catalog").Funcs(template.FuncMap{
-	"kr":     kr,
-	"plural": plural,
-}).Parse(`<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>{{.Title}}</title></head>
-<body>
-{{/* A comment: nothing of it is written. */ -}}
-<h1>{{.Title}}</h1>
-<p>{{.Note}}</p>
-{{with .Shop}}<p>{{.Name}}, {{$.Shop.City}}{{if .Open}} (open){{end}}</p>
-{{end -}}
-{{if not .Closed}}<p>Open today.</p>{{end}}
-{{if not .Specials}}<p>No specials.</p>{{end}}
-<p>{{plural (len .Groups) "group" "groups"}}, {{len .Rows}} rows</p>
-{{range .Groups}}<h2>{{.Name}}</h2><p>{{range .Members}}{{.}};{{end}}</p>
-{{end -}}
-<table>
-{{range .Rows}}<tr{{if .Hot}} class="hot"{{end}}><td>{{.ID}}<td>{{.Name}}<td>{{.Stock}}<td>{{range .Tags}}<i>{{.}}</i>{{else}}-{{end}}<td>{{kr .Price}} {{$.Currency}}
-{{end -}}
-</table>
-</body>
-</html>
-`))
+// The catalog workload's template is catalog.templ, compiled to Go by templ
+// (catalog_templ.go, generated: `go tool templ generate`).
 
 type Catalog struct {
 	Title    string
-	Note     template.HTML
+	Note     string // HTML, written raw
 	Currency string
 	Shop     Shop
 	Closed   bool
@@ -113,7 +86,7 @@ func plural(count int, one, many string) string {
 
 func catalogHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := catalogPage.Execute(w, catalog); err != nil {
+	if err := catalogPage(catalog).Render(r.Context(), w); err != nil {
 		log.Print(err)
 	}
 }

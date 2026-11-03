@@ -11,7 +11,7 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 | Language | Go 1.27.3 (`toolchain` in `go.mod`) |
 | Server | `net/http`, the standard library |
 | I/O | a goroutine per connection on the runtime's epoll netpoller; `GOMAXPROCS` left at all cores |
-| Templates | `html/template`, parsed once at startup |
+| Templates | [templ](https://templ.guide) 0.3.1100, `menu.templ` and `catalog.templ` compiled to Go (`*_templ.go`, committed) |
 | Database | `database/sql` with `modernc.org/sqlite` (SQLite in pure Go) |
 | HTTPS | crypto/tls; HTTP/2 by ALPN |
 | Build | `go build -trimpath -o dragrace-go`, `CGO_ENABLED=0`, `GOAMD64=v3` (`competitor.json`) |
@@ -24,9 +24,9 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 - **`POST /echo`**: up to 1 MiB (`http.MaxBytesReader`).
     - A body of known length is read straight into a pooled buffer (`sync.Pool`); `io.ReadAll` grew a fresh one each request.
     - +28% requests/s and half the p99, measured locally in three interleaved rounds (30-33k against 39-41k).
-- **`GET /menu`**: `html/template`, executed per request; it escapes every value for its context.
-- **`GET /catalog`**: the same, a bigger page (`catalog.go`), `kr` and `plural` as template functions.
-    - html/template calls its escaper by reflection on every action, about 3,000 on this page: 1.5 ms a render.
+- **`GET /menu`**: templ, rendered per request; it escapes every value.
+- **`GET /catalog`**: the same, a bigger page (`catalog.templ`, its data in `catalog.go`), `kr` and `plural` plain Go functions called from the template.
+    - Until 2026-11-03 both were `html/template`, which calls its escaper by reflection on every action, about 3,000 on this page: 1.5 ms a render, 500 requests a second where the others do ten thousand.
 - **`GET /sse`**: the signals with `encoding/json`, then each event written and flushed (`http.ResponseController`).
     - As Datastar's Go SDK does.
 - **Conduit (`/api/...`)**: `database/sql`, as a Go team runs SQLite.
@@ -50,6 +50,16 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 ## Worth knowing
 
 - `modernc.org/sqlite` keeps the binary static; `mattn/go-sqlite3` would need cgo.
+- templ is a generator: `go tool templ generate` turns each `.templ` into a `_templ.go`, which is
+  committed, so the race's `go build` needs no generator. Its version is pinned twice in `go.mod`,
+  the library (`require`) and the generator (`tool`), kept equal; to move them,
+  `go get github.com/a-h/templ@vX && go get -tool github.com/a-h/templ/cmd/templ@vX`, then
+  regenerate and `go mod tidy`. `go tool templ fmt .` formats the templates.
+- The reference pages set two things templ does not do by itself: templ writes no line break
+  between elements, so each of the reference's is a `{ "\n" }` in the template, and it closes
+  every element, so the catalog's `<tr>` and `<td>`, which the reference leaves open, are written
+  by two small components (`tr`, `cell`) from raw tags. Everything else is templ as its guide
+  shows it: elements, `if`, `for`, `{ value }` escaped.
 
 
 ## Tuning
@@ -60,4 +70,5 @@ Ideas welcome: GOGC/GOMEMLIMIT, PGO, a different mux. Say why ([CONTRIBUTING](..
 ## Links
 
 - [net/http](https://pkg.go.dev/net/http)
+- [templ](https://templ.guide), [a-h/templ](https://github.com/a-h/templ)
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)

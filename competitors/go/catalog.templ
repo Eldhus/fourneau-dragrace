@@ -1,0 +1,99 @@
+package main
+
+import "strconv"
+
+// The catalog workload: a bigger page, compiled to Go by templ: sections
+// over a record, lists nested in lists, a table of 256 rows, conditions,
+// empty lists, raw HTML and formatting functions. The reference is
+// workloads/catalog.html; templ writes no line break of its own between
+// elements, so the reference's are written out, each before its line, and
+// it wants every element closed, so the rows and cells the reference leaves
+// open are raw tags.
+templ catalogPage(c Catalog) {
+	<!DOCTYPE html>
+	{ "\n" }
+	<html lang="en">
+		{ "\n" }
+		<head><meta charset="utf-8"/><title>{ c.Title }</title></head>
+		{ "\n" }
+		<body>
+			{ "\n" }
+			<h1>{ c.Title }</h1>
+			{ "\n" }
+			<p>@templ.Raw(c.Note)</p>
+			{ "\n" }
+			<p>
+				{ c.Shop.Name }, { c.Shop.City }
+				if c.Shop.Open {
+					(open)
+				}
+			</p>
+			if !c.Closed {
+				{ "\n" }
+				<p>Open today.</p>
+			}
+			if len(c.Specials) == 0 {
+				{ "\n" }
+				<p>No specials.</p>
+			}
+			{ "\n" }
+			<p>{ plural(len(c.Groups), "group", "groups") }, { strconv.Itoa(len(c.Rows)) } rows</p>
+			for _, g := range c.Groups {
+				{ "\n" }
+				<h2>{ g.Name }</h2>
+				<p>
+					for _, m := range g.Members {
+						{ m };
+					}
+				</p>
+			}
+			{ "\n" }
+			<table>
+				for _, row := range c.Rows {
+					{ "\n" }
+					@tr(row.Hot)
+					@cell() {
+						{ strconv.FormatUint(uint64(row.ID), 10) }
+					}
+					@cell() {
+						{ row.Name }
+					}
+					@cell() {
+						{ strconv.FormatInt(int64(row.Stock), 10) }
+					}
+					@cell() {
+						if len(row.Tags) == 0 {
+							-
+						} else {
+							for _, t := range row.Tags {
+								<i>{ t }</i>
+							}
+						}
+					}
+					@cell() {
+						{ kr(row.Price) } { c.Currency }
+					}
+				}
+				{ "\n" }
+			</table>
+			{ "\n" }
+		</body>
+		{ "\n" }
+	</html>
+	{ "\n" }
+}
+
+// A row's open tag, as the reference leaves it: never closed.
+templ tr(hot bool) {
+	if hot {
+		@templ.Raw(`<tr class="hot">`)
+	} else {
+		@templ.Raw("<tr>")
+	}
+}
+
+// A cell: its open tag, never closed, then its content.
+templ cell() {
+	@templ.Raw("<td>")
+	{ children... }
+}

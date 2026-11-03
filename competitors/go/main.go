@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"net"
@@ -16,20 +15,8 @@ import (
 	"time"
 )
 
-// The templates workload: html/template, parsed once, executed per request
-// (it escapes every value for its context).
-var menu = template.Must(template.New("menu").Parse(`<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Menu</title></head>
-<body>
-<h1>Menu</h1>
-<table>
-<tr><th>Dish</th><th>Price</th></tr>
-{{range .}}<tr><td>{{.Name}}</td><td>{{.Price}}</td></tr>
-{{end}}</table>
-</body>
-</html>
-`))
+// The templates workload: menu.templ, compiled to Go by templ
+// (menu_templ.go, generated: `go tool templ generate`), rendered per request.
 
 type Dish struct {
 	Name  string
@@ -75,7 +62,7 @@ func main() {
 	mux.HandleFunc("POST /echo", echo)
 	mux.HandleFunc("GET /menu", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := menu.Execute(w, dishes); err != nil {
+		if err := menuPage(dishes).Render(r.Context(), w); err != nil {
 			log.Print(err)
 		}
 	})

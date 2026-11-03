@@ -27,7 +27,7 @@ Competitors :: [].{
 			name: "go",
 			language: "Go",
 			io: "net/http: goroutine per connection, epoll netpoller",
-			templates: "html/template: parsed at startup",
+			templates: "templ: compiled to Go",
 			db: "database/sql: modernc.org/sqlite",
 			build: "go build: -trimpath, CGO_ENABLED=0, GOAMD64=v3",
 			links: [{ label: "net/http", href: "https://pkg.go.dev/net/http" }, source("go")],
