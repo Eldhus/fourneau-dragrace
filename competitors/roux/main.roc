@@ -12,51 +12,27 @@ import pf.Sse
 import pf.Url
 import db/Database
 import Conduit
-import templates/Menu
 import templates/Catalog
 import templates/Holes
 
-## The templates workload's dishes, made once by `init!`; `Menu.rocstache`
-## (compiled to bytecode linked into the app by roux build, which the
-## host's renderer runs as the response is sent; `Menu.roc` is its
-## contract and `Menu.template`) renders them per request.
+## The templates workload's page, made once by `init!` (`catalog`);
+## `Catalog.rocstache` (compiled to bytecode linked into the app by roux
+## build, which the host's renderer runs as the response is sent;
+## `Catalog.roc` is its contract and `Catalog.template`) renders it per
+## request, its holes of Roc through `Holes.hole`.
 ## The conduit workload's database: ROUX_DATABASE says where, as the race
 ## starts every server, in WAL mode with synchronous=NORMAL (the contract).
 ## A request waits for it up to 5 s, as the contract asks of every server,
 ## where roux's defaults answer 503 sooner; 256 may wait for the writer,
 ## every request Conduit's 256 connections hold.
-## The catalog workload's page, made once by `init!` (`catalog`), rendered
-## per request by `Catalog.rocstache`.
-Context : { menu : Menu.Ctx, catalog : Catalog.Ctx, db : Sqlite.Db }
+Context : { catalog : Catalog.Ctx, db : Sqlite.Db }
 
 program = { init!, respond!, hole: Holes.hole }
 
 init! : () => Try({ config : Server.Config, context : Context }, [Exit(I64), DbErr(Sqlite.Err)])
 init! = || {
 	db = Sqlite.open!(Database.at("conduit.db"), { synchronous: Normal, read_wait_ms: 5_000, write_wait_ms: 5_000, writers_waiting: 256 })?
-	Ok({
-	config: { port: 8080, static_dir: "" },
-	context: {
-		db,
-		catalog: catalog(),
-		menu: {
-			dishes: [
-				{ name: "Roux", price: 120 },
-				{ name: "Fish & chips", price: 290 },
-				{ name: "Crème brûlée", price: 180 },
-				{ name: "<b>Bold</b> stew", price: 240 },
-				{ name: "Skyr & berries", price: 150 },
-				{ name: "Hákarl", price: 990 },
-				{ name: "Plokkfiskur", price: 310 },
-				{ name: "Kjötsúpa", price: 270 },
-				{ name: "Rúgbrauð <warm>", price: 90 },
-				{ name: "Pylsa með öllu", price: 120 },
-				{ name: "Flatkaka & hangikjöt", price: 210 },
-				{ name: "1 < 2 > 0 pie", price: 160 },
-			],
-		},
-	},
-	})
+	Ok({ config: { port: 8080, static_dir: "" }, context: { db, catalog: catalog() } })
 }
 
 respond! : Server.Request, Context => Try(Server.Response(_), [NotFound, BadRequest(Str), SseErr(Sse.SseErr), DbErr(Sqlite.Err)])
@@ -80,7 +56,6 @@ respond! = |request, context| {
 					)
 				Err(BodyErr(err)) => Err(BadRequest(Str.inspect(err)))
 			}
-		("GET", "/menu") => Ok(Rocstache.html(Menu.template(context.menu)))
 		("GET", "/catalog") => Ok(Rocstache.html(Catalog.template(context.catalog)))
 		("GET", "/sse") =>
 			match signals(request.target) {
@@ -96,7 +71,7 @@ respond! = |request, context| {
 	}
 }
 
-# --- the catalog workload: the page's data ---------------------------------------
+# --- the templates workload: the catalog page's data -----------------------------
 
 ## The catalog's names: markup, quotes and accents, each escaped as printed.
 names : List(Str)

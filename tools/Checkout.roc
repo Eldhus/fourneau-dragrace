@@ -63,9 +63,8 @@ Checkout :: [].{
 	race! : Str => Try(Config.Race, [Failed(Str)])
 	race! = |root| {
 		text = Checkout.read!("${root}/race.json")?
-		menu = Checkout.read!("${root}/workloads/menu.html")?
 		stream = Checkout.read!("${root}/workloads/sse.txt")?
-		race = Config.race(text, menu, stream)?
+		race = Config.race(text, stream)?
 		pages = race.paged.map_try!(|p| Ok((p.path, Checkout.read!("${root}/workloads/${p.test}.html")?)))?
 		Ok({ ..race, pages })
 	}

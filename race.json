@@ -49,21 +49,8 @@
     {
       "name": "templates",
       "title": "Templates",
-      "summary": "GET /menu renders a 12-row HTML table from a template per request, every value escaped: the work of a server-rendered page.",
-      "detail": "Each server renders the same page, a menu of twelve dishes and their prices, with its language's usual template engine, anew for every request: no cached response. Some dishes' names hold markup and accents, and every value is HTML-escaped; the page is checked against the reference byte for byte before the race (an entity may be spelled &amp; or &#38;). Against Plaintext it adds the template engine's work, for a page under a kilobyte.",
-      "method": "GET",
-      "path": "/menu",
-      "keepalive": true,
-      "variants": [
-        { "protocol": "http1", "connections": 256 },
-        { "protocol": "tls", "connections": 128, "streams": 2 }
-      ]
-    },
-    {
-      "name": "catalog",
-      "title": "Catalog",
-      "summary": "GET /catalog renders a 16 KB page from a template per request: a record's fields, lists in lists, a 256-row table, conditions, empty lists, raw HTML and formatted prices.",
-      "detail": "Each server renders the page with its usual template engine, anew for every request, from data made once at start: rows i = 0 to 255 with id i + 1, name NAMES[i % 8], price 500 + (i * 7919) % 20000 hundredths written as 12.05 kr, stock (i * 13) % 50 - 10, hot when i % 7 is 0, tags none, veg, or veg and gf by i % 3; six groups, group k named Group k + 1 with NAMES k, k + 1 and k + 2 (mod 8); NAMES are Roux, Skyr & ber, Crème, <b>Stew</b>, Hákarl, Kjöt \"s\", O'Brien and Pylsa. Its bytes are kept small, since it measures template rendering rather than the network. The page is checked against workloads/catalog.html byte for byte before the race, entities as for the menu.",
+      "summary": "GET /catalog renders a 16 KB page from a template per request: a record's fields, lists in lists, a 128-row table with nine formatted values a row, conditions, empty lists and raw HTML: the work of a server-rendered page.",
+      "detail": "Each server renders the same page with its language's usual template engine, anew for every request, from data made once at start: no cached response. Rows i = 0 to 127 with id i + 1, name NAMES[i % 8], price 500 + (i * 7919) % 20000 hundredths written as 12.05 kr, a discount of (i * 37) % 40 percent (on sale when above 0, the price after it rounded down and the old one struck through), stock (i * 13) % 50 - 10 written as out, 3 left or 16 and as the row's class out, low or ok, hot (a second class) when i % 7 is 0, tags none, veg, or veg and gf by i % 3, added on day (i * 53) % 365 of 2026 written as MM-DD, and 50 + (i * 997) % 5000 grams written as 350 g or 1.25 kg; six groups, group k named Group k + 1 with NAMES k, k + 1 and k + 2 (mod 8); three offers with a percentage each; the prices' total; NAMES are Roux, Skyr & ber, Crème, <b>Stew</b>, Hákarl, Kjöt \"s\", O'Brien and Pylsa, each escaped where it is printed. Its bytes are kept small, since it measures template rendering rather than the network. The page is checked against workloads/templates.html byte for byte before the race (an entity may be spelled &amp; or &#38;). Until 2026-11-04 this workload was a 12-row menu under a kilobyte, which no engine found hard; its history before that date is the menu's.",
       "method": "GET",
       "path": "/catalog",
       "keepalive": true,

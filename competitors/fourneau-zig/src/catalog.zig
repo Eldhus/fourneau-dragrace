@@ -2,7 +2,7 @@
 //! compiled at comptime) and Zig's own loops, conditions and formatting
 //! around it, as main.zig's menu: a record's fields, lists nested in lists,
 //! a table of 128 rows, empty lists, raw HTML, prices, sale prices, dates
-//! and weights. The reference is workloads/catalog.html.
+//! and weights. The reference is workloads/templates.html.
 
 const std = @import("std");
 const assert = std.debug.assert;

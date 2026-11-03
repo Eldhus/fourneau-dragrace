@@ -15,21 +15,6 @@ import (
 	"time"
 )
 
-// The templates workload: menu.templ, compiled to Go by templ
-// (menu_templ.go, generated: `go tool templ generate`), rendered per request.
-
-type Dish struct {
-	Name  string
-	Price int
-}
-
-var dishes = []Dish{
-	{"Roux", 120}, {"Fish & chips", 290}, {"Crème brûlée", 180},
-	{"<b>Bold</b> stew", 240}, {"Skyr & berries", 150}, {"Hákarl", 990},
-	{"Plokkfiskur", 310}, {"Kjötsúpa", 270}, {"Rúgbrauð <warm>", 90},
-	{"Pylsa með öllu", 120}, {"Flatkaka & hangikjöt", 210}, {"1 < 2 > 0 pie", 160},
-}
-
 // environment is a variable the race sets (CONTRIBUTING.md, "The contract"), or
 // otherwise when it is unset.
 func environment(name, otherwise string) string {
@@ -60,12 +45,6 @@ func main() {
 		io.WriteString(w, "Hello, World!")
 	})
 	mux.HandleFunc("POST /echo", echo)
-	mux.HandleFunc("GET /menu", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := menuPage(dishes).Render(r.Context(), w); err != nil {
-			log.Print(err)
-		}
-	})
 	mux.HandleFunc("GET /catalog", catalogHandler)
 	mux.HandleFunc("GET /sse", datastar)
 	server := &http.Server{

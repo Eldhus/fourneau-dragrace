@@ -355,8 +355,8 @@ measure! = |race, workload, target, bodies, pid| {
 }
 
 ## That the competitor does the work, "" when it does: the exact
-## plaintext, each echoed body byte for byte, the menu, the stream, h2c,
-## the 404; over TLS, what TLS was agreed.
+## plaintext, each echoed body byte for byte, each raced test's page, the
+## stream, h2c, the 404; over TLS, what TLS was agreed.
 validate! : Config.Race, Target.Where, List((U64, Str)), Target.Mode => Str
 validate! = |race, target, bodies, mode| {
 	url = Target.base_url(race, target, mode)
@@ -387,13 +387,8 @@ validate! = |race, target, bodies, mode| {
 			return "/echo did not answer the body it was sent"
 		}
 	}
-	# The machine trims trailing line breaks from what it returns; so is the
-	# reference.
-	menu = ask!("${curl}${url}/menu") ?? ""
-	if Checks.canonical_entities(menu) != trim_breaks(Checks.canonical_entities(race.menu)) {
-		return "/menu did not render the menu (workloads/menu.html)"
-	}
-	# An ad-hoc test's page, when it is raced.
+	# A paged test's page, when it is raced. The machine trims trailing line
+	# breaks from what it returns; so is the reference.
 	for (path, page) in race.pages {
 		if race.workloads.any(|w| w.path == path) {
 			got = ask!("${curl}${url}${path}") ?? ""

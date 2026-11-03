@@ -14,7 +14,7 @@ import "strconv"
 // The catalog workload: a bigger page, compiled to Go by templ: sections
 // over a record, lists nested in lists, a table of 128 rows, conditions,
 // empty lists, raw HTML and formatting functions. The reference is
-// workloads/catalog.html; templ writes no line break of its own between
+// workloads/templates.html; templ writes no line break of its own between
 // elements, so the reference's are written out, each before its line.
 func catalogPage(c Catalog) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {

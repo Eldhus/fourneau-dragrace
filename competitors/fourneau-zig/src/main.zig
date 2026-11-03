@@ -9,43 +9,12 @@ const std = @import("std");
 const assert = std.debug.assert;
 const fourneau = @import("fourneau");
 const Evented = @import("zig_io_evented");
-const Template = @import("template.zig").Template;
 const datastar = @import("datastar.zig");
 const catalog = @import("catalog.zig");
 const conduit = @import("conduit.zig");
 
 /// The shard's connection to the conduit workload's database (`ROUX_DATABASE`).
 threadlocal var shard_db: ?conduit.Db = null;
-
-/// The templates workload's page: a head, a row per dish, a tail.
-const MenuHead = Template(
-    \\<!doctype html>
-    \\<html lang="en">
-    \\<head><meta charset="utf-8"><title>Menu</title></head>
-    \\<body>
-    \\<h1>Menu</h1>
-    \\<table>
-    \\<tr><th>Dish</th><th>Price</th></tr>
-    \\
-);
-const MenuRow = Template("<tr><td>{{ name }}</td><td>{{ price }}</td></tr>\n");
-const MenuTail = Template("</table>\n</body>\n</html>\n");
-
-const Dish = struct { name: []const u8, price: u32 };
-const dishes = [_]Dish{
-    .{ .name = "Roux", .price = 120 },
-    .{ .name = "Fish & chips", .price = 290 },
-    .{ .name = "Crème brûlée", .price = 180 },
-    .{ .name = "<b>Bold</b> stew", .price = 240 },
-    .{ .name = "Skyr & berries", .price = 150 },
-    .{ .name = "Hákarl", .price = 990 },
-    .{ .name = "Plokkfiskur", .price = 310 },
-    .{ .name = "Kjötsúpa", .price = 270 },
-    .{ .name = "Rúgbrauð <warm>", .price = 90 },
-    .{ .name = "Pylsa með öllu", .price = 120 },
-    .{ .name = "Flatkaka & hangikjöt", .price = 210 },
-    .{ .name = "1 < 2 > 0 pie", .price = 160 },
-};
 
 const Header = fourneau.http1_response.Header;
 const shards_max = 256;
@@ -80,10 +49,6 @@ const App = struct {
         if (std.mem.eql(u8, path, "/echo")) {
             if (head.method != .post) return not_allowed(allow_post);
             return echo(request);
-        }
-        if (std.mem.eql(u8, path, "/menu")) {
-            if (!get) return not_allowed(allow_get);
-            return menu(request);
         }
         if (std.mem.eql(u8, path, "/catalog")) {
             if (!get) return not_allowed(allow_get);
@@ -193,28 +158,14 @@ const App = struct {
         return .{ .status = 200, .headers = octet_stream, .body = request.scratch[0..used] };
     }
 
-    /// The page, rendered into this connection's scratch memory.
-    fn menu(request: *Server.Request) Response {
-        var writer: std.Io.Writer = .fixed(request.scratch);
-        render_menu(&writer) catch {
-            return .{ .status = 500, .headers = text_plain, .body = "page too large" };
-        };
-        return .{ .status = 200, .headers = text_html, .body = writer.buffered() };
-    }
-
-    /// The catalog workload's page, rendered into this connection's scratch memory.
+    /// The templates workload's page, the catalog, rendered into this
+    /// connection's scratch memory.
     fn catalog_page(request: *Server.Request) Response {
         var writer: std.Io.Writer = .fixed(request.scratch);
         catalog.render(&writer) catch {
             return .{ .status = 500, .headers = text_plain, .body = "page too large" };
         };
         return .{ .status = 200, .headers = text_html, .body = writer.buffered() };
-    }
-
-    fn render_menu(writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        try MenuHead.render(writer, .{});
-        for (dishes) |dish| try MenuRow.render(writer, dish);
-        try MenuTail.render(writer, .{});
     }
 
     pub fn release(app: *App, response: *Response) void {

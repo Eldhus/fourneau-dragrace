@@ -67,8 +67,8 @@ Config :: [].{
 
 	Cloud : { region : Str, image : Str, servers : List(ServerClass), tag : Str, max_age_minutes : U64 }
 
-	## race.json, its tests expanded into workloads, and the two reference
-	## answers (workloads/menu.html, workloads/sse.txt).
+	## race.json, its tests expanded into workloads, and the reference
+	## answers (workloads/sse.txt, each paged test's page).
 	Race : {
 		port : U64,
 		rounds : U64,
@@ -80,7 +80,6 @@ Config :: [].{
 		workloads : List(Workload),
 		cloud : Cloud,
 		local : { server_cpus : Str, loader_cpus : Str },
-		menu : Str,
 		stream : Str,
 		## The workloads measured, when not all (a smoke race's); the checks
 		## still ask every workload's path.
@@ -115,9 +114,9 @@ Config :: [].{
 		kernel_tls : Bool,
 	}
 
-	## race.json read from its text and the two reference answers.
-	race : Str, Str, Str -> Try(Race, [Failed(Str)])
-	race = |text, menu, stream| {
+	## race.json read from its text and the stream's reference answer.
+	race : Str, Str -> Try(Race, [Failed(Str)])
+	race = |text, stream| {
 		file = parse_race(text) ? |err| Failed("race.json: ${describe_json(err)}")
 		if file.rounds < 1 or file.measure_seconds < 1 or file.workloads.is_empty() or file.oha.sha256 == "" {
 			return Err(Failed("race.json: rounds, measure_seconds, workloads and oha must be set"))
@@ -143,7 +142,6 @@ Config :: [].{
 			workloads,
 			cloud: file.cloud,
 			local: file.local,
-			menu,
 			stream,
 			loaded: Err(All),
 			adhoc_workloads,
@@ -409,14 +407,14 @@ race_text = |adhoc| {
 # An ad-hoc test is read apart from the nightly's workloads; one named as a
 # workload is refused.
 expect {
-	match Config.race(race_text("catalog"), "", "") {
+	match Config.race(race_text("catalog"), "") {
 		Ok(race) => race.workloads.map(|w| w.name) == ["p"] and race.adhoc_workloads.map(|w| w.path) == ["/catalog"]
 		Err(_) => Bool.False
 	}
 }
-expect Config.race(race_text("p"), "", "").is_err()
+expect Config.race(race_text("p"), "").is_err()
 expect {
-	match Config.race(race_text(""), "", "") {
+	match Config.race(race_text(""), "") {
 		Ok(race) => race.adhoc_workloads.is_empty() and race.paged.is_empty()
 		Err(_) => Bool.False
 	}
@@ -426,7 +424,7 @@ expect {
 # without has none.
 expect {
 	text = race_text("catalog").replace_first("\"keepalive\":true", "\"keepalive\":true,\"page\":true")
-	match Config.race(text, "", "") {
+	match Config.race(text, "") {
 		Ok(race) => race.paged == [{ test: "p", path: "/p" }]
 		Err(_) => Bool.False
 	}

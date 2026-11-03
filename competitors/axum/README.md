@@ -11,7 +11,7 @@ axum's own docs and examples write it.
 | Language | Rust 1.99.1 (`rust-toolchain.toml`) |
 | Server | axum 0.8 on hyper; `axum::serve` |
 | I/O | tokio's multi-threaded runtime: a worker per core, work stealing, epoll |
-| Templates | askama 0.16, `templates/menu.html` compiled into the binary |
+| Templates | askama 0.16, `templates/catalog.html` compiled into the binary |
 | Database | sqlx 0.9's SQLite (SQLite 3.51 bundled: the newest its `libsqlite3-sys` range allows) |
 | HTTPS | tokio-rustls (rustls on aws-lc-rs); HTTP/2 by ALPN |
 | Build | `cargo build --release --locked`: LTO, one codegen unit, x86-64-v3 (`.cargo/config.toml`) |
@@ -22,8 +22,8 @@ axum's own docs and examples write it.
 
 - **`GET /plaintext`** (also churn): a `&'static str`.
 - **`POST /echo`**: up to 1 MiB (`DefaultBodyLimit`), as `Bytes`.
-- **`GET /menu`**: askama, rendered per request; it escapes every value.
-- **`GET /catalog`**: askama again, `templates/catalog.html` (`src/catalog.rs`), its data built once.
+- **`GET /catalog`**: askama, `templates/catalog.html` rendered per request (`src/catalog.rs`: its
+  data built once, its formatters methods on the template's struct); it escapes every value.
 - **`GET /sse`**: `Query` and `serde_json` for the signals, then axum's `Sse` over a stream of the ten events.
     - hyper writes ready events together.
 - **Conduit (`/api/...`)**: sqlx, as an axum team runs SQLite.

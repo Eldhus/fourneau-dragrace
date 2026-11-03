@@ -2,7 +2,7 @@ import Text
 
 ## The parts of a competitor's checks that read what it answered: the SSE
 ## stream as sent (chunked, each event its own chunk), the TLS a client
-## like oha's agreed, and the menu with its entities spelled one way.
+## like oha's agreed, and a page with its entities spelled one way.
 Checks :: [].{
 	## The most events a checked stream may have.
 	stream_events_max : U64

@@ -1,7 +1,7 @@
 //! The catalog workload: a bigger page from askama, compiled from
 //! templates/catalog.html and rendered per request: sections over a record,
 //! lists nested in lists, a table of 128 rows, conditions, empty lists, raw
-//! HTML and formatting methods. The reference is workloads/catalog.html.
+//! HTML and formatting methods. The reference is workloads/templates.html.
 
 use askama::Template;
 use axum::{

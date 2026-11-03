@@ -11,7 +11,7 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 | Language | Go 1.27.3 (`toolchain` in `go.mod`) |
 | Server | `net/http`, the standard library |
 | I/O | a goroutine per connection on the runtime's epoll netpoller; `GOMAXPROCS` left at all cores |
-| Templates | [templ](https://templ.guide) 0.3.1100, `menu.templ` and `catalog.templ` compiled to Go (`*_templ.go`, committed) |
+| Templates | [templ](https://templ.guide) 0.3.1100, `catalog.templ` compiled to Go (`catalog_templ.go`, committed) |
 | Database | `database/sql` with `modernc.org/sqlite` (SQLite in pure Go) |
 | HTTPS | crypto/tls; HTTP/2 by ALPN |
 | Build | `go build -trimpath -o dragrace-go`, `CGO_ENABLED=0`, `GOAMD64=v3` (`competitor.json`) |
@@ -24,9 +24,8 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
 - **`POST /echo`**: up to 1 MiB (`http.MaxBytesReader`).
     - A body of known length is read straight into a pooled buffer (`sync.Pool`); `io.ReadAll` grew a fresh one each request.
     - +28% requests/s and half the p99, measured locally in three interleaved rounds (30-33k against 39-41k).
-- **`GET /menu`**: templ, rendered per request; it escapes every value.
-- **`GET /catalog`**: the same, a bigger page (`catalog.templ`, its data in `catalog.go`), `kr` and `plural` plain Go functions called from the template.
-    - Until 2026-11-03 both were `html/template`, which calls its escaper by reflection on every action, about 3,000 on this page: 1.5 ms a render, 500 requests a second where the others do ten thousand.
+- **`GET /catalog`**: templ, rendered per request (`catalog.templ`, its data and formatters in `catalog.go`, plain Go functions called from the template); it escapes every value.
+    - Until 2026-11-03 it was `html/template`, which calls its escaper by reflection on every action, thousands on this page: 1.5 ms a render, 500 requests a second where the others do ten thousand.
 - **`GET /sse`**: the signals with `encoding/json`, then each event written and flushed (`http.ResponseController`).
     - As Datastar's Go SDK does.
 - **Conduit (`/api/...`)**: `database/sql`, as a Go team runs SQLite.

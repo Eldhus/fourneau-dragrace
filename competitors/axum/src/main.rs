@@ -6,7 +6,6 @@
 mod catalog;
 mod conduit;
 
-use askama::Template;
 use std::convert::Infallible;
 
 use axum::{
@@ -21,41 +20,6 @@ use axum::{
     serve::ListenerExt,
     Router,
 };
-
-/// The templates workload: askama, compiled from templates/menu.html,
-/// rendered per request (it escapes every value as HTML).
-#[derive(Template)]
-#[template(path = "menu.html")]
-struct Menu<'a> {
-    dishes: &'a [Dish],
-}
-
-struct Dish {
-    name: &'static str,
-    price: u32,
-}
-
-const DISHES: [Dish; 12] = [
-    Dish { name: "Roux", price: 120 },
-    Dish { name: "Fish & chips", price: 290 },
-    Dish { name: "Crème brûlée", price: 180 },
-    Dish { name: "<b>Bold</b> stew", price: 240 },
-    Dish { name: "Skyr & berries", price: 150 },
-    Dish { name: "Hákarl", price: 990 },
-    Dish { name: "Plokkfiskur", price: 310 },
-    Dish { name: "Kjötsúpa", price: 270 },
-    Dish { name: "Rúgbrauð <warm>", price: 90 },
-    Dish { name: "Pylsa með öllu", price: 120 },
-    Dish { name: "Flatkaka & hangikjöt", price: 210 },
-    Dish { name: "1 < 2 > 0 pie", price: 160 },
-];
-
-async fn menu() -> impl IntoResponse {
-    match (Menu { dishes: &DISHES }).render() {
-        Ok(page) => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], page).into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
 
 /// The SSE workload: a Datastar action. Its signals are JSON in the
 /// `datastar` query parameter (a missing one is axum's 400); the answer is
@@ -159,7 +123,6 @@ async fn main() {
     let mut app = Router::new()
         .route("/plaintext", get(plaintext))
         .route("/echo", post(echo))
-        .route("/menu", get(menu))
         .route("/catalog", get(catalog::catalog))
         .route("/sse", get(datastar))
         .layer(axum::extract::DefaultBodyLimit::max(1 << 20));

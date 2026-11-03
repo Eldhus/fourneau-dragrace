@@ -9,7 +9,6 @@ app [Context, program] {
 # pool). Written as its examples are; the limits raised to the race's
 # load (README.md says which and why).
 
-import pf.Attribute
 import pf.Env
 import pf.Html
 import pf.MultipartFormData
@@ -20,9 +19,7 @@ import pf.Sse
 import http.Response
 import Conduit
 
-Dish : { name : Str, price : U32 }
-
-## The catalog workload's page data, as race.json's `catalog` defines it.
+## The templates workload's page data, as race.json's `catalog` defines it.
 Catalog : {
 	title : Str,
 	note : Str,
@@ -36,11 +33,10 @@ Catalog : {
 	rows : List({ id : U32, name : Str, price : U32, discount : U8, on_sale : Bool, stock : I32, hot : Bool, tags : List(Str), added : U16, grams : U32 }),
 }
 
-## The templates workload's dishes and the catalog's data, made once by
-## `init!`; the conduit workload's database (ROUX_DATABASE, as the race
-## starts every server), a pool in WAL mode with synchronous=NORMAL, as the
-## contract says.
-Context : { dishes : List(Dish), catalog : Catalog, db : Sqlite.Db }
+## The catalog's data, made once by `init!`; the conduit workload's database
+## (ROUX_DATABASE, as the race starts every server), a pool in WAL mode with
+## synchronous=NORMAL, as the contract says.
+Context : { catalog : Catalog, db : Sqlite.Db }
 
 program = { init!, respond!, shutdown! }
 
@@ -66,7 +62,7 @@ init! = || {
 			.with_sse_limits({ max_streams: 1024, max_event_bytes: 64 * 1024 })
 	database = Env.var_str!("ROUX_DATABASE") ? |_| Exit(2)
 	db = Sqlite.open!({ ..Sqlite.default_config(Path.utf8(database)), max_connections: 32, busy_timeout_ms: 5_000, synchronous: Normal }) ? |_| Exit(3)
-	Ok({ config, context: { dishes: menu_dishes, catalog: catalog(), db } })
+	Ok({ config, context: { catalog: catalog(), db } })
 }
 
 respond! : Server.Request, Context => Try(Server.Outcome, [ServerErr(Str)])
@@ -91,14 +87,6 @@ respond! = |request, context| {
 					)
 				Err(_) => Ok(Server.respond(plain(413, "body too large")))
 			}
-		(GET, "/menu") =>
-			Ok(
-				Server.respond(
-					Response.from_status(200)
-						.with_headers([{ name: "Content-Type", value: "text/html; charset=utf-8" }])
-						.with_body(Str.to_utf8(menu(context.dishes))),
-				),
-			)
 		(GET, "/catalog") =>
 			Ok(
 				Server.respond(
@@ -148,52 +136,7 @@ plain = |status, text|
 
 # --- the templates workload ---------------------------------------------------
 
-## The page, built with the platform's `Html` (which escapes every text
-## value). `Html.render` spells the doctype `<!DOCTYPE html>` and puts no
-## line breaks between elements; the race's page has both, so the doctype
-## is written here and the breaks are text nodes.
-menu : List(Dish) -> Str
-menu = |dishes| {
-	nl = Html.text("\n")
-	rows = dishes.map(|dish| [row([Html.text(dish.name), Html.text(dish.price.to_str())], "td"), nl]).join()
-	page = Html.element("html", [Attribute.attribute("lang", "en")], [
-		nl,
-		Html.element("head", [], [
-			Html.void_element("meta", [Attribute.attribute("charset", "utf-8")]),
-			Html.element("title", [], [Html.text("Menu")]),
-		]),
-		nl,
-		Html.element("body", [], [
-			nl,
-			Html.element("h1", [], [Html.text("Menu")]),
-			nl,
-			Html.element("table", [], List.concat([nl, row([Html.text("Dish"), Html.text("Price")], "th"), nl], rows)),
-			nl,
-		]),
-		nl,
-	])
-	"<!doctype html>\n${Html.render_without_doc_type(page)}\n"
-}
-
-row = |cells, tag| Html.element("tr", [], cells.map(|cell| Html.element(tag, [], [cell])))
-
-menu_dishes : List(Dish)
-menu_dishes = [
-	{ name: "Roux", price: 120 },
-	{ name: "Fish & chips", price: 290 },
-	{ name: "Crème brûlée", price: 180 },
-	{ name: "<b>Bold</b> stew", price: 240 },
-	{ name: "Skyr & berries", price: 150 },
-	{ name: "Hákarl", price: 990 },
-	{ name: "Plokkfiskur", price: 310 },
-	{ name: "Kjötsúpa", price: 270 },
-	{ name: "Rúgbrauð <warm>", price: 90 },
-	{ name: "Pylsa með öllu", price: 120 },
-	{ name: "Flatkaka & hangikjöt", price: 210 },
-	{ name: "1 < 2 > 0 pie", price: 160 },
-]
-
-# --- the catalog workload -----------------------------------------------------
+# --- the templates workload: the catalog page ----------------------------------
 
 ## The page, written out as text, each value escaped by the platform's
 ## `Html`: its elements put no line breaks between elements, and the race's
@@ -405,7 +348,7 @@ expect signals("") == Err(BadSignals)
 expect signals("datastar=%7B%7D") == Err(BadSignals)
 expect signals("datastar=nope") == Err(BadSignals)
 expect signals("other=%7B%22count%22%3A41%7D") == Err(BadSignals)
-expect Str.starts_with(menu(menu_dishes), "<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>Menu</title></head>\n")
+expect Str.starts_with(catalog_page(catalog()), "<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>Catalog &lt;&amp;&gt;")
 expect signals("datastar=%7B%22count%22%3A4294967295%7D") == Ok({ count: 4294967295 })
 expect signals("datastar=%7B%22count%22%3A4294967296%7D") == Err(BadSignals)
 expect signals("datastar=%7B%22count%22%3A-1%7D") == Err(BadSignals)
