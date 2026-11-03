@@ -60,6 +60,11 @@ The baseline, as most teams would ship it: Go on its standard library. `net/http
   every element, so the catalog's `<tr>` and `<td>`, which the reference leaves open, are written
   by two small components (`tr`, `cell`) from raw tags. Everything else is templ as its guide
   shows it: elements, `if`, `for`, `{ value }` escaped.
+    - Those components are what the catalog costs: each is a closure, a context for its children
+      and a buffer, about 40 allocations a row. The same page with every tag closed, templ's own
+      idiom, renders in 40% of the time with 3,700 allocations against 12,400 (2026-11-03,
+      `go test -bench` locally). Still half of html/template's instructions a request (7.4M
+      against 14.4M on the catalog, 106k against 240k on the menu).
 
 
 ## Tuning
