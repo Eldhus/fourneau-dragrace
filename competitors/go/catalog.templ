@@ -3,12 +3,10 @@ package main
 import "strconv"
 
 // The catalog workload: a bigger page, compiled to Go by templ: sections
-// over a record, lists nested in lists, a table of 256 rows, conditions,
+// over a record, lists nested in lists, a table of 128 rows, conditions,
 // empty lists, raw HTML and formatting functions. The reference is
 // workloads/catalog.html; templ writes no line break of its own between
-// elements, so the reference's are written out, each before its line, and
-// it wants every element closed, so the rows and cells the reference leaves
-// open are raw tags.
+// elements, so the reference's are written out, each before its line.
 templ catalogPage(c Catalog) {
 	<!DOCTYPE html>
 	{ "\n" }
@@ -26,6 +24,8 @@ templ catalogPage(c Catalog) {
 				{ c.Shop.Name }, { c.Shop.City }
 				if c.Shop.Open {
 					(open)
+				} else {
+					(closed)
 				}
 			</p>
 			if !c.Closed {
@@ -37,7 +37,19 @@ templ catalogPage(c Catalog) {
 				<p>No specials.</p>
 			}
 			{ "\n" }
-			<p>{ plural(len(c.Groups), "group", "groups") }, { strconv.Itoa(len(c.Rows)) } rows</p>
+			<ul>
+				for _, offer := range c.Offers {
+					{ "\n" }
+					<li>{ offer.What }: { pct(offer.Off) } off</li>
+				}
+				{ "\n" }
+			</ul>
+			if len(c.Offers) == 0 {
+				{ "\n" }
+				<p>No offers.</p>
+			}
+			{ "\n" }
+			<p>{ plural(len(c.Groups), "group", "groups") }, { plural(len(c.Rows), "row", "rows") }, { kr(c.Total) } { c.Currency } in stock</p>
 			for _, g := range c.Groups {
 				{ "\n" }
 				<h2>{ g.Name }</h2>
@@ -51,28 +63,29 @@ templ catalogPage(c Catalog) {
 			<table>
 				for _, row := range c.Rows {
 					{ "\n" }
-					@tr(row.Hot)
-					@cell() {
-						{ strconv.FormatUint(uint64(row.ID), 10) }
-					}
-					@cell() {
-						{ row.Name }
-					}
-					@cell() {
-						{ strconv.FormatInt(int64(row.Stock), 10) }
-					}
-					@cell() {
-						if len(row.Tags) == 0 {
-							-
-						} else {
-							for _, t := range row.Tags {
-								<i>{ t }</i>
+					<tr class={ level(row.Stock), templ.KV("hot", row.Hot) }>
+						<td>{ strconv.FormatUint(uint64(row.ID), 10) } { row.Name }</td>
+						<td>
+							{ stock(row.Stock) }
+							if len(row.Tags) == 0 {
+								-
+							} else {
+								for _, t := range row.Tags {
+									<i>{ t }</i>
+								}
 							}
-						}
-					}
-					@cell() {
-						{ kr(row.Price) } { c.Currency }
-					}
+						</td>
+						<td>
+							if row.OnSale {
+								<s>{ kr(row.Price) }</s>
+								{ kr(sale(row.Price, row.Discount)) }
+							} else {
+								{ kr(row.Price) }
+							}
+							{ c.Currency }
+						</td>
+						<td>{ date(row.Added) } { weight(row.Grams) }</td>
+					</tr>
 				}
 				{ "\n" }
 			</table>
@@ -81,19 +94,4 @@ templ catalogPage(c Catalog) {
 		{ "\n" }
 	</html>
 	{ "\n" }
-}
-
-// A row's open tag, as the reference leaves it: never closed.
-templ tr(hot bool) {
-	if hot {
-		@templ.Raw(`<tr class="hot">`)
-	} else {
-		@templ.Raw("<tr>")
-	}
-}
-
-// A cell: its open tag, never closed, then its content.
-templ cell() {
-	@templ.Raw("<td>")
-	{ children... }
 }

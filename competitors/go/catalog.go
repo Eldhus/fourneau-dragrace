@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 // The catalog workload's template is catalog.templ, compiled to Go by templ
@@ -16,6 +18,8 @@ type Catalog struct {
 	Shop     Shop
 	Closed   bool
 	Specials []string
+	Offers   []Offer
+	Total    uint32
 	Groups   []Group
 	Rows     []Row
 }
@@ -25,18 +29,27 @@ type Shop struct {
 	Open       bool
 }
 
+type Offer struct {
+	What string
+	Off  uint8
+}
+
 type Group struct {
 	Name    string
 	Members []string
 }
 
 type Row struct {
-	ID    uint32
-	Name  string
-	Price uint32
-	Stock int32
-	Hot   bool
-	Tags  []string
+	ID       uint32
+	Name     string
+	Price    uint32
+	Discount uint8
+	OnSale   bool
+	Stock    int32
+	Hot      bool
+	Tags     []string
+	Added    uint16
+	Grams    uint32
 }
 
 // The catalog's names: markup, quotes and accents, each escaped as printed.
@@ -50,16 +63,24 @@ var catalog = func() Catalog {
 		Currency: "kr",
 		Shop:     Shop{Name: "Eldhús", City: "Reykjavík", Open: true},
 		Specials: []string{},
+		Offers:   []Offer{{"Soup of the day", 10}, {"Bread & butter", 25}, {"Coffee <hot>", 5}},
 	}
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 128; i++ {
 		tags := [][]string{{}, {"veg"}, {"veg", "gf"}}[i%3]
+		discount := uint8((i * 37) % 40)
+		price := uint32(500 + (i*7919)%20000)
+		c.Total += price
 		c.Rows = append(c.Rows, Row{
-			ID:    uint32(i + 1),
-			Name:  names[i%8],
-			Price: uint32(500 + (i*7919)%20000),
-			Stock: int32((i*13)%50 - 10),
-			Hot:   i%7 == 0,
-			Tags:  tags,
+			ID:       uint32(i + 1),
+			Name:     names[i%8],
+			Price:    price,
+			Discount: discount,
+			OnSale:   discount > 0,
+			Stock:    int32((i*13)%50 - 10),
+			Hot:      i%7 == 0,
+			Tags:     tags,
+			Added:    uint16((i * 53) % 365),
+			Grams:    uint32(50 + (i*997)%5000),
 		})
 	}
 	for k := 0; k < 6; k++ {
@@ -82,6 +103,51 @@ func plural(count int, one, many string) string {
 		return fmt.Sprintf("%d %s", count, one)
 	}
 	return fmt.Sprintf("%d %s", count, many)
+}
+
+// A percentage: 10%.
+func pct(percent uint8) string {
+	return strconv.Itoa(int(percent)) + "%"
+}
+
+// A stock's level, the row's class: out, low (under ten), ok.
+func level(stock int32) string {
+	switch {
+	case stock <= 0:
+		return "out"
+	case stock < 10:
+		return "low"
+	}
+	return "ok"
+}
+
+// A stock as written: out, 3 left, 16.
+func stock(count int32) string {
+	switch {
+	case count <= 0:
+		return "out"
+	case count < 10:
+		return fmt.Sprintf("%d left", count)
+	}
+	return strconv.FormatInt(int64(count), 10)
+}
+
+// A price after a discount in percent, in hundredths, rounded down.
+func sale(price uint32, off uint8) uint32 {
+	return price - price*uint32(off)/100
+}
+
+// A day of 2026 (0 is January 1) as MM-DD.
+func date(day uint16) string {
+	return time.Date(2026, time.January, 1+int(day), 0, 0, 0, 0, time.UTC).Format("01-02")
+}
+
+// A weight in grams: 350 g, or 1.25 kg from a kilogram up.
+func weight(grams uint32) string {
+	if grams < 1000 {
+		return fmt.Sprintf("%d g", grams)
+	}
+	return fmt.Sprintf("%d.%02d kg", grams/1000, (grams%1000)/10)
 }
 
 func catalogHandler(w http.ResponseWriter, r *http.Request) {

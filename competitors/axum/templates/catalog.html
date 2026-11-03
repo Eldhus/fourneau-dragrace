@@ -5,14 +5,20 @@
 {# A comment: nothing of it is written. -#}
 <h1>{{ title }}</h1>
 <p>{{ note|safe }}</p>
-<p>{{ shop.name }}, {{ shop.city }}{% if shop.open %} (open){% endif %}</p>
+<p>{{ shop.name }}, {{ shop.city }}{% if shop.open %} (open){% else %} (closed){% endif %}</p>
 {% if !closed %}<p>Open today.</p>{% endif %}
 {% if specials.is_empty() %}<p>No specials.</p>{% endif %}
-<p>{{ self.plural(groups.len(), "group", "groups") }}, {{ rows.len() }} rows</p>
+<ul>
+{% for offer in offers %}<li>{{ offer.what }}: {{ self.pct(offer.off) }} off</li>
+{% endfor -%}
+</ul>
+{% if offers.is_empty() %}<p>No offers.</p>
+{% endif -%}
+<p>{{ self.plural(groups.len(), "group", "groups") }}, {{ self.plural(rows.len(), "row", "rows") }}, {{ self.kr(total) }} {{ currency }} in stock</p>
 {% for group in groups %}<h2>{{ group.name }}</h2><p>{% for member in group.members %}{{ member }};{% endfor %}</p>
 {% endfor -%}
 <table>
-{% for row in rows %}<tr{% if row.hot %} class="hot"{% endif %}><td>{{ row.id }}<td>{{ row.name }}<td>{{ row.stock }}<td>{% for tag in row.tags %}<i>{{ tag }}</i>{% else %}-{% endfor %}<td>{{ self.kr(row.price) }} {{ currency }}
+{% for row in rows %}<tr class="{{ self.level(row.stock) }}{% if row.hot %} hot{% endif %}"><td>{{ row.id }} {{ row.name }}</td><td>{{ self.stock(row.stock) }} {% for tag in row.tags %}<i>{{ tag }}</i>{% else %}-{% endfor %}</td><td>{% if row.on_sale %}<s>{{ self.kr(row.price) }}</s> {{ self.kr(self.sale(row.price, row.discount)) }}{% else %}{{ self.kr(row.price) }}{% endif %} {{ currency }}</td><td>{{ self.date(row.added) }} {{ self.weight(row.grams) }}</td></tr>
 {% endfor -%}
 </table>
 </body>

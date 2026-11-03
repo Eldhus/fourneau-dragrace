@@ -30,8 +30,10 @@ Catalog : {
 	shop : { name : Str, city : Str, open : Bool },
 	closed : Bool,
 	specials : List(Str),
+	offers : List({ what : Str, off : U8 }),
+	total : U32,
 	groups : List({ name : Str, members : List(Str) }),
-	rows : List({ id : U32, name : Str, price : U32, stock : I32, hot : Bool, tags : List(Str) }),
+	rows : List({ id : U32, name : Str, price : U32, discount : U8, on_sale : Bool, stock : I32, hot : Bool, tags : List(Str), added : U16, grams : U32 }),
 }
 
 ## The templates workload's dishes and the catalog's data, made once by
@@ -194,18 +196,25 @@ menu_dishes = [
 # --- the catalog workload -----------------------------------------------------
 
 ## The page, written out as text, each value escaped by the platform's
-## `Html`: its elements close every tag, and the race's page leaves the
-## table's rows and cells open.
+## `Html`: its elements put no line breaks between elements, and the race's
+## page has one after each.
 catalog_page : Catalog -> Str
 catalog_page = |page| {
 	title = escape(page.title)
 	var $out = Str.with_capacity(20_000)
 	$out = $out.concat("<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>${title}</title></head>\n<body>\n<h1>${title}</h1>\n<p>${page.note}</p>\n")
-	open = if page.shop.open " (open)" else ""
+	open = if page.shop.open " (open)" else " (closed)"
 	$out = $out.concat("<p>${escape(page.shop.name)}, ${escape(page.shop.city)}${open}</p>\n")
 	$out = $out.concat(if page.closed "" else "<p>Open today.</p>\n")
 	$out = $out.concat(if page.specials.is_empty() "<p>No specials.</p>\n" else "")
-	$out = $out.concat("<p>${plural(page.groups.len(), "group", "groups")}, ${page.rows.len().to_str()} rows</p>\n")
+	$out = $out.concat("<ul>\n")
+	for offer in page.offers {
+		$out = $out.concat("<li>${escape(offer.what)}: ${pct(offer.off)} off</li>\n")
+	}
+	$out = $out.concat("</ul>\n")
+	$out = $out.concat(if page.offers.is_empty() "<p>No offers.</p>\n" else "")
+	currency = escape(page.currency)
+	$out = $out.concat("<p>${plural(page.groups.len(), "group", "groups")}, ${plural(page.rows.len(), "row", "rows")}, ${kr(page.total)} ${currency} in stock</p>\n")
 	for group in page.groups {
 		$out = $out.concat("<h2>${escape(group.name)}</h2><p>")
 		for member in group.members {
@@ -214,10 +223,9 @@ catalog_page = |page| {
 		$out = $out.concat("</p>\n")
 	}
 	$out = $out.concat("<table>\n")
-	currency = escape(page.currency)
 	for item in page.rows {
-		hot = if item.hot " class=\"hot\"" else ""
-		$out = $out.concat("<tr${hot}><td>${item.id.to_str()}<td>${escape(item.name)}<td>${item.stock.to_str()}<td>")
+		hot = if item.hot " hot" else ""
+		$out = $out.concat("<tr class=\"${level(item.stock)}${hot}\"><td>${item.id.to_str()} ${escape(item.name)}</td><td>${stock(item.stock)} ")
 		if item.tags.is_empty() {
 			$out = $out.concat("-")
 		} else {
@@ -225,7 +233,8 @@ catalog_page = |page| {
 				$out = $out.concat("<i>${escape(tag)}</i>")
 			}
 		}
-		$out = $out.concat("<td>${kr(item.price)} ${currency}\n")
+		price = if item.on_sale "<s>${kr(item.price)}</s> ${kr(sale(item.price, item.discount))}" else kr(item.price)
+		$out = $out.concat("</td><td>${price} ${currency}</td><td>${date(item.added)} ${weight(item.grams)}</td></tr>\n")
 	}
 	$out.concat("</table>\n</body>\n</html>\n")
 }
@@ -247,22 +256,32 @@ name_at : U64 -> Str
 name_at = |i| catalog_names.get(i % 8) ?? ""
 
 ## The catalog's data: row i (from 0) is id i + 1, catalog_names[i % 8],
-## price 500 + (i * 7919) % 20000 hundredths, stock (i * 13) % 50 - 10, hot
-## when i % 7 is 0, tags by i % 3: none, veg, veg and gf. Group k (from 0)
-## is "Group k + 1", names k to k + 2.
+## price 500 + (i * 7919) % 20000 hundredths, discount (i * 37) % 40 percent
+## (on sale when above 0), stock (i * 13) % 50 - 10, hot when i % 7 is 0,
+## tags by i % 3: none, veg, veg and gf; added on day (i * 53) % 365 of the
+## year, grams 50 + (i * 997) % 5000. Group k (from 0) is "Group k + 1",
+## names k to k + 2. The total is the prices' sum.
 catalog : () -> Catalog
 catalog = || {
 	var $rows = []
-	for i in 0..<256.U64 {
+	var $total = 0
+	for i in 0..<128.U64 {
 		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
+		price = (500 + (i * 7919) % 20000).to_u32_wrap()
+		discount = ((i * 37) % 40).to_u8_wrap()
+		$total = $total + price
 		$rows = $rows.append(
 			{
 				id: (i + 1).to_u32_wrap(),
 				name: name_at(i),
-				price: (500 + (i * 7919) % 20000).to_u32_wrap(),
+				price,
+				discount,
+				on_sale: discount > 0,
 				stock: ((i * 13) % 50).to_i32_wrap() - 10,
 				hot: i % 7 == 0,
 				tags,
+				added: ((i * 53) % 365).to_u16_wrap(),
+				grams: (50 + (i * 997) % 5000).to_u32_wrap(),
 			},
 		)
 	}
@@ -277,6 +296,8 @@ catalog = || {
 		shop: { name: "Eldhús", city: "Reykjavík", open: Bool.True },
 		closed: Bool.False,
 		specials: [],
+		offers: [{ what: "Soup of the day", off: 10 }, { what: "Bread & butter", off: 25 }, { what: "Coffee <hot>", off: 5 }],
+		total: $total,
 		groups: $groups,
 		rows: $rows,
 	}
@@ -284,11 +305,7 @@ catalog = || {
 
 ## A price in hundredths: `12.05`.
 kr : U32 -> Str
-kr = |hundredths| {
-	cents = hundredths % 100
-	pad = if cents < 10 "0" else ""
-	"${(hundredths // 100).to_str()}.${pad}${cents.to_str()}"
-}
+kr = |hundredths| "${(hundredths // 100).to_str()}.${two((hundredths % 100).to_u64())}"
 
 ## A count and the noun that fits it: `1 group`, `6 groups`.
 plural : U64, Str, Str -> Str
@@ -296,6 +313,57 @@ plural = |count, one, many| {
 	noun = if count == 1 one else many
 	"${count.to_str()} ${noun}"
 }
+
+## A percentage: `10%`.
+pct : U8 -> Str
+pct = |percent| "${percent.to_str()}%"
+
+## A stock's level, the row's class: `out`, `low` (under ten), `ok`.
+level : I32 -> Str
+level = |count| if count <= 0 "out" else if count < 10 "low" else "ok"
+
+## A stock as written: `out`, `3 left`, `16`.
+stock : I32 -> Str
+stock = |count| if count <= 0 "out" else if count < 10 "${count.to_str()} left" else count.to_str()
+
+## A price after a discount in percent, in hundredths, rounded down.
+sale : U32, U8 -> U32
+sale = |price, off| price - price * off.to_u32() // 100
+
+## A day of 2026 (0 is January 1) as `MM-DD`.
+date : U16 -> Str
+date = |day| {
+	var $left = day.to_u64()
+	var $month = 1
+	for days in [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] {
+		if $left < days {
+			break
+		} else {
+			$left = $left - days
+			$month = $month + 1
+		}
+	}
+	"${two($month)}-${two($left + 1)}"
+}
+
+## A weight in grams: `350 g`, or `1.25 kg` from a kilogram up.
+weight : U32 -> Str
+weight = |grams|
+	if grams < 1000 {
+		"${grams.to_str()} g"
+	} else {
+		"${(grams // 1000).to_str()}.${two(((grams % 1000) // 10).to_u64())} kg"
+	}
+
+## A number under 100 in two digits: `05`.
+two : U64 -> Str
+two = |n| if n < 10 "0${n.to_str()}" else n.to_str()
+
+expect kr(1205) == "12.05"
+expect sale(8419, 37) == 5304
+expect date(53) == "02-23"
+expect weight(1045) == "1.04 kg"
+expect stock(3) == "3 left"
 
 # --- the SSE workload: a Datastar action --------------------------------------
 
