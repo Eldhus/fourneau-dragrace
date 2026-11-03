@@ -36,7 +36,7 @@ Toolchain :: [].{
 		zig_dir = Toolchain.archive!(cache, "zig-${pins.zig.version}", pins.zig)?
 		roc_dir = Toolchain.archive!(cache, "roc-${pins.roc.version}", pins.roc)?
 		Toolchain.musl!(cache, pins.roc_musl, roux)?
-		tools = { zig: "${zig_dir}/zig", roc: "${roc_dir}/roc", roux, fourneau, zig_version: pins.zig.version, roc_version: pins.roc.version }
+		tools = { zig: "${zig_dir}/zig", roc: "${roc_dir}/roc", roux, fourneau, zig_version: pins.zig.version, roc_version: pins.roc.version, roc_local: Bool.False }
 		versions = Toolchain.competitor_versions!(root)?
 		used = { zig: pins.zig.version, roc: pins.roc.version, go: versions.go, rust: versions.rust, axum: versions.axum, tokio: versions.tokio, basic_webserver: versions.basic_webserver }
 		Toolchain.ready_roux!(tools)?

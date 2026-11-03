@@ -17,8 +17,10 @@ import Text
 ## by either share the store, and the race key says the same.
 Keys :: [].{
 	## What a key needs of the toolchain: the pinned tools' paths and
-	## versions, and the checkouts beside this one.
-	Tools : { zig : Str, roc : Str, roux : Str, fourneau : Str, zig_version : Str, roc_version : Str }
+	## versions, and the checkouts beside this one. `roc_local`: roc is not
+	## the pin but a compiler of the build's own (an ad-hoc variant's), its
+	## version then naming its hash.
+	Tools : { zig : Str, roc : Str, roux : Str, fourneau : Str, zig_version : Str, roc_version : Str, roc_local : Bool }
 
 	## The newest binaries kept for each competitor in the store.
 	store_keep : U64

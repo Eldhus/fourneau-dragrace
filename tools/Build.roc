@@ -50,7 +50,7 @@ Build :: [].{
 			match competitor.argv {
 				[first, .. as rest] =>
 					match pins.find_first(|(name, _)| name == first) {
-						Ok((_, tool)) => [tool].concat(rest)
+						Ok((_, tool)) => [tool].concat(Build.unchecked(first, rest, tools))
 						Err(_) => competitor.argv
 					}
 				[] => []
@@ -58,6 +58,15 @@ Build :: [].{
 		Run.run!(dir, env, argv) ? |err| prefix(err, "building ${competitor.name}")
 		Keys.copy!("${dir}/${competitor.binary}", "${Checkout.bin(root)}/${competitor.name}").map_err(|Failed(why)| Failed("building ${competitor.name}: ${why}"))
 	}
+
+	## A compiler of the build's own, not roux's pin: `roux build` is told
+	## so, since it refuses any other compiler otherwise.
+	unchecked : Str, List(Str), Keys.Tools -> List(Str)
+	unchecked = |first, rest, tools|
+		match rest {
+			["build", .. as more] if first == "roux" and tools.roc_local => ["build", "--roc-unchecked"].concat(more)
+			_ => rest
+		}
 
 	## out/competitors.json: each competitor's key as built.
 	keys_path : Str -> Str
@@ -87,3 +96,10 @@ prefix = |err, what|
 		Failed(why) => Failed("${what}: ${why}")
 		Interrupted => Interrupted
 	}
+
+no_tools : Keys.Tools
+no_tools = { zig: "", roc: "", roux: "", fourneau: "", zig_version: "", roc_version: "", roc_local: Bool.False }
+
+expect Build.unchecked("roux", ["build", "--roc=roc", "main.roc"], { ..no_tools, roc_local: Bool.True }) == ["build", "--roc-unchecked", "--roc=roc", "main.roc"]
+expect Build.unchecked("roux", ["build", "--roc=roc", "main.roc"], no_tools) == ["build", "--roc=roc", "main.roc"]
+expect Build.unchecked("roc", ["build", "main.roc"], { ..no_tools, roc_local: Bool.True }) == ["build", "main.roc"]

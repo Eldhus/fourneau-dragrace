@@ -54,8 +54,10 @@ import Toolchain
 ## Standard error has the same for people, and the final table.
 Adhoc :: [].{
 	## A build to race: a competitor at chosen commits (REPOSITORY=REF each,
-	## HEAD for the rest).
-	Variant : { label : Str, competitor : Str, refs : List((Str, Str)) }
+	## HEAD for the rest), and for a Roc one, `roc=/PATH`: a compiler of
+	## its own in place of roux's pin (one built from source, to try before
+	## any nightly carries it); "" is the pin.
+	Variant : { label : Str, competitor : Str, refs : List((Str, Str)), roc : Str }
 
 	## `dragrace adhoc race|down`.
 	command! : Str, List(Str) => Try({}, [BadFlag(Str), Failed(Str), Interrupted, Exited(I32)])
@@ -83,17 +85,22 @@ Adhoc :: [].{
 				Err(_) => { name: text, given: "" }
 			}
 		var $refs = repositories.map(|r| (r, "HEAD"))
+		var $roc = ""
 		if given != "" {
 			for pair in given.split_on(",") {
 				match pair.split_first("=") {
 					Ok({ before, after }) if repositories.contains(before) and after != "" => {
 						$refs = $refs.map(|(r, ref)| if r == before (r, after) else (r, ref))
 					}
-					_ => return Err(BadFlag("variant \"${text}\": \"${pair}\" is not REPOSITORY=REF (dragrace, fourneau, roux)"))
+					# An absolute path: the build runs in the variant's own tree.
+					Ok({ before: "roc", after }) if after.starts_with("/") => {
+						$roc = after
+					}
+					_ => return Err(BadFlag("variant \"${text}\": \"${pair}\" is not REPOSITORY=REF (dragrace, fourneau, roux) or roc=/PATH"))
 				}
 			}
 		}
-		Ok({ label: text, competitor: name, refs: $refs })
+		Ok({ label: text, competitor: name, refs: $refs, roc: $roc })
 	}
 
 	## One variant on one workload, against the first variant: the best
@@ -279,9 +286,10 @@ log! = |text| Run.log!("adhoc: ${text}")
 
 ## --- variants -----------------------------------------------------------------
 
-## A variant resolved: its commits, its key (a hash of what the build reads),
-## its name on the server, and its cached binary.
-Resolved : { variant : Adhoc.Variant, commits : List((Str, Str)), key : Str, name : Str, binary : Str }
+## A variant resolved: its commits, its own compiler's hash ("" for the
+## pin), its key (a hash of what the build reads), its name on the server,
+## and its cached binary.
+Resolved : { variant : Adhoc.Variant, commits : List((Str, Str)), roc_sha256 : Str, key : Str, name : Str, binary : Str }
 
 checkout_dir : Str, Str -> Str
 checkout_dir = |root, repository| if repository == "dragrace" root else Checkout.beside(root, repository)
@@ -307,11 +315,19 @@ commit_of! = |repository, ref| {
 
 ## The variant's commits and its key: a hash of every file of the three
 ## trees but Markdown (git ls-tree's lines), so a commit of documentation
-## only keeps its build.
+## only keeps its build; and of its own compiler's bytes, when it has one.
 resolve! : Str, Adhoc.Variant => Try(Resolved, [BadFlag(Str), Failed(Str), Interrupted])
 resolve! = |root, variant| {
 	stream = Hash.start!()?
 	Hash.write_str!(stream, variant.competitor)?
+	roc_sha256 =
+		if variant.roc == "" {
+			""
+		} else {
+			sha256 = Hash.file!(variant.roc) ? |err| prefix(err, "variant ${variant.label}, roc=${variant.roc}")
+			Hash.write_str!(stream, "roc ${sha256}\n")?
+			sha256
+		}
 	var $commits = []
 	for (repository, ref) in variant.refs {
 		at = checkout_dir(root, repository)
@@ -327,7 +343,23 @@ resolve! = |root, variant| {
 	}
 	key = Text.take(Hash.finish!(stream)?, 12)
 	name = "${variant.competitor}-${Text.take(key, 8)}"
-	Ok({ variant, commits: $commits, key, name, binary: "${dir(root)}/bin/${name}.zst" })
+	Ok({ variant, commits: $commits, roc_sha256, key, name, binary: "${dir(root)}/bin/${name}.zst" })
+}
+
+## A variant's own compiler put among the tools: a directory in the cache
+## named by its hash, holding a link `roc` to it (a competitor's build
+## finds roc by that name on its PATH), its hash where the pin's version
+## was, so the build's key tells the two apart.
+local_roc! : Toolchain.Ready, Resolved => Try(Toolchain.Ready, [Failed(Str), Interrupted])
+local_roc! = |ready, resolved| {
+	if resolved.variant.roc == "" {
+		return Ok(ready)
+	}
+	short = Text.take(resolved.roc_sha256, 12)
+	roc_dir = "${Keys.cache!()?}/roc-local-${short}"
+	Path.utf8(roc_dir).create_all!() ? |PathErr(err, _)| Failed("${roc_dir}: ${err.to_str()}")
+	Run.run!(roc_dir, [], ["ln", "-sfn", resolved.variant.roc, "${roc_dir}/roc"])?
+	Ok({ ..ready, tools: { ..ready.tools, roc: "${roc_dir}/roc", roc_version: "local-${short}", roc_local: Bool.True } })
 }
 
 commit_in : Resolved, Str -> Str
@@ -355,7 +387,7 @@ build! = |root, resolved, started| {
 	for repository in ["fourneau", "roux"] {
 		checkout_at!(root, repository, commit_in(resolved, repository), Checkout.beside(tree_root, repository))?
 	}
-	ready = Toolchain.load!(tree_root)?
+	ready = local_roc!(Toolchain.load!(tree_root)?, resolved)?
 	competitors = Checkout.competitors!(tree_root, [resolved.variant.competitor])?
 	_ = Build.all!(tree_root, ready, competitors) ? |err| prefix(err, "variant ${label}")
 	stripped = "${tree}/${resolved.name}"
@@ -669,7 +701,7 @@ race! = |root, args| {
 		],
 	)?
 	if flags.rest.is_empty() {
-		return Err(BadFlag("adhoc race: at least one VARIANT (competitor[:dragrace=REF,fourneau=REF,roux=REF])"))
+		return Err(BadFlag("adhoc race: at least one VARIANT (competitor[:dragrace=REF,fourneau=REF,roux=REF,roc=/PATH])"))
 	}
 	rounds = U64.from_str(Flags.value(flags, "rounds")) ? |_| BadFlag("-rounds: a number")
 	picked = Flags.value(flags, "workloads").split_on(",").map(Str.trim).map_try(|name| closed_workload(whole, name))?
@@ -677,7 +709,8 @@ race! = |root, args| {
 	variants = flags.rest.map_try(Adhoc.parse_variant)?
 	resolved = variants.map_try!(|v| {
 		r = resolve!(root, v)?
-		emit!(started, "resolved", [("variant", Json.to_str(v.label)), ("commits", "{${Str.join_with(r.commits.map(|(k, c)| "${Json.to_str(k)}:${Json.to_str(c)}"), ",")}}"), ("key", Json.to_str(r.key))])
+		own_roc = if r.roc_sha256 == "" [] else [("roc", "{\"path\":${Json.to_str(v.roc)},\"sha256\":${Json.to_str(r.roc_sha256)}}")]
+		emit!(started, "resolved", [("variant", Json.to_str(v.label)), ("commits", "{${Str.join_with(r.commits.map(|(k, c)| "${Json.to_str(k)}:${Json.to_str(c)}"), ",")}}"), ("key", Json.to_str(r.key))].concat(own_roc))
 		Ok(r)
 	})?
 	token = DigitalOcean.checked_token(Keyring.digitalocean!()?)?
@@ -823,9 +856,11 @@ widen = |err|
 		Interrupted => Interrupted
 	}
 
-expect Adhoc.parse_variant("roux") == Ok({ label: "roux", competitor: "roux", refs: [("dragrace", "HEAD"), ("fourneau", "HEAD"), ("roux", "HEAD")] })
+expect Adhoc.parse_variant("roux") == Ok({ label: "roux", competitor: "roux", refs: [("dragrace", "HEAD"), ("fourneau", "HEAD"), ("roux", "HEAD")], roc: "" })
 expect Adhoc.parse_variant("roux:roux=vm,dragrace=vm").map_ok(|v| v.refs) == Ok([("dragrace", "vm"), ("fourneau", "HEAD"), ("roux", "vm")])
+expect Adhoc.parse_variant("roux:roux=vm,roc=/opt/roc/roc").map_ok(|v| (v.refs, v.roc)) == Ok(([("dragrace", "HEAD"), ("fourneau", "HEAD"), ("roux", "vm")], "/opt/roc/roc"))
 expect Adhoc.parse_variant("roux:zig=x").is_err() and Adhoc.parse_variant("roux:roux=").is_err()
+expect Adhoc.parse_variant("roux:roc=roc").is_err() and Adhoc.parse_variant("roux:roc=").is_err()
 expect round2(1.234) == 1.23 and round2(1.235) == 1.24
 expect {
 	round = |rps, cpu| { ..Results.zero_round, rps, cpu_busy_pct: cpu }
