@@ -30,18 +30,23 @@ Catalog :: [].{
 	}
 
 	## The catalog workload's page: every feature of the language at least once,
-	## over 256 rows, its bytes kept small (it measures the rendering, not the
+	## over 128 rows, its bytes kept small (it measures the rendering, not the
 	## network). The reference is workloads/catalog.html.
 	Ctx : {
 		closed : Bool,
 		currency : Str,
 		groups : List({ members : List(Str), name : Str }),
 		note : Str,
+		offers : List({ off : U8, what : Str }),
 		rows : List(
 			{
+				added : U16,
+				discount : U8,
+				grams : U32,
 				hot : Bool,
 				id : U32,
 				name : Str,
+				on_sale : Bool,
 				price : U32,
 				stock : I32,
 				tags : List(Str),
@@ -50,6 +55,7 @@ Catalog :: [].{
 		shop : { city : Str, name : Str, open : Bool },
 		specials : List(Str),
 		title : Str,
+		total : U32,
 	}
 
 	## The template's value: what a response sends, rendered by the

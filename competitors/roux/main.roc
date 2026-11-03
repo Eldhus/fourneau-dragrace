@@ -104,21 +104,32 @@ names = ["Roux", "Skyr & ber", "Crème", "<b>Stew</b>", "Hákarl", "Kjöt \"s\""
 
 ## The catalog's data, as race.json's `catalog` defines it: row i (from 0)
 ## is id i + 1, names[i % 8], price 500 + (i * 7919) % 20000 hundredths,
-## stock (i * 13) % 50 - 10, hot when i % 7 is 0, tags by i % 3: none,
-## veg, veg and gf. Group k (from 0) is "Group k + 1", names k to k + 2.
+## discount (i * 37) % 40 percent (on sale when above 0), stock (i * 13) %
+## 50 - 10, hot when i % 7 is 0, tags by i % 3: none, veg, veg and gf;
+## added on day (i * 53) % 365 of the year, grams 50 + (i * 997) % 5000.
+## Group k (from 0) is "Group k + 1", names k to k + 2. The total is the
+## prices' sum.
 catalog : () -> Catalog.Ctx
 catalog = || {
 	var $rows = []
-	for i in 0..<256.U64 {
+	var $total = 0
+	for i in 0..<128.U64 {
 		tags = if i % 3 == 0 [] else if i % 3 == 1 ["veg"] else ["veg", "gf"]
+		price = (500 + (i * 7919) % 20000).to_u32_wrap()
+		discount = ((i * 37) % 40).to_u8_wrap()
+		$total = $total + price
 		$rows = $rows.append(
 			{
 				id: (i + 1).to_u32_wrap(),
 				name: name_at(i),
-				price: (500 + (i * 7919) % 20000).to_u32_wrap(),
+				price,
+				discount,
+				on_sale: discount > 0,
 				stock: ((i * 13) % 50).to_i32_wrap() - 10,
 				hot: i % 7 == 0,
 				tags,
+				added: ((i * 53) % 365).to_u16_wrap(),
+				grams: (50 + (i * 997) % 5000).to_u32_wrap(),
 			},
 		)
 	}
@@ -133,6 +144,8 @@ catalog = || {
 		shop: { name: "Eldhús", city: "Reykjavík", open: Bool.True },
 		closed: Bool.False,
 		specials: [],
+		offers: [{ what: "Soup of the day", off: 10 }, { what: "Bread & butter", off: 25 }, { what: "Coffee <hot>", off: 5 }],
+		total: $total,
 		groups: $groups,
 		rows: $rows,
 	}

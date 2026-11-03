@@ -1,7 +1,7 @@
 {{%
 import Fmt
 ## The catalog workload's page: every feature of the language at least once,
-## over 256 rows, its bytes kept small (it measures the rendering, not the
+## over 128 rows, its bytes kept small (it measures the rendering, not the
 ## network). The reference is workloads/catalog.html.
 Ctx : {
 	title : Str,
@@ -10,8 +10,10 @@ Ctx : {
 	shop : { name : Str, city : Str, open : Bool },
 	closed : Bool,
 	specials : List(Str),
+	offers : List({ what : Str, off : U8 }),
+	total : U32,
 	groups : List({ name : Str, members : List(Str) }),
-	rows : List({ id : U32, name : Str, price : U32, stock : I32, hot : Bool, tags : List(Str) }),
+	rows : List({ id : U32, name : Str, price : U32, discount : U8, on_sale : Bool, stock : I32, hot : Bool, tags : List(Str), added : U16, grams : U32 }),
 }
 %}}
 <!doctype html>
@@ -22,17 +24,25 @@ Ctx : {
 <h1>{{ title }}</h1>
 <p>{{{ note }}}</p>
 {{#shop |s|}}
-<p>{{ s.name }}, {{ shop.city }}{{?s.open}} (open){{/s.open}}</p>
+<p>{{ s.name }}, {{ shop.city }}{{?s.open}} (open){{/s.open}}{{^s.open}} (closed){{/s.open}}</p>
 {{/shop}}
 {{^closed}}<p>Open today.</p>{{/closed}}
 {{^specials}}<p>No specials.</p>{{/specials}}
-<p>{{ Fmt.plural(groups.len(), "group", "groups") }}, {{ rows.len().to_str() }} rows</p>
+<ul>
+{{#offers |offer|}}
+<li>{{ offer.what }}: {{ Fmt.pct(offer.off) }} off</li>
+{{/offers}}
+</ul>
+{{^offers}}
+<p>No offers.</p>
+{{/offers}}
+<p>{{ Fmt.plural(groups.len(), "group", "groups") }}, {{ Fmt.plural(rows.len(), "row", "rows") }}, {{ Fmt.kr(total) }} {{ currency }} in stock</p>
 {{#groups |group|}}
 <h2>{{ group.name }}</h2><p>{{#group.members |member|}}{{ member }};{{/group.members}}</p>
 {{/groups}}
 <table>
 {{#rows |row|}}
-{{$Row}}<tr{{?row.hot}} class="hot"{{/row.hot}}><td>{{ row.id.to_str() }}<td>{{ row.name }}<td>{{ row.stock.to_str() }}<td>{{#row.tags |tag|}}<i>{{ tag }}</i>{{/row.tags}}{{^row.tags}}-{{/row.tags}}{{/Row}}<td>{{> Price}}
+{{$Row}}<tr class="{{ Fmt.level(row.stock) }}{{?row.hot}} hot{{/row.hot}}"><td>{{ row.id.to_str() }} {{ row.name }}</td><td>{{ Fmt.stock(row.stock) }} {{#row.tags |tag|}}<i>{{ tag }}</i>{{/row.tags}}{{^row.tags}}-{{/row.tags}}</td>{{/Row}}<td>{{?row.on_sale}}<s>{{> Price}}</s> {{ Fmt.kr(Fmt.sale(row.price, row.discount)) }}{{/row.on_sale}}{{^row.on_sale}}{{> Price}}{{/row.on_sale}} {{ currency }}</td><td>{{ Fmt.date(row.added) }} {{ Fmt.weight(row.grams) }}</td></tr>
 {{/rows}}
 </table>
 </body>
