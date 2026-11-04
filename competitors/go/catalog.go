@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -9,12 +10,46 @@ import (
 	"time"
 )
 
-// The catalog workload's template is catalog.templ, compiled to Go by templ
-// (catalog_templ.go, generated: `go tool templ generate`).
+// The catalog workload: a bigger page from html/template, parsed once and
+// executed per request: sections over a record, lists nested in lists, a
+// list of 96 rows, conditions, empty lists, raw HTML and formatting
+// functions. The reference is workloads/templates.html; the template's
+// line breaks are the reference's, so `{{end}}` opens the next line.
+var catalogPage = template.Must(template.New("catalog").Funcs(template.FuncMap{
+	"kr":     kr,
+	"plural": plural,
+	"pct":    pct,
+	"level":  level,
+	"stock":  stock,
+	"tags":   tags,
+	"sale":   sale,
+	"date":   date,
+	"weight": weight,
+}).Parse(`<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{.Title}}</title></head>
+<body>
+<h1>{{.Title}}</h1>
+<p>{{.Note}}</p>
+<p>{{.Shop.Name}}, {{.Shop.City}} {{if .Shop.Open}}(open){{else}}(closed){{end}}</p>
+{{if not .Closed}}<p>Open today.</p>
+{{end}}{{if not .Specials}}<p>No specials.</p>
+{{end}}<ul>
+{{range .Offers}}<li>{{.What}}: {{pct .Off}} off</li>
+{{end}}</ul>
+{{if not .Offers}}<p>No offers.</p>
+{{end}}<p>{{plural (len .Groups) "group" "groups"}}, {{plural (len .Rows) "row" "rows"}}, {{kr .Total}} {{.Currency}} in stock</p>
+{{range .Groups}}<h2>{{.Name}}</h2><p>{{range .Members}}{{.}};{{end}}</p>
+{{end}}<ul>
+{{range .Rows}}<li class="{{level .Stock}}{{if .Hot}} hot{{end}}">{{.ID}} {{.Name}}, {{stock .Stock}}{{tags .Tags}}, {{if .OnSale}}<s>{{kr .Price}}</s> {{kr (sale .Price .Discount)}}{{else}}{{kr .Price}}{{end}}, {{date .Added}}, {{weight .Grams}}</li>
+{{end}}</ul>
+</body>
+</html>
+`))
 
 type Catalog struct {
 	Title    string
-	Note     string // HTML, written raw
+	Note     template.HTML
 	Currency string
 	Shop     Shop
 	Closed   bool
@@ -161,7 +196,7 @@ func weight(grams uint32) string {
 
 func catalogHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := catalogPage(catalog).Render(r.Context(), w); err != nil {
+	if err := catalogPage.Execute(w, catalog); err != nil {
 		log.Print(err)
 	}
 }
