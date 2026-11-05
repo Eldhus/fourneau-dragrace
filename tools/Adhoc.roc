@@ -199,7 +199,7 @@ tag : Str
 tag = "fourneau-dragrace-adhoc"
 
 ## Dedicated cores, so a difference is the builds'; deleted after 20
-## minutes unused.
+## minutes unused. `-class` names another of race.json's classes.
 session_class : Str
 session_class = "dedicated-2"
 
@@ -457,13 +457,13 @@ ssh_of = |root, node| { user: "root", host: node.public, key: "${dir(root)}/key"
 
 ## The warm session, made if there is none (or the one there is is for
 ## another class or region, or gone).
-ensure_session! : Str, Config.Race, Str, Monotonic => Try(Session, [BadFlag(Str), Failed(Str), Interrupted])
-ensure_session! = |root, race, token, started| {
-	class = race.cloud.servers.find_first(|c| c.name == session_class) ? |_| Failed("no server class \"${session_class}\" in race.json")
+ensure_session! : Str, Config.Race, Str, Str, Monotonic => Try(Session, [BadFlag(Str), Failed(Str), Interrupted])
+ensure_session! = |root, race, class_name, token, started| {
+	class = race.cloud.servers.find_first(|c| c.name == class_name) ? |_| BadFlag("-class: no server class \"${class_name}\" in race.json")
 	region = class.region
 	found =
 		match load_session!(root)? {
-			Some(s) if s.class != session_class or s.region != region => {
+			Some(s) if s.class != class_name or s.region != region => {
 				log!("the session is ${s.class} in ${s.region}; replacing it")
 				delete_session!(root, token, s)
 				None
@@ -687,7 +687,7 @@ down! = |root, args| {
 
 ## --- the race -----------------------------------------------------------------
 
-## `dragrace adhoc race [-workloads W] [-rounds N] VARIANT...`, the lock held.
+## `dragrace adhoc race [-workloads W] [-rounds N] [-class C] VARIANT...`, the lock held.
 race! : Str, List(Str) => Try({}, [BadFlag(Str), Failed(Str), Interrupted])
 race! = |root, args| {
 	started = Monotonic.now!()
@@ -698,6 +698,7 @@ race! = |root, args| {
 		[
 			{ name: "workloads", kind: Value(Str.join_with(closed, ",")), usage: "comma-separated" },
 			{ name: "rounds", kind: Value("3"), usage: "rounds, each variant once a round in a new order" },
+			{ name: "class", kind: Value(session_class), usage: "race.json's server class to race on" },
 		],
 	)?
 	if flags.rest.is_empty() {
@@ -714,7 +715,7 @@ race! = |root, args| {
 		Ok(r)
 	})?
 	token = DigitalOcean.checked_token(Keyring.digitalocean!()?)?
-	session = ensure_session!(root, race, token, started)?
+	session = ensure_session!(root, race, Flags.value(flags, "class"), token, started)?
 	# One at a time: two Zig builds at once only fight for the CPUs.
 	for r in resolved {
 		build!(root, r, started)?
