@@ -684,7 +684,6 @@ race_post! = |root, race, competitors, seed| {
 	versions = Toolchain.versions!(root, race)?
 	post = {
 		seed,
-		region: race.cloud.region,
 		image: race.cloud.image,
 		port: race.port,
 		rounds: race.rounds,

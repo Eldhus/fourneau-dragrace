@@ -48,33 +48,33 @@ Runs :: [].{
 	}
 
 	## `add_class`, Runs.sql:91: no rows.
-	add_class! : Sqlite.Write, { run_id : Str, name : Str, position : I64, label : Str, title : Str, size : Str, loader_size : Str } => Try({}, [DbErr(Sqlite.Err)])
+	add_class! : Sqlite.Write, { run_id : Str, name : Str, position : I64, label : Str, title : Str, region : Str, size : Str, loader_size : Str } => Try({}, [DbErr(Sqlite.Err)])
 	add_class! = |db, params| {
-		_ = Sqlite.run_write!(db, 36, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.name), Sqlite.Param.i64(params.position), Sqlite.Param.str(params.label), Sqlite.Param.str(params.title), Sqlite.Param.str(params.size), Sqlite.Param.str(params.loader_size)])? # Runs.sql:99
+		_ = Sqlite.run_write!(db, 36, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.name), Sqlite.Param.i64(params.position), Sqlite.Param.str(params.label), Sqlite.Param.str(params.title), Sqlite.Param.str(params.region), Sqlite.Param.str(params.size), Sqlite.Param.str(params.loader_size)])? # Runs.sql:100
 		Ok({})
 	}
 
-	## `end`, Runs.sql:104: no rows.
+	## `end`, Runs.sql:105: no rows.
 	end! : Sqlite.Write, { status : Str, reason : Str, finished_at : Str, seconds : F64, build_seconds : F64, launch_seconds : F64, racing_seconds : F64, cost_usd : F64, id : Str } => Try({}, [DbErr(Sqlite.Err)])
 	end! = |db, params| {
-		_ = Sqlite.run_write!(db, 37, [Sqlite.Param.str(params.status), Sqlite.Param.str(params.reason), Sqlite.Param.str(params.finished_at), Sqlite.Param.f64(params.seconds), Sqlite.Param.f64(params.build_seconds), Sqlite.Param.f64(params.launch_seconds), Sqlite.Param.f64(params.racing_seconds), Sqlite.Param.f64(params.cost_usd), Sqlite.Param.str(params.id)])? # Runs.sql:114
+		_ = Sqlite.run_write!(db, 37, [Sqlite.Param.str(params.status), Sqlite.Param.str(params.reason), Sqlite.Param.str(params.finished_at), Sqlite.Param.f64(params.seconds), Sqlite.Param.f64(params.build_seconds), Sqlite.Param.f64(params.launch_seconds), Sqlite.Param.f64(params.racing_seconds), Sqlite.Param.f64(params.cost_usd), Sqlite.Param.str(params.id)])? # Runs.sql:115
 		Ok({})
 	}
 
-	## `add_droplet`, Runs.sql:119: no rows.
+	## `add_droplet`, Runs.sql:120: no rows.
 	add_droplet! : Sqlite.Write, { run_id : Str, position : I64, role : Str, class : Str, size : Str, price_hourly : F64, seconds : F64, cost_usd : F64 } => Try({}, [DbErr(Sqlite.Err)])
 	add_droplet! = |db, params| {
-		_ = Sqlite.run_write!(db, 38, [Sqlite.Param.str(params.run_id), Sqlite.Param.i64(params.position), Sqlite.Param.str(params.role), Sqlite.Param.str(params.class), Sqlite.Param.str(params.size), Sqlite.Param.f64(params.price_hourly), Sqlite.Param.f64(params.seconds), Sqlite.Param.f64(params.cost_usd)])? # Runs.sql:128
+		_ = Sqlite.run_write!(db, 38, [Sqlite.Param.str(params.run_id), Sqlite.Param.i64(params.position), Sqlite.Param.str(params.role), Sqlite.Param.str(params.class), Sqlite.Param.str(params.size), Sqlite.Param.f64(params.price_hourly), Sqlite.Param.f64(params.seconds), Sqlite.Param.f64(params.cost_usd)])? # Runs.sql:129
 		Ok({})
 	}
 
 	## A row of `access`.
 	Access : { status : Str, worker_token : Sqlite.Nullable(Str) }
 
-	## `access`, Runs.sql:135: one row, or `NotFound`.
+	## `access`, Runs.sql:136: one row, or `NotFound`.
 	access! : Sqlite.Read, { id : Str } => Try(Access, [NotFound, DbErr(Sqlite.Err)])
 	access! = |db, params| {
-		rows = Sqlite.run_read!(db, 39, [Sqlite.Param.str(params.id)])? # Runs.sql:137
+		rows = Sqlite.run_read!(db, 39, [Sqlite.Param.str(params.id)])? # Runs.sql:138
 		match rows {
 			[] => Err(NotFound)
 			[[c0, c1]] => Ok({ status: Sqlite.Cell.str(c0), worker_token: Sqlite.Cell.nullable_str(c1) })
@@ -82,31 +82,31 @@ Runs :: [].{
 		}
 	}
 
-	## `set_class`, Runs.sql:139: no rows.
+	## `set_class`, Runs.sql:140: no rows.
 	set_class! : Sqlite.Write, { run_id : Str, class : Str, status : Str, reason : Str, seconds : F64 } => Try({}, [DbErr(Sqlite.Err)])
 	set_class! = |db, params| {
-		_ = Sqlite.run_write!(db, 40, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.str(params.status), Sqlite.Param.str(params.reason), Sqlite.Param.f64(params.seconds)])? # Runs.sql:145
+		_ = Sqlite.run_write!(db, 40, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.str(params.status), Sqlite.Param.str(params.reason), Sqlite.Param.f64(params.seconds)])? # Runs.sql:146
 		Ok({})
 	}
 
-	## `set_step`, Runs.sql:153: no rows.
+	## `set_step`, Runs.sql:154: no rows.
 	set_step! : Sqlite.Write, { run_id : Str, class : Str, step : I64, competitor : Str, round : I64, workload : Str, planned_seconds : F64 } => Try({}, [DbErr(Sqlite.Err)])
 	set_step! = |db, params| {
-		_ = Sqlite.run_write!(db, 41, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.i64(params.step), Sqlite.Param.str(params.competitor), Sqlite.Param.i64(params.round), Sqlite.Param.str(params.workload), Sqlite.Param.f64(params.planned_seconds)])? # Runs.sql:161
+		_ = Sqlite.run_write!(db, 41, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.i64(params.step), Sqlite.Param.str(params.competitor), Sqlite.Param.i64(params.round), Sqlite.Param.str(params.workload), Sqlite.Param.f64(params.planned_seconds)])? # Runs.sql:162
 		Ok({})
 	}
 
-	## `begin_step`, Runs.sql:168: no rows.
+	## `begin_step`, Runs.sql:169: no rows.
 	begin_step! : Sqlite.Write, { run_id : Str, class : Str, step : I64 } => Try({}, [DbErr(Sqlite.Err)])
 	begin_step! = |db, params| {
-		_ = Sqlite.run_write!(db, 42, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.i64(params.step)])? # Runs.sql:172
+		_ = Sqlite.run_write!(db, 42, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.i64(params.step)])? # Runs.sql:173
 		Ok({})
 	}
 
-	## `set_machine`, Runs.sql:175: no rows.
+	## `set_machine`, Runs.sql:176: no rows.
 	set_machine! : Sqlite.Write, { run_id : Str, class : Str, role : Str, size : Str, cpu : Str, cpus : I64, kernel : Str, cpu_id : Str, memory_mib : I64 } => Try({}, [DbErr(Sqlite.Err)])
 	set_machine! = |db, params| {
-		_ = Sqlite.run_write!(db, 43, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.str(params.role), Sqlite.Param.str(params.size), Sqlite.Param.str(params.cpu), Sqlite.Param.i64(params.cpus), Sqlite.Param.str(params.kernel), Sqlite.Param.str(params.cpu_id), Sqlite.Param.i64(params.memory_mib)])? # Runs.sql:185
+		_ = Sqlite.run_write!(db, 43, [Sqlite.Param.str(params.run_id), Sqlite.Param.str(params.class), Sqlite.Param.str(params.role), Sqlite.Param.str(params.size), Sqlite.Param.str(params.cpu), Sqlite.Param.i64(params.cpus), Sqlite.Param.str(params.kernel), Sqlite.Param.str(params.cpu_id), Sqlite.Param.i64(params.memory_mib)])? # Runs.sql:186
 		Ok({})
 	}
 }

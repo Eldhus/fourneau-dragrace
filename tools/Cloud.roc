@@ -13,7 +13,7 @@ import Run
 import Text
 
 ## One race's droplets: per server class a server and its own loader, in
-## one region on its private network, made and deleted through the guard,
+## the class's region on its private network, made and deleted through the guard,
 ## each one's life kept for the race's cost.
 Cloud :: [].{
 	Life : { id : U64, role : Str, class : Str, size : Str, created_ms : I128, deleted_ms : I128, public : Str, private : Str }
@@ -93,7 +93,7 @@ Cloud :: [].{
 				$problems = $problems.append("${class.name}: loader ${class.loader_size} (${vcpus(class.loader_size).to_str()} vCPUs) is smaller than server ${class.size} (${vcpus(class.size).to_str()})")
 			}
 		}
-		for slug in cloud.servers.join_map(|c| [c.size, c.loader_size]) {
+		for (slug, region) in cloud.servers.join_map(|c| [(c.size, c.region), (c.loader_size, c.region)]) {
 			match of(slug) {
 				Err(_) => {
 					$problems = $problems.append("${slug}: no such size")
@@ -101,8 +101,8 @@ Cloud :: [].{
 				Ok(size) if !size.available => {
 					$problems = $problems.append("${slug}: not available")
 				}
-				Ok(size) if !size.regions.contains(cloud.region) => {
-					$problems = $problems.append("${slug}: not in ${cloud.region} (offered in ${Str.join_with(size.regions, ", ")})")
+				Ok(size) if !size.regions.contains(region) => {
+					$problems = $problems.append("${slug}: not in ${region} (offered in ${Str.join_with(size.regions, ", ")})")
 				}
 				Ok(_) => {}
 			}
@@ -122,8 +122,13 @@ Cloud :: [].{
 				if why == "" Err(None) else Ok("${name}: ${why}")
 			},
 		)
-		if cloud.region != allowed.region or cloud.image != allowed.image or cloud.tag != allowed.tag {
-			$problems = $problems.append("region, image, tag ${cloud.region}, ${cloud.image}, ${cloud.tag}; the guard allows ${allowed.region}, ${allowed.image}, ${allowed.tag}")
+		for region in Config.regions(cloud) {
+			if !allowed.regions.contains(region) {
+				$problems = $problems.append("region ${region}; the guard allows ${Str.join_with(allowed.regions, ", ")}")
+			}
+		}
+		if cloud.image != allowed.image or cloud.tag != allowed.tag {
+			$problems = $problems.append("image, tag ${cloud.image}, ${cloud.tag}; the guard allows ${allowed.image}, ${allowed.tag}")
 		}
 		if 2 * cloud.servers.len() > allowed.droplets_max {
 			$problems = $problems.append("${cloud.servers.len().to_str()} classes need ${(2 * cloud.servers.len()).to_str()} droplets; the guard allows ${allowed.droplets_max.to_str()}")
@@ -155,7 +160,7 @@ Cloud :: [].{
 		var $fleet = empty
 		for class in race.cloud.servers {
 			for (role, size) in [("loader", class.loader_size), ("server", class.size)] {
-				request = { name: "dragrace-${role}-${class.name}", region: race.cloud.region, size, image: race.cloud.image, ssh_keys: [], tags: [race.cloud.tag], user_data: Cloud.user_data(public, ssh_from), ipv6: Bool.False }
+				request = { name: "dragrace-${role}-${class.name}", region: class.region, size, image: race.cloud.image, ssh_keys: [], tags: [race.cloud.tag], user_data: Cloud.user_data(public, ssh_from), ipv6: Bool.False }
 				requested = (Utc.now!()).to_millis_since_epoch()
 				match Guard.create!(guard, request) {
 					Ok(droplet) => {
@@ -328,19 +333,35 @@ expect {
 }
 
 expect {
-	cloud = { region: "lon1", image: "i", servers: [{ name: "a", label: "", title: "", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
+	cloud = { image: "i", servers: [{ name: "a", label: "", title: "", region: "lon1", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
 	sizes = [{ slug: "s", available: Bool.True, regions: ["lon1"], vcpus: 1, price_hourly: 0.01 }, { slug: "l", available: Bool.True, regions: ["nyc1"], vcpus: 4, price_hourly: 0.1 }]
 	Cloud.size_problems(sizes, cloud) == ["l: not in lon1 (offered in nyc1)"]
 }
 
+# Each class's sizes are checked in its own region.
 expect {
-	cloud = { region: "r", image: "i", servers: [{ name: "same", label: "", title: "", size: "s", loader_size: "s" }, { name: "small", label: "", title: "", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
+	cloud = { image: "i", servers: [{ name: "a", label: "", title: "", region: "sfo2", size: "c", loader_size: "c" }, { name: "v5", label: "", title: "", region: "mkc1", size: "g", loader_size: "c" }], tag: "t", max_age_minutes: 240 }
+	sizes = [{ slug: "c", available: Bool.True, regions: ["sfo2"], vcpus: 4, price_hourly: 0.1 }, { slug: "g", available: Bool.True, regions: ["mkc1"], vcpus: 2, price_hourly: 0.07 }]
+	Cloud.size_problems(sizes, cloud) == ["c: not in mkc1 (offered in sfo2)"]
+}
+
+expect {
+	cloud = { image: "i", servers: [{ name: "same", label: "", title: "", region: "r", size: "s", loader_size: "s" }, { name: "small", label: "", title: "", region: "r", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
 	sizes = [{ slug: "s", available: Bool.True, regions: ["r"], vcpus: 4, price_hourly: 0.1 }, { slug: "l", available: Bool.True, regions: ["r"], vcpus: 2, price_hourly: 0.05 }]
 	Cloud.size_problems(sizes, cloud) == ["small: loader l (2 vCPUs) is smaller than server s (4)"]
 }
 
 expect {
-	cloud = { region: "lon1", image: "i", servers: [{ name: "a", label: "", title: "", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
-	allowed = { region: "lon1", image: "i", tag: "t", hourly_max_usd: 0.05, monthly_cap_usd: 25, droplets_max: 6, age_max_minutes: 240 }
+	cloud = { image: "i", servers: [{ name: "a", label: "", title: "", region: "lon1", size: "s", loader_size: "l" }], tag: "t", max_age_minutes: 240 }
+	allowed = { regions: ["lon1"], image: "i", tag: "t", hourly_max_usd: 0.05, monthly_cap_usd: 25, droplets_max: 6, age_max_minutes: 240 }
 	Cloud.refusals(cloud, [("s", 0.01), ("l", 0.1)], allowed) == ["a: l costs $0.1000 an hour, the most allowed is $0.0500"]
+}
+
+# A class in a region the guard does not allow is refused before any droplet.
+expect {
+	class = |name, region| { name, label: "", title: "", region, size: "s", loader_size: "s" }
+	cloud = { image: "i", servers: [class("a", "sfo2"), class("v5", "mkc1")], tag: "t", max_age_minutes: 240 }
+	allowed = { regions: ["sfo2"], image: "i", tag: "t", hourly_max_usd: 0.25, monthly_cap_usd: 25, droplets_max: 8, age_max_minutes: 240 }
+	Cloud.refusals(cloud, [("s", 0.01)], allowed) == ["region mkc1; the guard allows sfo2"]
+	and Cloud.refusals(cloud, [("s", 0.01)], { ..allowed, regions: ["mkc1", "sfo2"] }) == []
 }

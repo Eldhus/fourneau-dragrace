@@ -153,13 +153,13 @@
   ],
   "adhoc_workloads": [],
   "cloud": {
-    "region": "sfo2",
     "image": "ubuntu-26-04-x64",
     "servers": [
       {
         "name": "smallest",
         "label": "512MB/1vCPU",
         "title": "What a $4/month droplet can do",
+        "region": "sfo2",
         "size": "s-1vcpu-512mb-10gb",
         "loader_size": "c-4"
       },
@@ -167,6 +167,7 @@
         "name": "dedicated-2",
         "label": "4GB/2vCPU",
         "title": "Dedicated cores",
+        "region": "sfo2",
         "size": "c-2",
         "loader_size": "c-4"
       },
@@ -174,8 +175,17 @@
         "name": "premium-4",
         "label": "8GB/4vCPU Intel",
         "title": "Premium Intel cores",
+        "region": "sfo2",
         "size": "c-4-intel",
         "loader_size": "c-4-intel"
+      },
+      {
+        "name": "v5-2",
+        "label": "4GB/2vCPU AMD v5",
+        "title": "5th-gen AMD EPYC cores",
+        "region": "mkc1",
+        "size": "g5-2vcpu-4gb-30gb",
+        "loader_size": "g5-4vcpu-8gb-30gb"
       }
     ],
     "tag": "fourneau-dragrace-race",

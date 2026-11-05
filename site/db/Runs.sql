@@ -94,10 +94,11 @@ ON CONFLICT DO NOTHING;
 -- @param position : I64
 -- @param label : Str
 -- @param title : Str
+-- @param region : Str
 -- @param size : Str
 -- @param loader_size : Str
-INSERT INTO run_classes (run_id, name, position, label, title, size, loader_size)
-VALUES (:run_id, :name, :position, :label, :title, :size, :loader_size)
+INSERT INTO run_classes (run_id, name, position, label, title, region, size, loader_size)
+VALUES (:run_id, :name, :position, :label, :title, :region, :size, :loader_size)
 ON CONFLICT DO NOTHING;
 
 -- A run over: its status, its timing, and no more results taken.

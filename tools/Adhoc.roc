@@ -459,8 +459,8 @@ ssh_of = |root, node| { user: "root", host: node.public, key: "${dir(root)}/key"
 ## another class or region, or gone).
 ensure_session! : Str, Config.Race, Str, Monotonic => Try(Session, [BadFlag(Str), Failed(Str), Interrupted])
 ensure_session! = |root, race, token, started| {
-	region = race.cloud.region
 	class = race.cloud.servers.find_first(|c| c.name == session_class) ? |_| Failed("no server class \"${session_class}\" in race.json")
+	region = class.region
 	found =
 		match load_session!(root)? {
 			Some(s) if s.class != session_class or s.region != region => {
@@ -516,12 +516,12 @@ make_session! = |root, race, class, token| {
 	public = Checkout.read!("${key}.pub")?.trim()
 	admin_key_id = DigitalOcean.admin_key_id!(token)?
 	create! = |role, size| {
-		droplet = DigitalOcean.create!(token, { name: "dragrace-adhoc-${role}", region: race.cloud.region, size, image: race.cloud.image, ssh_keys: [admin_key_id], tags: [tag], user_data: Cloud.user_data(public, ""), ipv6: Bool.False })?
+		droplet = DigitalOcean.create!(token, { name: "dragrace-adhoc-${role}", region: class.region, size, image: race.cloud.image, ssh_keys: [admin_key_id], tags: [tag], user_data: Cloud.user_data(public, ""), ipv6: Bool.False })?
 		Ok({ id: droplet.id, size, public: "", private: "" })
 	}
 	none = { id: 0, size: "", public: "", private: "" }
 	server = create!("server", class.size)?
-	var $session = { class: class.name, region: race.cloud.region, server, loader: none, created: now!(), used: now!(), idle_minutes, machines: [] }
+	var $session = { class: class.name, region: class.region, server, loader: none, created: now!(), used: now!(), idle_minutes, machines: [] }
 	save_session!(root, $session)?
 	match create!("loader", class.loader_size) {
 		Ok(loader) => {
@@ -732,7 +732,7 @@ race! = |root, args| {
 	})?
 	labels = resolved.map(|r| (r.name, r.variant.label))
 	label_of = |name| (labels.find_first(|(n, _)| n == name) ?? (name, name)).1
-	class = race.cloud.servers.find_first(|c| c.name == session.class) ?? { name: session.class, label: "", title: "", size: "", loader_size: "" }
+	class = race.cloud.servers.find_first(|c| c.name == session.class) ?? { name: session.class, label: "", title: "", region: session.region, size: "", loader_size: "" }
 	threads = (session.machines.find_first(|m| m.role == "loader") ?? { role: "", class: "", size: "", cpu: "", cpus: 0, kernel: "", cpu_id: "", memory_mib: 0 }).cpus
 	target = { class, server, loader, server_home: home, loader_home: home, address: session.server.private, server_cpus: "", loader_cpus: "", loader_threads: threads.to_u64_wrap(), black_box: "" }
 	report! = |result| {

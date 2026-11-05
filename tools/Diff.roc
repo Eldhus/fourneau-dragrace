@@ -55,7 +55,7 @@ Diff :: [].{
 		_ = Build.all!(root, ready, competitors)?
 		out = Checkout.out(root)
 		target = {
-			class: { name: "local", label: "", title: "", size: "", loader_size: "" },
+			class: { name: "local", label: "", title: "", region: "", size: "", loader_size: "" },
 			server: Local,
 			loader: Local,
 			server_home: out,

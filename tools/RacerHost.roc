@@ -19,7 +19,7 @@ import Racer
 import Run
 import Text
 
-## The racer host: a small droplet in the race region, with no inbound
+## The racer host: a small droplet, with no inbound
 ## port but the owner's SSH, over the tailnet (Hosts). Users:
 ##   - cook: the owner's key, sudo;
 ##   - guard: runs `dragrace-guard guard` (a copy of this binary the owner
@@ -39,17 +39,18 @@ RacerHost :: [].{
 	guard_binary = "/usr/local/bin/dragrace-guard"
 
 	## The guard's config for a race: any size up to `hourly_max` an hour,
-	## in race.json's region and image, under the month's cap, so a class
-	## added to race.json needs no install; each droplet names the admin key.
-	## Its socket is the one hosts/racer's racer config names.
+	## in race.json's classes' regions and its image, under the month's cap,
+	## at most four classes' droplets, so a class added to race.json in a
+	## region already allowed needs no install; each droplet names the admin
+	## key. Its socket is the one hosts/racer's racer config names.
 	guard_config : Config.Cloud, F64, F64, U64 -> Ledger.Config
 	guard_config = |cloud, hourly_max, cap, admin_key_id| {
-		region: cloud.region,
+		regions: Config.regions(cloud),
 		image: cloud.image,
 		tag: cloud.tag,
 		hourly_max_usd: hourly_max,
 		monthly_cap_usd: cap,
-		droplets_max: 6,
+		droplets_max: 8,
 		age_max_minutes: cloud.max_age_minutes,
 		socket: "/run/dragrace-guard/lines.sock",
 		ledger: "/var/lib/dragrace-guard/ledger.json",
@@ -198,7 +199,10 @@ expect guard_unit.contains("LoadCredentialEncrypted=digitalocean-token") and gua
 expect !racer_unit.contains("digitalocean-token") and !check_unit.contains("digitalocean-token")
 
 test_cloud : Config.Cloud
-test_cloud = { region: "lon1", image: "ubuntu-26-04-x64", tag: "t", max_age_minutes: 180, servers: [] }
+test_cloud = { image: "ubuntu-26-04-x64", tag: "t", max_age_minutes: 180, servers: [{ name: "a", label: "", title: "", region: "lon1", size: "s", loader_size: "s" }] }
+
+# The guard allows each class's region.
+expect RacerHost.guard_config(test_cloud, 0.25, 25, 42).regions == ["lon1"]
 
 expect {
 	config = RacerHost.guard_config(test_cloud, 0.25, 25, 42)

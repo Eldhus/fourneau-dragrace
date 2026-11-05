@@ -111,7 +111,7 @@ Local :: [].{
 		Machine.put!(Local, oha, "${loader_home}/oha")?
 		cpu = Machine.shell!(Local, "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'") ?? ""
 		target = {
-			class: { name: "local", label: "", title: "${cpu}: server on CPUs ${race.local.server_cpus}, loader on ${race.local.loader_cpus}", size: "", loader_size: "" },
+			class: { name: "local", label: "", title: "${cpu}: server on CPUs ${race.local.server_cpus}, loader on ${race.local.loader_cpus}", region: "", size: "", loader_size: "" },
 			server: Local,
 			loader: Local,
 			server_home: out,

@@ -7,7 +7,7 @@ Report a problem by a private security advisory on GitHub, not an issue.
 
 - **The DigitalOcean token** lives in the owner's keyring and, encrypted, on the racer.
     - A guard alone may use it: up to a monthly cap, on sizes under an hourly ceiling.
-    - Only in one region and image.
+    - Only in the regions and the image the owner allows.
 - **The site host** holds no DigitalOcean token.
     - Taken over, it can write false results and read the races, nothing more.
     - It runs unprivileged under systemd's sandbox.

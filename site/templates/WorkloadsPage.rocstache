@@ -18,7 +18,7 @@
 {{/ready}}
 <h2>The race</h2>
 <ul>
-<li><b>Machines.</b> Each server class gets a fresh server droplet and a loader droplet with more vCPUs, running <a href="https://github.com/hatoo/oha">oha</a>, in one region, over the private network. The classes race at the same time; every droplet is deleted afterwards.</li>
+<li><b>Machines.</b> Each server class gets a fresh server droplet and a loader droplet at least as big, running <a href="https://github.com/hatoo/oha">oha</a>, both in the class&rsquo;s region, over its private network. The classes race at the same time; every droplet is deleted afterwards.</li>
 <li><b>Checks.</b> Before racing, <code>/plaintext</code> must answer exactly <code>Hello, World!</code>, <code>/echo</code> the body it was sent, <code>/menu</code> the reference page, <code>/sse</code> the reference stream with one chunk per event (and 400 without signals), and an unknown path 404; over TLS, TLS&nbsp;1.3 with HTTP/2 by ALPN; without TLS, <code>/plaintext</code> over h2c too. RealWorld&rsquo;s answers are checked against the seed&rsquo;s model before its climb. Each mode, with TLS and without, is checked on its own: a server that fails one is a DNF there and still races the other.</li>
 <li><b>Builds.</b> Each server is built and configured the way its users ship it. Every dependency is pinned but fourneau and roux, which race their master; each race records their commits and the toolchains&rsquo; versions.</li>
 <li><b>Noise.</b> Every round records CPU steal, and each machine its CPU model, so a night&rsquo;s hardware shows in its data.</li>

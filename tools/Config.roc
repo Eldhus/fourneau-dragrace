@@ -62,10 +62,25 @@ Config :: [].{
 		mixed : Try(Mixed, [None]),
 	}
 
-	## One kind of server droplet and the bigger loader that races it.
-	ServerClass : { name : Str, label : Str, title : Str, size : Str, loader_size : Str }
+	## One kind of server droplet and the loader that races it, both in the
+	## class's region, on its private network: a size may be offered in
+	## only some regions (DigitalOcean's v5 sizes are not where its older
+	## dedicated ones are).
+	ServerClass : { name : Str, label : Str, title : Str, region : Str, size : Str, loader_size : Str }
 
-	Cloud : { region : Str, image : Str, servers : List(ServerClass), tag : Str, max_age_minutes : U64 }
+	Cloud : { image : Str, servers : List(ServerClass), tag : Str, max_age_minutes : U64 }
+
+	## The regions the classes race in, each once, sorted.
+	regions : Cloud -> List(Str)
+	regions = |cloud| {
+		var $seen = []
+		for class in cloud.servers {
+			if !$seen.contains(class.region) {
+				$seen = $seen.append(class.region)
+			}
+		}
+		Text.sorted($seen)
+	}
 
 	## race.json, its tests expanded into workloads, and the reference
 	## answers (workloads/sse.txt, each paged test's page).
@@ -396,12 +411,19 @@ expect Config.expand(test_of("x", [{ protocol: "http1", connections: 1, streams:
 expect Config.expand(test_of("x", [{ protocol: "http1", connections: 1, streams: 0 }, { protocol: "http1", connections: 1, streams: 0 }], Bool.True)).is_err()
 expect Config.expand(test_of("x", [{ protocol: "http1", connections: 0, streams: 0 }], Bool.True)).is_err()
 
+# The classes' regions, each once, sorted.
+expect {
+	class = |name, region| { name, label: "", title: "", region, size: "s", loader_size: "s" }
+	cloud = { image: "i", servers: [class("a", "sfo2"), class("b", "mkc1"), class("c", "sfo2")], tag: "t", max_age_minutes: 1 }
+	Config.regions(cloud) == ["mkc1", "sfo2"]
+}
+
 ## A race.json with one workload, `p`, and `adhoc` as its ad-hoc ones.
 race_text : Str -> Str
 race_text = |adhoc| {
 	test = |name| "{\"name\":\"${name}\",\"title\":\"T\",\"summary\":\"s\",\"detail\":\"d\",\"method\":\"GET\",\"path\":\"/${name}\",\"keepalive\":true,\"variants\":[{\"protocol\":\"http1\",\"connections\":1}]}"
 	ad_hoc = Str.join_with(adhoc.split_on(",").keep_if(|n| n != "").map(test), ",")
-	"{\"port\":1,\"rounds\":1,\"warmup_seconds\":1,\"measure_seconds\":1,\"competitors\":[\"go\"],\"oha\":{\"version\":\"1\",\"url\":\"u\",\"sha256\":\"h\"},\"workloads\":[${test("p")}],\"adhoc_workloads\":[${ad_hoc}],\"cloud\":{\"region\":\"r\",\"image\":\"i\",\"servers\":[],\"tag\":\"t\",\"max_age_minutes\":1},\"local\":{\"server_cpus\":\"0\",\"loader_cpus\":\"1\"}}"
+	"{\"port\":1,\"rounds\":1,\"warmup_seconds\":1,\"measure_seconds\":1,\"competitors\":[\"go\"],\"oha\":{\"version\":\"1\",\"url\":\"u\",\"sha256\":\"h\"},\"workloads\":[${test("p")}],\"adhoc_workloads\":[${ad_hoc}],\"cloud\":{\"image\":\"i\",\"servers\":[],\"tag\":\"t\",\"max_age_minutes\":1},\"local\":{\"server_cpus\":\"0\",\"loader_cpus\":\"1\"}}"
 }
 
 # An ad-hoc test is read apart from the nightly's workloads; one named as a

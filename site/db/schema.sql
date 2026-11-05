@@ -62,6 +62,8 @@ CREATE TABLE run_commits (
 CREATE TABLE run_settings (
   run_id TEXT PRIMARY KEY REFERENCES runs (id),
   seed INTEGER NOT NULL,
+  -- The run's one region; '' since 2026-11-04, each class's own is
+  -- run_classes.region.
   region TEXT NOT NULL,
   image TEXT NOT NULL,
   port INTEGER NOT NULL,
@@ -135,6 +137,9 @@ CREATE TABLE run_classes (
   position INTEGER NOT NULL,
   label TEXT NOT NULL,
   title TEXT NOT NULL,
+  -- Where the class raced, since 2026-11-04 (each class names its own);
+  -- '' before, when the run had one, run_settings.region.
+  region TEXT NOT NULL DEFAULT '',
   size TEXT NOT NULL,
   loader_size TEXT NOT NULL,
   PRIMARY KEY (run_id, name)

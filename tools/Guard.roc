@@ -24,7 +24,7 @@ Guard :: [].{
 	Request : DigitalOcean.Request
 
 	## What the owner allows (the guard's config).
-	Allowed : { region : Str, image : Str, tag : Str, hourly_max_usd : F64, monthly_cap_usd : F64, droplets_max : U64, age_max_minutes : U64 }
+	Allowed : { regions : List(Str), image : Str, tag : Str, hourly_max_usd : F64, monthly_cap_usd : F64, droplets_max : U64, age_max_minutes : U64 }
 
 	create! : Way, Request => Try(Droplet, [Refused(Str), Failed(Str), Interrupted])
 	create! = |way, request| {

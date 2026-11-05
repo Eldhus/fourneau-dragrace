@@ -11,10 +11,11 @@ Ledger :: [].{
 	## The owner's, on the racer's disk (/etc/dragrace-guard/config.json).
 	## `hourly_max_usd` is the most any droplet may cost an hour: whatever
 	## size a race asks for under it is allowed, so a class added to race.json
-	## needs no install; the month's cap still bounds the spend. The admin
-	## key is the one DigitalOcean key a race droplet names (racer install
-	## looks it up), so no root password is emailed.
-	Config : { region : Str, image : Str, tag : Str, hourly_max_usd : F64, monthly_cap_usd : F64, droplets_max : U64, age_max_minutes : U64, socket : Str, ledger : Str, admin_key_id : U64 }
+	## needs no install, unless it races in a region not yet allowed; the
+	## month's cap still bounds the spend. The admin key is the one
+	## DigitalOcean key a race droplet names (racer install looks it up), so
+	## no root password is emailed.
+	Config : { regions : List(Str), image : Str, tag : Str, hourly_max_usd : F64, monthly_cap_usd : F64, droplets_max : U64, age_max_minutes : U64, socket : Str, ledger : Str, admin_key_id : U64 }
 
 	## One droplet the guard made.
 	Life : { id : U64, size : Str, price_hourly : F64, created_ms : I64, deleted : [Alive, At(I64)] }
@@ -23,7 +24,7 @@ Ledger :: [].{
 	problems : Config -> List(Str)
 	problems = |config| {
 		checks = [
-			(config.region == "" or config.image == "" or config.tag == "", "region, image and tag are required"),
+			(config.regions.is_empty() or config.regions.contains("") or config.image == "" or config.tag == "", "regions, image and tag are required"),
 			(config.admin_key_id == 0, "admin_key_id is required"),
 			(config.hourly_max_usd <= 0 or config.hourly_max_usd > hourly_usd_max, "hourly_max_usd: above 0, at most ${hourly_usd_max.to_str()}"),
 			(config.monthly_cap_usd <= 0 or config.monthly_cap_usd > cap_usd_max, "monthly_cap_usd: above 0, at most ${cap_usd_max.to_str()}"),
@@ -36,7 +37,7 @@ Ledger :: [].{
 
 	## The limits the racer compares a race with before it makes a droplet.
 	allowed : Config -> Guard.Allowed
-	allowed = |c| { region: c.region, image: c.image, tag: c.tag, hourly_max_usd: c.hourly_max_usd, monthly_cap_usd: c.monthly_cap_usd, droplets_max: c.droplets_max, age_max_minutes: c.age_max_minutes }
+	allowed = |c| { regions: c.regions, image: c.image, tag: c.tag, hourly_max_usd: c.hourly_max_usd, monthly_cap_usd: c.monthly_cap_usd, droplets_max: c.droplets_max, age_max_minutes: c.age_max_minutes }
 
 	## Why a droplet asked for, at its size's price now, is refused; Ok when
 	## it is allowed.
@@ -51,8 +52,8 @@ Ledger :: [].{
 		why =
 			if size != "" {
 				size
-			} else if request.region != config.region {
-				"region ${request.region}, not ${config.region}"
+			} else if !config.regions.contains(request.region) {
+				"region ${request.region}, not ${Str.join_with(config.regions, " or ")}"
 			} else if request.image != config.image {
 				"image ${request.image}, not ${config.image}"
 			} else if request.tags != [config.tag] {
@@ -184,7 +185,7 @@ billed_seconds_min : F64
 billed_seconds_min = 60
 
 test_config : Ledger.Config
-test_config = { region: "lon1", image: "ubuntu-26-04-x64", tag: "fourneau-dragrace-race", hourly_max_usd: 0.13, monthly_cap_usd: 25, droplets_max: 4, age_max_minutes: 180, socket: "/run/g", ledger: "/var/l", admin_key_id: 42 }
+test_config = { regions: ["lon1", "mkc1"], image: "ubuntu-26-04-x64", tag: "fourneau-dragrace-race", hourly_max_usd: 0.13, monthly_cap_usd: 25, droplets_max: 4, age_max_minutes: 180, socket: "/run/g", ledger: "/var/l", admin_key_id: 42 }
 
 race_droplet : Str -> DigitalOcean.Request
 race_droplet = |size| { name: "dragrace-server-x", region: "lon1", size, image: "ubuntu-26-04-x64", ssh_keys: [], tags: ["fourneau-dragrace-race"], user_data: "#cloud-config\n", ipv6: Bool.False }
@@ -203,6 +204,8 @@ expect Ledger.problems(test_config) == []
 expect Ledger.problems({ ..test_config, hourly_max_usd: 20 }) == ["hourly_max_usd: above 0, at most 2"]
 expect Ledger.problems({ ..test_config, hourly_max_usd: 0 }).len() == 1
 expect Ledger.problems({ ..test_config, admin_key_id: 0 }) == ["admin_key_id is required"]
+expect Ledger.problems({ ..test_config, regions: [] }) == ["regions, image and tag are required"]
+expect Ledger.problems({ ..test_config, regions: ["lon1", ""] }) == ["regions, image and tag are required"]
 
 # What the owner did not allow is refused.
 expect {
@@ -210,6 +213,7 @@ expect {
 	refused(race_droplet("c-32"), 1.0)
 	and refused(race_droplet("c-2"), 0.15)
 	and refused({ ..race_droplet("c-4"), region: "nyc3" }, 0.125)
+	and !refused({ ..race_droplet("c-4"), region: "mkc1" }, 0.125)
 	and refused({ ..race_droplet("c-4"), image: "debian" }, 0.125)
 	and refused({ ..race_droplet("c-4"), tags: [] }, 0.125)
 	and refused({ ..race_droplet("c-4"), name: "miner" }, 0.125)

@@ -41,7 +41,6 @@ Api :: [].{
 
 	RacePost : {
 		seed : I64,
-		region : Str,
 		image : Str,
 		port : I64,
 		rounds : I64,
@@ -51,7 +50,8 @@ Api :: [].{
 		versions : List({ name : Str, version : Str }),
 		competitors : List({ name : Str, title : Str, language : Str, framework : Str }),
 		workloads : List(WorkloadPost),
-		classes : List({ name : Str, label : Str, title : Str, size : Str, loader_size : Str }),
+		## Each class names its region since 2026-11-04.
+		classes : List({ name : Str, label : Str, title : Str, region : Str, size : Str, loader_size : Str }),
 	}
 
 	WorkloadPost : {
@@ -426,7 +426,7 @@ Api :: [].{
 		Runs.add_settings!(tx, {
 			run_id,
 			seed: race.seed,
-			region: race.region,
+			region: "",
 			image: race.image,
 			port: race.port,
 			rounds: race.rounds,
@@ -467,7 +467,7 @@ Api :: [].{
 		}
 		$position = 0
 		for c in race.classes.take_first(items_max) {
-			Runs.add_class!(tx, { run_id, name: c.name, position: $position, label: c.label, title: c.title, size: c.size, loader_size: c.loader_size })?
+			Runs.add_class!(tx, { run_id, name: c.name, position: $position, label: c.label, title: c.title, region: c.region, size: c.size, loader_size: c.loader_size })?
 			$position = $position + 1
 		}
 		Ok({})
@@ -868,8 +868,8 @@ expect {
 	}
 }
 
-# A race with a field the site no longer reads (`versions_json`) still
-# parses.
+# A race with fields the site no longer reads (`versions_json`, `region`)
+# still parses.
 expect {
 	parsed : Try(Api.RacePost, _)
 	parsed = Json.parse("{\"seed\":1,\"region\":\"lon1\",\"image\":\"ubuntu-26-04-x64\",\"port\":8080,\"rounds\":3,\"warmup_seconds\":5,\"measure_seconds\":20,\"race_json\":\"{}\",\"versions_json\":\"{}\",\"versions\":[{\"name\":\"oha\",\"version\":\"1.16.0\"}],\"competitors\":[],\"workloads\":[],\"classes\":[]}")
