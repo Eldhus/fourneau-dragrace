@@ -30,7 +30,7 @@ IndexPage :: [].{
 			),
 		}
 
-		template : {
+		fragment : {
 			done : Str,
 			flare : Bool,
 			lanes : List(
@@ -51,7 +51,7 @@ IndexPage :: [].{
 			),
 			..,
 		} -> Rocstache.Template(Templates.Template)
-		template = |{ done, flare, lanes, .. }|
+		fragment = |{ done, flare, lanes, .. }|
 			{ layouts: Templates.layouts, template: IndexPageLiveRace({ done, flare, lanes }) }
 	}
 
