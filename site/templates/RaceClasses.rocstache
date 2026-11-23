@@ -4,7 +4,7 @@
 <dl class="machines">{{#class.machines |machine|}}<dt>{{ machine.role }}</dt><dd>{{#machine.items |item|}}<span>{{ item }}</span> {{/machine.items}}</dd>{{/class.machines}}</dl>
 <div class="strips">
 {{#class.strips |strip|}}{{> Strip}}{{/class.strips}}</div>
-{{#class.open |chart|}}<figure class="strip open" data-chart="{{ chart.key }}"><span class="run-id">{{ chart.run }}</span><figcaption><b>{{ chart.title }}</b>{{ chart.caption }}<span class="variant">{{#chart.variant |part|}}<span>{{ part }}</span>{{/chart.variant}}</span></figcaption>
+{{#class.open |chart|}}<figure class="strip open" data-chart="{{ chart.key }}"><figcaption><b>{{ chart.title }}</b>{{ chart.caption }}<span class="variant">{{#chart.variant |part|}}<span>{{ part }}</span>{{/chart.variant}}</span></figcaption><span class="run-id">{{ chart.run }}</span>
 <p class="axis-note y">&uarr; {{ chart.measure }}</p>
 <div class="chart-scroll"><svg class="chart" viewBox="0 0 720 260" role="img" aria-label="{{ chart.title }}: {{ chart.measure }} by offered requests per second">
 {{#chart.ticks_y |tick|}}<line class="grid" x1="72" x2="600" y1="{{ tick.line_y }}" y2="{{ tick.line_y }}"></line><text class="tick" x="64" y="{{ tick.text_y }}">{{ tick.label }}</text>
