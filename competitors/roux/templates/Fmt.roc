@@ -17,7 +17,7 @@ Fmt :: [].{
 
 	## A stock's level, the row's class: `out`, `low` (under ten), `ok`.
 	level : I32 -> Str
-	level = |stock| if stock <= 0 "out" else if stock < 10 "low" else "ok"
+	level = |count| if count <= 0 "out" else if count < 10 "low" else "ok"
 
 	## A stock as written: `out`, `3 left`, `16`.
 	stock : I32 -> Str
