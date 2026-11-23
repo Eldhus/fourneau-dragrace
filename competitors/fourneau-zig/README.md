@@ -9,7 +9,7 @@ fourneau checkout beside this repository, so each nightly races fourneau's newes
 
 | | |
 |---|---|
-| Language | Zig 0.17.0 (the race's pin) |
+| Language | Zig 0.17.1 (the race's pin) |
 | Server | fourneau, from the checkout beside this repository |
 | I/O | io_uring (`std.Io.Evented`): a fiber per connection, one shard per core, sharing nothing |
 | Templates | pure Zig, no engine (`src/template.zig`): the floor |
