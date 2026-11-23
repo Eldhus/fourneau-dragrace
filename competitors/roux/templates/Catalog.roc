@@ -17,7 +17,7 @@ Catalog :: [].{
 			tags : List(Str),
 		}
 
-		template : {
+		fragment : {
 			hot : Bool,
 			id : U32,
 			name : Str,
@@ -25,7 +25,7 @@ Catalog :: [].{
 			tags : List(Str),
 			..,
 		} -> Rocstache.Template(Templates.Template)
-		template = |{ hot, id, name, stock, tags, .. }|
+		fragment = |{ hot, id, name, stock, tags, .. }|
 			{ layouts: Templates.layouts, template: CatalogRow({ hot, id, name, stock, tags }) }
 	}
 
