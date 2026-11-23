@@ -124,7 +124,7 @@ Mixed :: [].{
 	## shedding load) is a failure as an error is: the client got no answer
 	## it could use, however soon.
 	held : Results.Step, F64 -> Bool
-	held = |step, saturated| step.achieved_rps >= saturated * step.offered_rps and step.errors == 0 and step.non_2xx == 0
+	held = |rung, saturated| rung.achieved_rps >= saturated * rung.offered_rps and rung.errors == 0 and rung.non_2xx == 0
 
 	step : U64, List(Results.Part) -> Results.Step
 	step = |rate, parts| {
@@ -178,15 +178,7 @@ climb_rates! = |race, workload, mixed, target, pid| {
 	token = Conduit.token!(Conduit.load_user)?
 	var $steps = []
 	for rate in mixed.rates {
-		attempt =
-			{
-				_ = run_parts!(race, workload, mixed, target, token, rate, mixed.warmup_seconds) ? |err| at(err, "warmup at ${rate.to_str()}/s")
-				before = Target.snapshots!(target, pid, Before) ? |err| at(err, "snapshot before ${rate.to_str()}/s")
-				parts = run_parts!(race, workload, mixed, target, token, rate, mixed.measure_seconds) ? |err| at(err, "at ${rate.to_str()}/s")
-				after = Target.snapshots!(target, pid, After) ? |err| at(err, "snapshot after ${rate.to_str()}/s")
-				Ok({ parts, before, after })
-			}
-		match attempt {
+		match climb_one!(race, workload, mixed, target, pid, token, rate) {
 			Err(Interrupted) => return Err(Interrupted)
 			Err(Failed(why)) => return Ok({ steps: $steps, why: "", failure: why })
 			Ok({ parts, before, after }) => {
@@ -209,6 +201,19 @@ climb_rates! = |race, workload, mixed, target, pid| {
 		}
 	}
 	Ok({ steps: $steps, why: "", failure: "" })
+}
+
+## One rung: the warmup, then the measured run between two snapshots. A
+## function of its own so that its `?`s end the rung, not the climb (a `?`
+## in a block returns from the whole function), and the steps before it
+## are kept.
+climb_one! : Config.Race, Config.Workload, Config.Mixed, Target.Where, Str, Str, U64 => Try({ parts : List(Results.Part), before : { server : Snapshot.Taken, loader : Snapshot.Taken }, after : { server : Snapshot.Taken, loader : Snapshot.Taken } }, [Failed(Str), Interrupted])
+climb_one! = |race, workload, mixed, target, pid, token, rate| {
+	_ = run_parts!(race, workload, mixed, target, token, rate, mixed.warmup_seconds) ? |err| at(err, "warmup at ${rate.to_str()}/s")
+	before = Target.snapshots!(target, pid, Before) ? |err| at(err, "snapshot before ${rate.to_str()}/s")
+	parts = run_parts!(race, workload, mixed, target, token, rate, mixed.measure_seconds) ? |err| at(err, "at ${rate.to_str()}/s")
+	after = Target.snapshots!(target, pid, After) ? |err| at(err, "snapshot after ${rate.to_str()}/s")
+	Ok({ parts, before, after })
 }
 
 ## Every part's oha at once, each at its share of the rate.
