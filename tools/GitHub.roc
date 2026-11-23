@@ -48,9 +48,9 @@ GitHub :: [].{
 					if !release.get("tag_name").text().starts_with("build-") {
 						return Err(NotABuild)
 					}
-					info = GitHub.info(release.get("body").text())?
+					build = GitHub.info(release.get("body").text())?
 					assets = release.get("assets").items().map(|a| (a.get("name").text(), a.get("browser_download_url").text()))
-					Ok({ info, assets })
+					Ok({ info: build, assets })
 				},
 			)
 

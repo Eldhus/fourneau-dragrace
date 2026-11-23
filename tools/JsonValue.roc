@@ -9,8 +9,8 @@ JsonValue := [Null, Boolean(Bool), Number(F64), Text(Str), Array(List(JsonValue)
 
 	## A value read from JSON text.
 	parse : Str -> Try(JsonValue, [InvalidJson(Str)])
-	parse = |text|
-		match Json.parse(text) {
+	parse = |json|
+		match Json.parse(json) {
 			Ok(value) => Ok(value)
 			Err(InvalidJson(why)) => Err(InvalidJson(why))
 		}
@@ -123,6 +123,11 @@ depth_max = 64
 
 ## One value, its kind found by trying each of the format's readers: a
 ## reader that does not see its kind fails without consuming anything.
+## Its error annotated, as its two helpers' are: `Json.parse` takes a
+## parser whose error is `[InvalidJson(Str)]` exactly (since Roc
+## 0.1.0_RC1); the format and its cursor are internal to Roc's builtins,
+## which no annotation can name.
+parse_value : _, _, U64 -> Try({ value : JsonValue, rest : _ }, [InvalidJson(Str)])
 parse_value = |encoding, state, depth| {
 	if depth > depth_max {
 		return Err(InvalidJson("JSON nested deeper than ${depth_max.to_str()}"))
@@ -153,6 +158,7 @@ parse_value = |encoding, state, depth| {
 	}
 }
 
+parse_items : _, [Counted({ len : U64, rest : _ }), Uncounted(_)], U64 -> Try({ value : JsonValue, rest : _ }, [InvalidJson(Str)])
 parse_items = |encoding, start, depth| {
 	var $items = []
 	match start {
@@ -194,6 +200,7 @@ parse_items = |encoding, start, depth| {
 	}
 }
 
+parse_members : _, _, U64 -> Try({ value : JsonValue, rest : _ }, [InvalidJson(Str)])
 parse_members = |encoding, start, depth| {
 	var $members = []
 	var $state =

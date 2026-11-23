@@ -19,11 +19,11 @@ Checkout :: [].{
 			if Path.utf8("${$dir}/race.json").is_file!() == Ok(Bool.True) {
 				return Ok($dir)
 			}
-			parent = Checkout.parent($dir)
-			if parent == $dir {
+			up = Checkout.parent($dir)
+			if up == $dir {
 				$tries = 64
 			} else {
-				$dir = parent
+				$dir = up
 				$tries = $tries + 1
 			}
 		}

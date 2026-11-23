@@ -42,22 +42,22 @@ Notify :: [].{
 			return Err(Failed("notify runs as dragrace-site-crashed.service: no credentials or state directory"))
 		}
 		topic_path = "${credentials}/ntfy-topic"
-		topic = Notify.topic(Checkout.read!(topic_path)?) ? |_| Failed("${topic_path}: not an ntfy topic (letters, digits, - and _, at most 64)")
+		ntfy_topic = Notify.topic(Checkout.read!(topic_path)?) ? |_| Failed("${topic_path}: not an ntfy topic (letters, digits, - and _, at most 64)")
 		# systemd leaves $MONITOR_* out when more than one unit could have
 		# started this one ("multiple trigger source candidates"): the unit's
 		# last result is then asked for. An alert is never skipped for want
 		# of its details.
 		named = env!("MONITOR_UNIT")
 		unit = if named == "" Flags.value(flags, "unit") else named
-		shown = Notify.shown(Run.output!("", ["systemctl", "show", "-p", "Result,ExecMainCode,ExecMainStatus,NRestarts", unit]) ?? "")
+		property = Notify.shown(Run.output!("", ["systemctl", "show", "-p", "Result,ExecMainCode,ExecMainStatus,NRestarts", unit]) ?? "")
 		result = env!("MONITOR_SERVICE_RESULT")
 		failure =
 			if result == "" {
-				{ unit, result: shown("Result"), code: exit_code_name(shown("ExecMainCode")), status: shown("ExecMainStatus"), restarts: shown("NRestarts") }
+				{ unit, result: property("Result"), code: exit_code_name(property("ExecMainCode")), status: property("ExecMainStatus"), restarts: property("NRestarts") }
 			} else {
-				{ unit, result, code: env!("MONITOR_EXIT_CODE"), status: env!("MONITOR_EXIT_STATUS"), restarts: shown("NRestarts") }
+				{ unit, result, code: env!("MONITOR_EXIT_CODE"), status: env!("MONITOR_EXIT_STATUS"), restarts: property("NRestarts") }
 			}
-		send!(topic, state, failure)
+		send!(ntfy_topic, state, failure)
 	}
 
 	## The topic, checked against ntfy's grammar: [A-Za-z0-9_-]{1,64}.

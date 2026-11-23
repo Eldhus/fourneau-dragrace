@@ -46,8 +46,8 @@ Ledger :: [].{
 		size = Guard.size_problem(Ledger.allowed(config), request.size, price)
 		alive = lives.count_if(|life| life.deleted == Alive)
 		age_hours = config.age_max_minutes.to_f64() / 60
-		spent = Ledger.spent(lives, now_ms)
-		committed = Ledger.committed(config, lives, now_ms)
+		spent_usd = Ledger.spent(lives, now_ms)
+		committed_usd = Ledger.committed(config, lives, now_ms)
 		next = price * age_hours
 		why =
 			if size != "" {
@@ -64,8 +64,8 @@ Ledger :: [].{
 				"ssh_keys [${Str.join_with(request.ssh_keys.map(|k| k.to_str()), " ")}] (the guard names the admin key alone)"
 			} else if alive >= config.droplets_max {
 				"${alive.to_str()} droplets alive, the most allowed"
-			} else if spent + committed + next > config.monthly_cap_usd {
-				"the month's budget: $${Text.fixed(spent, 2)} spent, $${Text.fixed(committed, 2)} committed, $${Text.fixed(next, 2)} more would pass the cap of $${Text.fixed(config.monthly_cap_usd, 2)}"
+			} else if spent_usd + committed_usd + next > config.monthly_cap_usd {
+				"the month's budget: $${Text.fixed(spent_usd, 2)} spent, $${Text.fixed(committed_usd, 2)} committed, $${Text.fixed(next, 2)} more would pass the cap of $${Text.fixed(config.monthly_cap_usd, 2)}"
 			} else {
 				""
 			}

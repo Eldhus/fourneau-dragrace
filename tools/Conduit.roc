@@ -112,13 +112,13 @@ Conduit :: [].{
 			$lines = $lines.append("INSERT INTO tags VALUES (${$tag_id.to_str()}, ${text(tag)});")
 			$tag_id = $tag_id + 1
 		}
-		for article in model.articles {
-			$lines = $lines.append("INSERT INTO articles VALUES (${article.id.to_str()}, ${text(article.slug)}, ${text(article.title)}, ${text(article.description)}, ${text(article.body)}, ${article.author.to_str()}, ${text(article.created)}, ${text(article.created)});")
-			for tag in article.tags {
-				$lines = $lines.append("INSERT INTO article_tags SELECT ${article.id.to_str()}, id FROM tags WHERE name = ${text(tag)};")
+		for post in model.articles {
+			$lines = $lines.append("INSERT INTO articles VALUES (${post.id.to_str()}, ${text(post.slug)}, ${text(post.title)}, ${text(post.description)}, ${text(post.body)}, ${post.author.to_str()}, ${text(post.created)}, ${text(post.created)});")
+			for tag in post.tags {
+				$lines = $lines.append("INSERT INTO article_tags SELECT ${post.id.to_str()}, id FROM tags WHERE name = ${text(tag)};")
 			}
-			for user in article.favorites {
-				$lines = $lines.append("INSERT INTO favorites VALUES (${user.to_str()}, ${article.id.to_str()});")
+			for user in post.favorites {
+				$lines = $lines.append("INSERT INTO favorites VALUES (${user.to_str()}, ${post.id.to_str()});")
 			}
 		}
 		for comment in model.comments {

@@ -71,10 +71,10 @@ Diff :: [].{
 		for competitor in competitors {
 			$rows = $rows.append((competitor.name, competitor!(race, competitor, target, cases)?))
 		}
-		report = Diff.report(names, cases, $rows)
-		_ = Stdout.write!(report)
+		table = Diff.report(names, cases, $rows)
+		_ = Stdout.write!(table)
 		path = "${out}/diff.md"
-		Path.utf8(path).write_utf8!(report) ? |PathErr(err, _)| Failed("${path}: ${err.to_str()}")
+		Path.utf8(path).write_utf8!(table) ? |PathErr(err, _)| Failed("${path}: ${err.to_str()}")
 		Ok({})
 	}
 

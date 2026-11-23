@@ -38,8 +38,8 @@ Machine :: [].{
 	## Run a script with bytes on its standard input: a tarball.
 	shell_bytes! : Where, Str, List(U8) => Try({}, [Failed(Str), Interrupted])
 	shell_bytes! = |machine, script, input| {
-		argv = Machine.argv(machine, script)
-		_ = Run.with_input_bytes!("", argv, input)?
+		command = Machine.argv(machine, script)
+		_ = Run.with_input_bytes!("", command, input)?
 		Ok({})
 	}
 
@@ -47,8 +47,7 @@ Machine :: [].{
 	## or several on one, at once.
 	start! : Where, Str => Try(Running, [Failed(Str), Interrupted])
 	start! = |machine, script| {
-		argv = Machine.argv(machine, script)
-		match argv {
+		match Machine.argv(machine, script) {
 			[first, .. as rest] =>
 				match Cmd.new(OsStr.from_str(first)).args(rest.map(OsStr.from_str)).stdin(Null).stdout(Capture).stderr(Capture).output_limit(NoLimit).spawn!() {
 					Ok(child) => Ok(Running.{ child, what: first })

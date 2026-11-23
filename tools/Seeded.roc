@@ -11,8 +11,8 @@ Seeded :: [].{
 		var $state = seed
 		var $i = items.len()
 		while $i > 1 {
-			{ value, next } = Seeded.next($state)
-			$state = next
+			{ value, next: after } = Seeded.next($state)
+			$state = after
 			j = value % $i
 			# Both indexes are below the length: the swap cannot fail.
 			$order = $order.swap($i - 1, j) ?? $order
@@ -27,8 +27,8 @@ Seeded :: [].{
 		var $out = List.with_capacity(count)
 		var $state = seed
 		while $out.len() < count {
-			{ value, next } = Seeded.next($state)
-			$state = next
+			{ value, next: after } = Seeded.next($state)
+			$state = after
 			var $word = value
 			var $k = 0
 			while $k < 8 and $out.len() < count {
@@ -43,10 +43,10 @@ Seeded :: [].{
 	## One step: a number and the state after it.
 	next : U64 -> { value : U64, next : U64 }
 	next = |state| {
-		next = state.plus_wrap(0x9E3779B97F4A7C15)
-		z1 = (next.bitwise_xor(next.shr_zf_wrap(30))).times_wrap(0xBF58476D1CE4E5B9)
+		after = state.plus_wrap(0x9E3779B97F4A7C15)
+		z1 = (after.bitwise_xor(after.shr_zf_wrap(30))).times_wrap(0xBF58476D1CE4E5B9)
 		z2 = (z1.bitwise_xor(z1.shr_zf_wrap(27))).times_wrap(0x94D049BB133111EB)
-		{ value: z2.bitwise_xor(z2.shr_zf_wrap(31)), next }
+		{ value: z2.bitwise_xor(z2.shr_zf_wrap(31)), next: after }
 	}
 
 	## FNV-1a of a string, 64 bits: a name's own part of a seed.

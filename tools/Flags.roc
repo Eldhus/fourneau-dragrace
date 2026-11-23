@@ -53,8 +53,8 @@ Flags :: [].{
 						$values = $values.insert(name, text)
 					}
 					(Value(_), Err(Missing)) => {
-						value = words.get($index + 1) ? |_| BadFlag("-${name}: needs a value")
-						$values = $values.insert(name, value)
+						next_word = words.get($index + 1) ? |_| BadFlag("-${name}: needs a value")
+						$values = $values.insert(name, next_word)
 						$index = $index + 1
 					}
 				}

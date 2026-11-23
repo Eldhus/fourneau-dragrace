@@ -10,7 +10,7 @@ import Text
 
 ## The pinned tools, fetched and checked: Zig and roc at roux's pins
 ## (roux's toolchain.json, one pin per tool in the repository that owns
-## it), musl's two files for `roc build`, roux's platform and tools readied
+## it), musl's files roux pins for `roc build`, roux's platform and tools readied
 ## (from the store, or built), and the record of what a build was built
 ## with, out/toolchain.json, which race.tar.gz carries and a race posts.
 Toolchain :: [].{
@@ -40,9 +40,9 @@ Toolchain :: [].{
 		versions = Toolchain.competitor_versions!(root)?
 		used = { zig: pins.zig.version, roc: pins.roc.version, go: versions.go, rust: versions.rust, axum: versions.axum, tokio: versions.tokio, basic_webserver: versions.basic_webserver }
 		Toolchain.ready_roux!(tools)?
-		record = Json.to_str(used)
+		used_json = Json.to_str(used)
 		Path.utf8(Checkout.out(root)).create_all!() ? |PathErr(err, _)| Failed("out: ${err.to_str()}")
-		Path.utf8(Toolchain.record(root)).write_utf8!(record) ? |PathErr(err, _)| Failed("out/toolchain.json: ${err.to_str()}")
+		Path.utf8(Toolchain.record(root)).write_utf8!(used_json) ? |PathErr(err, _)| Failed("out/toolchain.json: ${err.to_str()}")
 		Run.log!("toolchain: zig ${used.zig}, roc ${used.roc}, go ${used.go}, rust ${used.rust}")
 		Ok({ tools, used })
 	}
@@ -95,7 +95,7 @@ Toolchain :: [].{
 		Ok({ zig: pins.zig, roc: pins.roc, roc_musl: { commit: pins.roc_musl.commit, url: pins.roc_musl.url, files } })
 	}
 
-	## musl's files from Roc's source at the nightly's commit, each pinned.
+	## musl's files from Roc's source at roc's commit, each pinned.
 	Musl : { commit : Str, url : Str, files : List((Str, Str)) }
 
 	## An archive downloaded, checked and unpacked once; the directory with
@@ -115,8 +115,8 @@ Toolchain :: [].{
 		Ok(dir)
 	}
 
-	## musl's crt1.o and libc.a where `roc build` looks for them in roux's
-	## checkout, from Roc's source at the pinned commit, each file checked
+	## musl's files roux pins (libc.a) where `roc build` looks for them in
+	## roux's checkout, from Roc's source at the pinned commit, each file checked
 	## (GitHub's archives are not byte-stable, so the archive is not pinned).
 	musl! : Str, Musl, Str => Try({}, [Failed(Str), Interrupted])
 	musl! = |cache, musl, roux| {
@@ -250,7 +250,7 @@ Toolchain :: [].{
 roux_store_name = "roux-platform"
 
 ## What `zig build platform` and `zig build tools` make in roux's checkout.
-roux_built = ["platform/targets/x64musl/libhost.a", "zig-out/bin/roux", "zig-out/bin/roux-db", "zig-out/bin/roux-load"]
+roux_built = ["platform/targets/x64musl/libhost.a", "platform/targets/x64musl/rcrt1.o", "zig-out/bin/roux", "zig-out/bin/roux-db", "zig-out/bin/roux-load"]
 
 # basic-webserver's header pins its release by URL; another version, a
 # prefix of it, or none is not that pin.
