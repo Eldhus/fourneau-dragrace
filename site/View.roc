@@ -1032,14 +1032,14 @@ expect {
 axis_time : List(Data.Entry), Str -> Str
 axis_time = |entries, stamp| {
 	shared = entries.keep_if(|entry| day(entry.started_at) == day(stamp))
-	if List.len(shared) > 1 clock(stamp) else ""
+	if List.len(shared) > 1 time_of_day(stamp) else ""
 }
 
 ## "2026-10-06T13:58:49Z" is "13:58": the tool writes that one format.
-clock : Str -> Str
-clock = |stamp| Str.from_utf8_lossy(List.sublist(Str.to_utf8(stamp), { start: 11, len: 5 }))
+time_of_day : Str -> Str
+time_of_day = |stamp| Str.from_utf8_lossy(List.sublist(Str.to_utf8(stamp), { start: 11, len: 5 }))
 
-expect clock("2026-10-06T13:58:49Z") == "13:58"
+expect time_of_day("2026-10-06T13:58:49Z") == "13:58"
 
 ## "53 min · $0.45": how long the race took and what its droplets cost
 ## (the cost only when droplets ran).

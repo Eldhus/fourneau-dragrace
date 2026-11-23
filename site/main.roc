@@ -65,7 +65,8 @@ respond! = |request, { db, tokens }| {
 	if request.method == "POST" and path == "/api/visit" {
 		count_visit!(db, request)
 	} else if path.starts_with("/api/") {
-		Api.respond!(request, db, tokens, path)
+		response = Api.respond!(request, db, tokens, path) ? |DbErr(err)| DbErr(err)
+		Ok(response)
 	} else {
 		match path {
 			"/" => index!(db, request, wanted)
@@ -477,7 +478,7 @@ race_live! = |db, request| {
 				if said != $said or calm.done != $done {
 					# The first read draws what the page has; no flare.
 					landed = $done != "" and calm.done != $done
-					Sse.send!(stream, Rocstache.patch!(IndexPage.LiveRace.template({ ..calm, flare: landed })))?
+					Sse.send!(stream, Rocstache.patch!(IndexPage.LiveRace.fragment({ ..calm, flare: landed })))?
 					$said = said
 					$done = calm.done
 					$quiet = 0
