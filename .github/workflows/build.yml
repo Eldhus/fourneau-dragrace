@@ -122,7 +122,11 @@ jobs:
       # release, or GitHub failing) races them all. fourneau-zig and roux
       # serve HTTPS through the kernel's TLS, a module the runner has but
       # has not loaded; without it their TLS cells cannot start, and the
-      # race refuses at once (tools/Local.roc, kernel_tls!).
+      # race refuses at once (tools/Local.roc, kernel_tls!). The server
+      # gets the first half of the physical cores and the loader the rest,
+      # whole cores each, read from lscpu: the runner's numbering of its
+      # hyperthreads varies (on 2026-11-23, CPUs 0 and 2 were one core, so
+      # a fixed 0-1 / 2-3 split shared both and the race refused).
       - if: steps.key.outputs.built != 'true'
         name: The smoke race
         working-directory: fourneau-dragrace
@@ -130,7 +134,13 @@ jobs:
           sudo modprobe tls
           gh release download -R "$GITHUB_REPOSITORY" --pattern build.json -D out/last --clobber \
             || echo "no latest build.json: every competitor races"
-          out/dragrace race local -quick -since out/last/build.json -server-cpus 0-1 -loader-cpus 2-3
+          cpus_of() { lscpu -p=CORE,CPU | grep -v '^#' | awk -F, -v lo="$1" -v hi="$2" '$1 >= lo && $1 < hi { print $2 }' | paste -sd,; }
+          cores=$(lscpu -p=CORE | grep -v '^#' | sort -un | wc -l)
+          server=$(cpus_of 0 $((cores / 2)))
+          loader=$(cpus_of $((cores / 2)) "$cores")
+          lscpu -e=CPU,CORE
+          echo "server CPUs $server, loader CPUs $loader"
+          out/dragrace race local -quick -since out/last/build.json -server-cpus "$server" -loader-cpus "$loader"
       - if: steps.key.outputs.built != 'true' && env.RELEASE == 'true'
         name: Release, and keep the newest 20
         working-directory: fourneau-dragrace
