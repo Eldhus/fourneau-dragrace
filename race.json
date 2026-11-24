@@ -175,7 +175,7 @@
         "name": "premium-4",
         "label": "8GB/4vCPU Intel",
         "title": "Premium Intel cores",
-        "region": "sfo2",
+        "region": "nyc2",
         "size": "c-4-intel",
         "loader_size": "c-4-intel"
       }
