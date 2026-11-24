@@ -26,7 +26,9 @@ Site :: [].{
 		dir = "${root}/site"
 		roux = "${ready.tools.roux}/zig-out/bin/roux"
 		Run.run!(dir, [], [roux, "build", "--roc=${ready.tools.roc}", "--output=${Site.binary(root)}", "main.roc"])?
-		Run.run!(dir, [], [ready.tools.roc, "test", "main.roc"])
+		# --no-cache until roc-lang/roc#13382 is fixed: with caching on,
+		# roc test crashes on any expect in a platform's main.roc (roux's).
+		Run.run!(dir, [], [ready.tools.roc, "test", "--no-cache", "main.roc"])
 	}
 
 	## `roux dev` on site/ in this process's place, so its signals are its
